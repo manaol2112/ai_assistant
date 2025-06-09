@@ -449,6 +449,182 @@ I love helping you learn about the world around you! Show me anything you're cur
             return response + enhancement
         return response 
 
+    def capture_and_identify_text(self, user: str = "sophia", expected_word: str = None) -> Dict[str, Any]:
+        """
+        Capture an image and identify text/handwriting with enhanced OCR for spelling verification.
+        
+        Args:
+            user: The user for personalized messaging
+            expected_word: The word we expect to see (for spelling games)
+            
+        Returns:
+            Dictionary with text detection results
+        """
+        try:
+            logger.info(f"Capturing image for text identification - Expected: '{expected_word}'")
+            
+            # Capture image
+            image_path = self.camera_manager.capture_image()
+            if not image_path:
+                return {
+                    "success": False,
+                    "message": "Failed to capture image. Please check the camera.",
+                    "detected_text": "",
+                    "image_path": None
+                }
+            
+            # Identify text with enhanced prompts for handwriting
+            result = self._identify_text_with_vision(image_path, user, expected_word)
+            
+            # Cleanup
+            try:
+                os.remove(image_path)
+            except:
+                pass
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error in text capture and identification: {e}")
+            return {
+                "success": False,
+                "message": f"Error during text identification: {str(e)}",
+                "detected_text": "",
+                "image_path": None
+            }
+
+    def _identify_text_with_vision(self, image_path: str, user: str, expected_word: str = None) -> Dict[str, Any]:
+        """Use GPT-4 Vision to identify handwritten text with OCR focus."""
+        try:
+            # Encode image for Vision API
+            base64_image = self.encode_image(image_path)
+            
+            # Create enhanced prompt for text/handwriting recognition
+            if expected_word:
+                prompt = f"""HANDWRITING AND TEXT RECOGNITION TASK:
+
+You are analyzing an image of handwritten text, specifically looking for a word that should spell: "{expected_word.upper()}"
+
+Please perform these tasks:
+1. **OCR ANALYSIS**: Extract ALL visible text, letters, and words from the image
+2. **HANDWRITING FOCUS**: Pay special attention to handwritten letters and words
+3. **SPELLING VERIFICATION**: Determine if the handwritten word matches "{expected_word}"
+4. **DETAILED DESCRIPTION**: Describe exactly what letters/words you can see
+
+CRITICAL: For the spelling game verification, I need you to:
+- State clearly if you can see the word "{expected_word}" written correctly
+- If you see other text, tell me exactly what letters/words are visible
+- Be precise about spelling - even one wrong letter means incorrect spelling
+
+Format your response as:
+DETECTED TEXT: [exact letters/words you can see]
+SPELLING MATCH: [YES/NO - does it match "{expected_word}" exactly?]
+DESCRIPTION: [detailed description of what's written]
+
+Remember: This is for educational spelling practice, so accuracy is crucial!"""
+            else:
+                prompt = """HANDWRITING AND TEXT RECOGNITION:
+
+Please analyze this image and extract any visible text, handwriting, or letters.
+
+Provide:
+1. **DETECTED TEXT**: All visible text, letters, and words
+2. **HANDWRITING ANALYSIS**: Description of any handwritten content
+3. **TEXT QUALITY**: Assessment of legibility and clarity
+4. **DETAILED DESCRIPTION**: What you can see in the image
+
+Be as precise as possible in identifying text and letters."""
+            
+            # Make Vision API call
+            response = self.client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": prompt
+                            },
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{base64_image}",
+                                    "detail": "high"
+                                }
+                            }
+                        ]
+                    }
+                ],
+                max_tokens=500,
+                temperature=0.1  # Low temperature for more consistent OCR results
+            )
+            
+            # Extract response
+            ai_response = response.choices[0].message.content
+            
+            # Parse detected text from the response
+            detected_text = self._extract_detected_text(ai_response)
+            
+            logger.info(f"Text identification complete - Expected: '{expected_word}', Detected: '{detected_text}'")
+            
+            return {
+                "success": True,
+                "message": ai_response,
+                "detected_text": detected_text,
+                "image_path": image_path,
+                "model_used": "gpt-4o",
+                "expected_word": expected_word
+            }
+            
+        except Exception as e:
+            logger.error(f"Error in Vision API text identification: {e}")
+            return {
+                "success": False,
+                "message": f"Sorry, I had trouble reading the text in your image. Error: {str(e)}",
+                "detected_text": "",
+                "image_path": image_path
+            }
+
+    def _extract_detected_text(self, ai_response: str) -> str:
+        """Extract the detected text from AI response."""
+        try:
+            import re
+            
+            # Look for "DETECTED TEXT:" pattern
+            pattern = r"DETECTED TEXT:\s*([^\n\r]+)"
+            match = re.search(pattern, ai_response, re.IGNORECASE)
+            
+            if match:
+                detected = match.group(1).strip()
+                # Clean up common OCR artifacts
+                detected = re.sub(r'[\[\]"]', '', detected)  # Remove brackets and quotes
+                detected = detected.strip()
+                return detected
+            
+            # Fallback: look for quoted text
+            quote_patterns = [
+                r'"([^"]+)"',
+                r"'([^']+)'",
+                r"`([^`]+)`"
+            ]
+            
+            for pattern in quote_patterns:
+                matches = re.findall(pattern, ai_response)
+                if matches:
+                    return matches[0].strip()
+            
+            # Last resort: extract first word-like sequence
+            word_match = re.search(r'\b[a-zA-Z]{2,}\b', ai_response)
+            if word_match:
+                return word_match.group(0).strip()
+            
+            return ""  # No text detected
+            
+        except Exception as e:
+            logger.error(f"Error extracting detected text: {e}")
+            return ""
+
 # Example usage
 if __name__ == "__main__":
     identifier = ObjectIdentifier()

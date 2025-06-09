@@ -1108,15 +1108,18 @@ Take your time and write '{word}' on your paper. Remember to make your letters b
             # Give time to position the paper
             time.sleep(3)
             
-            # Capture and analyze the written answer
-            result = self.object_identifier.capture_and_identify(user)
+            # Capture and analyze the written answer with enhanced OCR
+            result = self.object_identifier.capture_and_identify_text(user, expected_word=correct_word)
             
             if result["success"]:
-                # Analyze if the written text matches the word
-                written_text = result["message"].lower()
+                # Get the detected text from OCR
+                detected_text = result.get("detected_text", "").strip().lower()
+                ai_description = result["message"].lower()
                 
-                # Check if the correct word appears in the AI's analysis
-                if correct_word.lower() in written_text or self.check_spelling_similarity(written_text, correct_word):
+                # Enhanced spelling verification
+                is_correct = self.verify_spelling_accuracy(detected_text, ai_description, correct_word)
+                
+                if is_correct:
                     # Correct answer!
                     self.spelling_score += 1
                     
@@ -1125,7 +1128,7 @@ Take your time and write '{word}' on your paper. Remember to make your letters b
                     elif user == 'eladriel':
                         praise = f"Roar-some job Eladriel! 🦕⭐ You spelled '{correct_word}' correctly! You're a spelling champion!"
                     else:  # parent
-                        praise = f"✅ Correct spelling detected: '{correct_word}'. Camera recognition system working properly."
+                        praise = f"✅ Correct spelling detected: '{correct_word}'. Camera recognition system working properly. Detected: '{detected_text}'"
                     
                     # Move to next word
                     self.spelling_word_index += 1
@@ -1156,13 +1159,15 @@ Hint: {next_hint}
 Write '{next_word}' on your paper, and say 'Ready' when you want me to check it!"""
                 
                 else:
-                    # Incorrect answer - provide helpful feedback
+                    # Incorrect answer - provide helpful feedback with what was detected
+                    detected_info = f" (I saw: '{detected_text}')" if detected_text else ""
+                    
                     if user == 'sophia':
-                        feedback = f"Good try Sophia! The correct spelling is '{correct_word.upper()}'. Let me help you learn it!"
+                        feedback = f"Good try Sophia! The correct spelling is '{correct_word.upper()}'{detected_info}. Let me help you learn it!"
                     elif user == 'eladriel':
-                        feedback = f"Nice effort Eladriel! The correct spelling is '{correct_word.upper()}'. Let's learn it together!"
+                        feedback = f"Nice effort Eladriel! The correct spelling is '{correct_word.upper()}'{detected_info}. Let's learn it together!"
                     else:  # parent
-                        feedback = f"❌ Incorrect spelling detected. Expected: '{correct_word.upper()}'. Testing educational feedback system."
+                        feedback = f"❌ Incorrect spelling detected. Expected: '{correct_word.upper()}'{detected_info}. Testing educational feedback system."
                     
                     # Provide detailed spelling help
                     spelling_help = self.provide_spelling_help(correct_word, user)
@@ -1180,15 +1185,69 @@ Try writing '{correct_word}' again! Take your time and remember the tips I gave 
             logger.error(f"Error checking spelling answer: {e}")
             return "Sorry! I had trouble checking your answer. Let's try again!"
 
-    def check_spelling_similarity(self, written_text: str, correct_word: str) -> bool:
-        """Check if the written text is similar enough to the correct word."""
-        # Simple similarity check - look for the word or its letters
-        correct_letters = set(correct_word.lower())
-        written_letters = set(''.join(c for c in written_text.lower() if c.isalpha()))
+    def verify_spelling_accuracy(self, detected_text: str, ai_description: str, correct_word: str) -> bool:
+        """Enhanced spelling verification with multiple accuracy checks."""
+        correct_word_lower = correct_word.lower()
         
-        # If most of the correct letters are present, consider it a match
-        if len(correct_letters.intersection(written_letters)) >= len(correct_letters) * 0.7:
+        # Method 1: Exact match from OCR
+        if detected_text == correct_word_lower:
+            logger.info(f"✅ Exact OCR match: '{detected_text}' == '{correct_word_lower}'")
             return True
+        
+        # Method 2: Check if correct word is explicitly mentioned in AI description
+        # Look for phrases like "the word 'cat'" or "says 'dog'" or "written 'sun'"
+        import re
+        word_patterns = [
+            rf"word\s+['\"`]?{re.escape(correct_word_lower)}['\"`]?",
+            rf"says\s+['\"`]?{re.escape(correct_word_lower)}['\"`]?",
+            rf"written\s+['\"`]?{re.escape(correct_word_lower)}['\"`]?",
+            rf"text\s+['\"`]?{re.escape(correct_word_lower)}['\"`]?",
+            rf"reads\s+['\"`]?{re.escape(correct_word_lower)}['\"`]?",
+            rf"['\"`]{re.escape(correct_word_lower)}['\"`]\s+written",
+            rf"['\"`]{re.escape(correct_word_lower)}['\"`]\s+spelled",
+        ]
+        
+        for pattern in word_patterns:
+            if re.search(pattern, ai_description):
+                logger.info(f"✅ AI description confirms correct word: '{correct_word}' found in: {ai_description}")
+                return True
+        
+        # Method 3: Strict character sequence check (only for very short words)
+        if len(correct_word_lower) <= 3:
+            # For very short words, check if all letters appear in correct sequence
+            cleaned_text = ''.join(c for c in detected_text if c.isalpha())
+            if cleaned_text == correct_word_lower:
+                logger.info(f"✅ Short word exact match: '{cleaned_text}' == '{correct_word_lower}'")
+                return True
+        
+        # Method 4: Check for close variations (handle OCR errors like 0 vs O, 1 vs l)
+        ocr_variations = {
+            '0': 'o', 'o': '0',
+            '1': 'l', 'l': '1', 'i': '1',
+            '5': 's', 's': '5',
+            '8': 'b', 'b': '8',
+            '6': 'g', 'g': '6'
+        }
+        
+        def normalize_ocr_errors(text):
+            """Normalize common OCR character confusion."""
+            result = text.lower()
+            for char, replacement in ocr_variations.items():
+                result = result.replace(char, replacement)
+            return result
+        
+        normalized_detected = normalize_ocr_errors(detected_text)
+        normalized_correct = normalize_ocr_errors(correct_word_lower)
+        
+        if normalized_detected == normalized_correct:
+            logger.info(f"✅ OCR-normalized match: '{detected_text}' -> '{normalized_detected}' == '{normalized_correct}'")
+            return True
+        
+        # If none of the above methods confirm correctness, it's incorrect
+        logger.info(f"❌ Spelling verification failed:")
+        logger.info(f"   Expected: '{correct_word_lower}'")
+        logger.info(f"   OCR detected: '{detected_text}'")
+        logger.info(f"   AI description: '{ai_description[:100]}...'")
         
         return False
 
