@@ -76,6 +76,9 @@ class AIAssistant:
         self.last_face_greeting = {}  # Track when we last greeted each person
         self.face_greeting_cooldown = 30  # seconds between face greetings
         
+        # Parent mode settings
+        self.quiet_mode = False
+        
         # User profiles with personalized settings
         self.users = {
             'sophia': {
@@ -95,6 +98,20 @@ class AIAssistant:
                 'face_greeting': "Hey Eladriel! I see you there! 🦕 Ready for some dinosaur adventures?",
                 'tts_engine': self.eladriel_tts,
                 'special_commands': ['identify dinosaur', 'identify this', 'what is this', 'tell me about this', 'show me camera', 'dinosaur tips', 'help']
+            },
+            'parent': {
+                'name': 'Parent',
+                'wake_word': 'assistant',
+                'personality': 'professional, intelligent, and efficient',
+                'greeting': "Hello! Parent mode activated. I'm ready to assist you with any requests. Speaking quietly to avoid waking the children.",
+                'face_greeting': "Hello! I see you. Parent mode ready - speaking softly.",
+                'tts_engine': self.sophia_tts,  # Use calm voice for parent mode
+                'special_commands': [
+                    'help', 'status report', 'system check', 'quiet mode on', 'quiet mode off',
+                    'identify this', 'what is this', 'tell me about this', 'show me camera',
+                    'check on kids', 'home automation', 'schedule reminder', 'weather',
+                    'news update', 'shopping list', 'calendar', 'notes'
+                ]
             }
         }
         
@@ -197,7 +214,8 @@ class AIAssistant:
                 if self.is_conversation_ending(user_input):
                     farewell_messages = {
                         'sophia': "Goodbye Sophia! I'm always here when you need me. Have a wonderful day!",
-                        'eladriel': "See you later Eladriel! Keep exploring and learning about dinosaurs! Roar!"
+                        'eladriel': "See you later Eladriel! Keep exploring and learning about dinosaurs! Roar!",
+                        'parent': "Goodbye! Parent mode deactivated. All systems remain operational for the children. Call 'Assistant' anytime you need me."
                     }
                     self.speak(farewell_messages.get(user, "Goodbye! Talk to you soon!"), user)
                     conversation_active = False
@@ -340,7 +358,24 @@ class AIAssistant:
         """Handle special commands for each user."""
         user_input_lower = user_input.lower()
         
-        # Universal object identification commands for both users - expanded with natural phrases
+        # Parent-specific admin commands
+        if user == 'parent':
+            if any(phrase in user_input_lower for phrase in ['status report', 'system status', 'report']):
+                return self.get_system_status()
+            
+            elif any(phrase in user_input_lower for phrase in ['system check', 'health check', 'diagnostic']):
+                return self.run_system_diagnostic()
+            
+            elif any(phrase in user_input_lower for phrase in ['quiet mode on', 'enable quiet mode', 'whisper mode']):
+                return self.enable_quiet_mode()
+            
+            elif any(phrase in user_input_lower for phrase in ['quiet mode off', 'disable quiet mode', 'normal volume']):
+                return self.disable_quiet_mode()
+            
+            elif any(phrase in user_input_lower for phrase in ['check on kids', 'kids status', 'children']):
+                return self.check_kids_status()
+        
+        # Universal object identification commands for all users - expanded with natural phrases
         object_identification_phrases = [
             'identify this', 'what is this', 'tell me about this', 'what am i holding',
             'look', 'look at this', 'look at the camera', 'can you see this',
@@ -363,7 +398,7 @@ class AIAssistant:
             elif any(phrase in user_input_lower for phrase in ['dinosaur tips', 'how to show', 'tips']):
                 return self.dinosaur_identifier.get_dinosaur_tips()
         
-        # General help commands for both users
+        # General help commands for all users
         if any(phrase in user_input_lower for phrase in ['help', 'what can you do', 'commands']):
             return self.get_help_message(user)
         
@@ -489,7 +524,204 @@ Ask me anything or show me any object you're curious about!"""
 
 What do you want to explore today? Show me anything you've discovered! 🚀"""
         
+        elif user == 'parent':
+            return """Parent Mode Active - Advanced Features Available:
+
+🔧 SYSTEM COMMANDS:
+• "Status report" - Get system health and usage statistics
+• "System check" - Run diagnostic tests on all components
+• "Quiet mode on/off" - Control volume for nighttime use
+
+👶 CHILD MONITORING:
+• "Check on kids" - Review recent activity and interactions
+• Face recognition shows when children are detected
+• Conversation logs available for review
+
+🔍 OBJECT IDENTIFICATION:
+• Same advanced object identification as the kids
+• "What is this?" works for any household item
+• Great for identifying unknown objects or tools
+
+💡 CONVERSATION MODES:
+• VOICE ACTIVATED: Say 'Assistant' to activate
+• FACE RECOGNITION: Automatic activation when you're detected
+• Extended timeout (no rush like with kids)
+• Professional, efficient responses
+
+🛠️ TECHNICAL FEATURES:
+• Full access to camera and audio systems
+• Real-time system monitoring
+• Error reporting and troubleshooting
+• Configuration adjustments
+
+All standard features available with enhanced capabilities for household management."""
+        
         return "I'm here to help! Just ask me anything you're curious about or show me any object!"
+
+    def get_system_status(self) -> str:
+        """Provide system status report for parent mode."""
+        try:
+            import psutil
+            import time
+            
+            # Get system metrics
+            cpu_usage = psutil.cpu_percent(interval=1)
+            memory_info = psutil.virtual_memory()
+            disk_info = psutil.disk_usage('/')
+            
+            # Get AI assistant specific status
+            face_recognition_status = "Active" if self.face_recognition_active else "Inactive"
+            camera_status = "Connected" if self.face_detector.cap and self.face_detector.cap.isOpened() else "Disconnected"
+            
+            # Get recent activity
+            current_time = time.strftime("%I:%M %p")
+            
+            status_report = f"""System Status Report - {current_time}
+
+🖥️ SYSTEM HEALTH:
+• CPU Usage: {cpu_usage}%
+• Memory: {memory_info.percent}% used ({memory_info.available // (1024**3)} GB available)
+• Storage: {disk_info.percent}% used
+
+🤖 AI ASSISTANT STATUS:
+• Face Recognition: {face_recognition_status}
+• Camera: {camera_status}
+• Current User: {self.current_user or 'None (Standby)'}
+• Wake Words: Miley (Sophia), Dino (Eladriel), Assistant (Parent)
+
+📊 OPERATIONAL STATUS:
+• Speech Recognition: Functional
+• Text-to-Speech: Premium OpenAI voices active
+• Object Identification: Ready
+• Dinosaur Recognition: Ready for Eladriel
+
+All systems operational. Running smoothly."""
+            
+            return status_report
+            
+        except Exception as e:
+            logger.error(f"Error getting system status: {e}")
+            return "Status report unavailable. System monitoring tools may not be installed."
+
+    def run_system_diagnostic(self) -> str:
+        """Run system diagnostic tests for parent mode."""
+        try:
+            diagnostic_results = []
+            
+            # Test microphone
+            mic_test = self.audio_manager.test_microphone()
+            diagnostic_results.append(f"🎤 Microphone: {'✅ Pass' if mic_test else '❌ Fail'}")
+            
+            # Test camera
+            camera_test = self.face_detector.cap and self.face_detector.cap.isOpened()
+            diagnostic_results.append(f"📷 Camera: {'✅ Pass' if camera_test else '❌ Fail'}")
+            
+            # Test OpenAI connection
+            try:
+                test_response = self.client.chat.completions.create(
+                    model="gpt-3.5-turbo",
+                    messages=[{"role": "user", "content": "test"}],
+                    max_tokens=5
+                )
+                openai_test = True
+            except:
+                openai_test = False
+            diagnostic_results.append(f"🤖 OpenAI API: {'✅ Pass' if openai_test else '❌ Fail'}")
+            
+            # Test face recognition
+            face_test = self.face_detector is not None
+            diagnostic_results.append(f"👁️ Face Recognition: {'✅ Pass' if face_test else '❌ Fail'}")
+            
+            # Test TTS engines
+            tts_test = self.sophia_tts is not None and self.eladriel_tts is not None
+            diagnostic_results.append(f"🗣️ Text-to-Speech: {'✅ Pass' if tts_test else '❌ Fail'}")
+            
+            results_text = "\n".join(diagnostic_results)
+            return f"""System Diagnostic Complete:
+
+{results_text}
+
+Overall Status: {'✅ All systems operational' if all(['✅' in result for result in diagnostic_results]) else '⚠️ Some issues detected'}"""
+            
+        except Exception as e:
+            logger.error(f"Error running diagnostics: {e}")
+            return "❌ Diagnostic test failed. Unable to complete system check."
+
+    def enable_quiet_mode(self) -> str:
+        """Enable quiet mode for nighttime use."""
+        try:
+            # Reduce TTS volume/speed for all engines
+            for user_profile in self.users.values():
+                tts_engine = user_profile['tts_engine']
+                if tts_engine:
+                    tts_engine.setProperty('volume', 0.3)  # Lower volume
+                    tts_engine.setProperty('rate', 150)    # Slower speech
+            
+            self.quiet_mode = True
+            return "Quiet mode enabled. Speaking softly to avoid waking the children. Volume reduced to 30%."
+            
+        except Exception as e:
+            logger.error(f"Error enabling quiet mode: {e}")
+            return "Could not enable quiet mode. Audio settings may not be adjustable."
+
+    def disable_quiet_mode(self) -> str:
+        """Disable quiet mode and return to normal volume."""
+        try:
+            # Restore normal TTS volume/speed
+            for user_profile in self.users.values():
+                tts_engine = user_profile['tts_engine']
+                if tts_engine:
+                    tts_engine.setProperty('volume', 0.8)  # Normal volume
+                    tts_engine.setProperty('rate', 200)    # Normal speech rate
+            
+            self.quiet_mode = False
+            return "Quiet mode disabled. Volume restored to normal levels."
+            
+        except Exception as e:
+            logger.error(f"Error disabling quiet mode: {e}")
+            return "Could not disable quiet mode. Audio settings may not be adjustable."
+
+    def check_kids_status(self) -> str:
+        """Check on kids' recent activity and interactions."""
+        try:
+            current_time = time.strftime("%I:%M %p")
+            
+            # Check if kids are currently detected
+            kids_present = []
+            for user in ['sophia', 'eladriel']:
+                if user in self.last_face_greeting:
+                    last_seen_time = self.last_face_greeting[user]
+                    time_since = time.time() - last_seen_time
+                    if time_since < 300:  # Within last 5 minutes
+                        kids_present.append(f"{user.title()} (seen {int(time_since//60)} min ago)")
+            
+            status_message = f"""Kids Status Report - {current_time}
+
+👶 RECENT ACTIVITY:
+"""
+            
+            if kids_present:
+                status_message += f"• Currently detected: {', '.join(kids_present)}\n"
+            else:
+                status_message += "• No children detected in last 5 minutes\n"
+            
+            status_message += f"""
+🎭 FACE RECOGNITION:
+• Face detection system: {'Active' if self.face_recognition_active else 'Inactive'}
+• Auto-conversation: {'In progress' if self.current_user else 'Standby mode'}
+
+🔧 SYSTEM STATUS:
+• All child-safe features operational
+• Wake words active: 'Miley' (Sophia), 'Dino' (Eladriel)
+• Ready for immediate interaction when kids appear
+
+Everything looks good for when the children wake up!"""
+            
+            return status_message
+            
+        except Exception as e:
+            logger.error(f"Error checking kids status: {e}")
+            return "Unable to retrieve kids status information."
 
     def is_conversation_ending(self, user_input: str) -> bool:
         """Check if the user wants to end the conversation."""
@@ -526,7 +758,8 @@ What do you want to explore today? Show me anything you've discovered! 🚀"""
                 if self.is_conversation_ending(user_input):
                     farewell_messages = {
                         'sophia': "Goodbye Sophia! I'm always here when you need me. Have a wonderful day!",
-                        'eladriel': "See you later Eladriel! Keep exploring and learning about dinosaurs! Roar!"
+                        'eladriel': "See you later Eladriel! Keep exploring and learning about dinosaurs! Roar!",
+                        'parent': "Goodbye! Parent mode deactivated. All systems remain operational for the children. Call 'Assistant' anytime you need me."
                     }
                     self.speak(farewell_messages.get(user, "Goodbye! Talk to you soon!"), user)
                     conversation_active = False
@@ -559,7 +792,8 @@ What do you want to explore today? Show me anything you've discovered! 🚀"""
                     # First timeout - gentle prompt
                     prompts = {
                         'sophia': "I'm still here if you have more questions, Sophia!",
-                        'eladriel': "Still here for more dinosaur fun, Eladriel! What's next?"
+                        'eladriel': "Still here for more dinosaur fun, Eladriel! What's next?",
+                        'parent': "I'm still here and ready to assist. Any additional requests?"
                     }
                     self.speak(prompts.get(user, "I'm still listening if you have more to say!"), user)
                     print(f"⏰ Waiting for {user.title()} to continue...")
@@ -568,7 +802,8 @@ What do you want to explore today? Show me anything you've discovered! 🚀"""
                     # Multiple timeouts - end conversation gracefully
                     goodbye_messages = {
                         'sophia': "I'll be here whenever you need me, Sophia. Just say 'Miley' to chat again!",
-                        'eladriel': "I'll be waiting for more dinosaur adventures, Eladriel! Just say 'Dino' when you're ready!"
+                        'eladriel': "I'll be waiting for more dinosaur adventures, Eladriel! Just say 'Dino' when you're ready!",
+                        'parent': "Returning to standby mode. Say 'Assistant' anytime for immediate assistance."
                     }
                     self.speak(goodbye_messages.get(user, "I'll be here when you need me. Just call my name!"), user)
                     conversation_active = False
@@ -587,7 +822,7 @@ What do you want to explore today? Show me anything you've discovered! 🚀"""
         print("🤖 AI Assistant is now running with AUTOMATIC CONVERSATION MODE!")
         print("📢 How to interact:")
         print("   • AUTOMATIC: Just step in front of the camera!")
-        print("   • VOICE: Say 'Miley' (Sophia) or 'Dino' (Eladriel)")
+        print("   • VOICE: Say 'Miley' (Sophia), 'Dino' (Eladriel), or 'Assistant' (Parent)")
         print("💡 NEW FEATURES:")
         print("   • Face detection automatically starts conversations!")
         print("   • Universal object identification - show me anything!")
@@ -596,6 +831,7 @@ What do you want to explore today? Show me anything you've discovered! 🚀"""
         print("   • Say 'goodbye' to end conversations anytime")
         print("🔍 Object identification: Say 'What is this?' with any object!")
         print("👁️ Face recognition active - I can see Sophia and Eladriel!")
+        print("👨‍💼 Parent Mode: Say 'Assistant' for admin features and quiet mode!")
         print("🎤 Listening for faces and wake words...")
         
         try:

@@ -31,13 +31,15 @@ class WakeWordDetector:
         # User wake word mappings - FIXED the confusion
         self.wake_words = {
             'miley': 'sophia',
-            'dino': 'eladriel'
+            'dino': 'eladriel',
+            'assistant': 'parent'
         }
         
         # More natural wake word variations
         self.wake_word_variations = {
             'miley': ['miley', 'hey miley', 'hi miley', 'hello miley', 'miley cyrus', 'mily', 'mailey'],
-            'dino': ['dino', 'hey dino', 'hi dino', 'hello dino', 'dinosaur', 'deeno', 'dinah']
+            'dino': ['dino', 'hey dino', 'hi dino', 'hello dino', 'dinosaur', 'deeno', 'dinah'],
+            'assistant': ['assistant', 'hey assistant', 'hi assistant', 'hello assistant', 'ai assistant', 'hey ai', 'computer']
         }
         
         # Conversation state management
