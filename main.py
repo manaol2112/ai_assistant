@@ -13,6 +13,7 @@ import threading
 import signal
 from typing import Optional
 from datetime import datetime
+import cv2
 
 # Add current directory to path for imports
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -28,6 +29,7 @@ try:
     import openai
     import pyttsx3
     import speech_recognition as sr
+    from voice_activity_detector import VoiceActivityDetector
 except ImportError as e:
     print(f"❌ Import error: {e}")
     print("Please install required packages: pip install -r requirements.txt")
@@ -57,6 +59,9 @@ class AIAssistant:
         # Setup audio components
         self.audio_manager = AudioManager()
         self.recognizer = sr.Recognizer()
+        
+        # NEW: Initialize Voice Activity Detector with speaker differentiation
+        self.voice_detector = VoiceActivityDetector(self.recognizer)
         
         # Setup wake word detector
         self.wake_word_detector = WakeWordDetector(self.config)
@@ -855,11 +860,19 @@ class AIAssistant:
             # Play completion sound to indicate AI is done speaking and ready to listen
             self.play_completion_sound()
             
+            # CRITICAL: Add delay after speaking to prevent audio feedback loop
+            # This prevents the microphone from picking up the AI's own voice
+            import time
+            time.sleep(1.5)  # 1.5 second delay to ensure audio output is completely finished
+            
         except Exception as e:
             logger.error(f"TTS Error: {e}")
             self.stop_interrupt_listener()
             # Still play completion sound even on error
             self.play_completion_sound()
+            # Add delay even on error to prevent feedback
+            import time
+            time.sleep(1.5)
 
     def speak_no_interrupt(self, text: str, user: Optional[str] = None):
         """Convert text to speech without interrupt capability - for educational content like Filipino game."""
@@ -879,10 +892,17 @@ class AIAssistant:
             # Play completion sound to indicate AI is done speaking and ready to listen
             self.play_completion_sound()
             
+            # CRITICAL: Add delay after speaking to prevent audio feedback loop
+            import time
+            time.sleep(1.5)  # 1.5 second delay to ensure audio output is completely finished
+            
         except Exception as e:
             logger.error(f"TTS Error (no interrupt): {e}")
             # Still play completion sound even on error
             self.play_completion_sound()
+            # Add delay even on error to prevent feedback
+            import time
+            time.sleep(1.5)
 
     def _speak_with_interrupt_check(self, tts_engine, text: str):
         """Speak with smooth delivery but interrupt capability."""
@@ -1004,107 +1024,73 @@ class AIAssistant:
         return False
 
     def listen_for_speech(self, timeout: int = 15) -> Optional[str]:
-        """Listen for speech input and convert to text with enhanced sensitivity for better recognition."""
+        """Listen for speech input using intelligent voice activity detection with speaker differentiation."""
         try:
+            # CRITICAL: Additional delay before starting to listen to prevent audio feedback
+            # This ensures any residual audio output is completely finished
+            import time
+            time.sleep(0.5)  # Extra 0.5 second safety buffer before listening
+            
             # Play listening sound to indicate AI is ready to hear
             self.play_listening_sound()
             
+            # Brief pause after listening sound to let it finish completely
+            time.sleep(0.3)
+            
+            # Determine game mode for optimal sensitivity
+            game_mode = None
+            if self.spelling_game_active:
+                game_mode = 'spelling'
+            elif hasattr(self, 'filipino_translator') and self.filipino_translator.game_active:
+                game_mode = 'filipino'
+            
+            # Use the new voice activity detector with speaker differentiation
+            logger.info("🎤 Using Smart Voice Detection with Speaker Differentiation...")
+            text = self.voice_detector.listen_with_speaker_detection(
+                timeout=timeout,
+                silence_threshold=1.0,
+                max_total_time=30,
+                game_mode=game_mode
+            )
+            
+            if text is None:
+                return None
+            
+            # Special handling for "ready" detection in spelling game
+            if self.spelling_game_active:
+                detected_ready = self.detect_ready_command(text)
+                if detected_ready:
+                    logger.info(f"Ready command detected: '{text}' -> '{detected_ready}'")
+                    return detected_ready
+            
+            return text
+                
+        except Exception as e:
+            logger.error(f"Smart voice detection error: {e}")
+            # Fallback to basic recognition if smart detection fails
+            return self._fallback_listen_for_speech(timeout)
+    
+    def _fallback_listen_for_speech(self, timeout: int = 15) -> Optional[str]:
+        """Fallback speech recognition method."""
+        try:
             with sr.Microphone() as source:
-                logger.info("Listening for speech...")
+                logger.info("🎤 Using fallback speech recognition...")
+                self.recognizer.adjust_for_ambient_noise(source, duration=0.8)
                 
-                # Enhanced microphone calibration for better sensitivity
-                # Longer calibration for more accurate ambient noise detection
-                self.recognizer.adjust_for_ambient_noise(source, duration=0.5)
-                
-                # Improved sensitivity settings for all scenarios
                 if self.spelling_game_active:
-                    # Very sensitive settings for spelling game
                     self.recognizer.energy_threshold = max(200, self.recognizer.energy_threshold * 0.6)
-                    self.recognizer.dynamic_energy_threshold = True
-                    # Shorter phrase limit for quick "ready" commands
                     audio = self.recognizer.listen(source, timeout=timeout, phrase_time_limit=10)
-                elif hasattr(self, 'filipino_translator') and self.filipino_translator.game_active:
-                    # Enhanced sensitivity for Filipino game
-                    self.recognizer.energy_threshold = max(250, self.recognizer.energy_threshold * 0.7)
-                    self.recognizer.dynamic_energy_threshold = True
-                    # Allow longer phrases for Filipino words
-                    audio = self.recognizer.listen(source, timeout=timeout, phrase_time_limit=15)
                 else:
-                    # Improved standard settings for regular conversation
                     self.recognizer.energy_threshold = max(300, self.recognizer.energy_threshold * 0.8)
-                    self.recognizer.dynamic_energy_threshold = True
                     audio = self.recognizer.listen(source, timeout=timeout, phrase_time_limit=20)
                 
-                # Multi-attempt speech recognition with fallbacks
-                text = None
-                recognition_attempts = 0
-                max_attempts = 3
-                
-                while text is None and recognition_attempts < max_attempts:
-                    recognition_attempts += 1
-                    try:
-                        # Convert speech to text with language support
-                        # Use Filipino language when Filipino game is active for better accuracy
-                        if hasattr(self, 'filipino_translator') and self.filipino_translator.game_active:
-                            try:
-                                # Try Filipino first for better recognition of Filipino words
-                                text = self.recognizer.recognize_google(audio, language='fil-PH')
-                                logger.info(f"Recognized speech (Filipino, attempt {recognition_attempts}): {text}")
-                                break
-                            except (sr.UnknownValueError, sr.RequestError):
-                                # Fallback to English if Filipino recognition fails
-                                text = self.recognizer.recognize_google(audio, language='en-US')
-                                logger.info(f"Recognized speech (English fallback, attempt {recognition_attempts}): {text}")
-                                break
-                        else:
-                            # Try different language models for better recognition
-                            languages_to_try = ['en-US', 'en-GB', 'en-AU']
-                            for lang in languages_to_try:
-                                try:
-                                    text = self.recognizer.recognize_google(audio, language=lang)
-                                    logger.info(f"Recognized speech ({lang}, attempt {recognition_attempts}): {text}")
-                                    break
-                                except (sr.UnknownValueError, sr.RequestError):
-                                    continue
-                            
-                            if text:
-                                break
-                    
-                    except (sr.UnknownValueError, sr.RequestError) as e:
-                        logger.warning(f"Recognition attempt {recognition_attempts} failed: {e}")
-                        if recognition_attempts < max_attempts:
-                            # Brief pause before retry
-                            import time
-                            time.sleep(0.2)
-                        continue
-                
-                # If all attempts failed, return None
-                if text is None:
-                    logger.info("Could not understand audio after multiple attempts")
-                    return None
-                
-                # Post-process the recognized text for better accuracy
-                text = self._clean_recognized_text(text)
-                
-                # Special handling for "ready" detection in spelling game
-                if self.spelling_game_active:
-                    detected_ready = self.detect_ready_command(text.lower())
-                    if detected_ready:
-                        logger.info(f"Ready command detected: '{text}' -> '{detected_ready}'")
-                        return detected_ready
-                
+                text = self.recognizer.recognize_google(audio, language='en-US')
+                logger.info(f"Fallback recognized: {text}")
                 return text.lower()
                 
-        except sr.WaitTimeoutError:
-            logger.info("No speech detected within timeout")
+        except (sr.WaitTimeoutError, sr.UnknownValueError, sr.RequestError):
             return None
-        except sr.UnknownValueError:
-            logger.info("Could not understand audio")
-            return None
-        except sr.RequestError as e:
-            logger.error(f"Speech recognition error: {e}")
-            return None
-    
+
     def _clean_recognized_text(self, text: str) -> str:
         """Clean and improve recognized text for better accuracy."""
         if not text:
@@ -1170,7 +1156,7 @@ class AIAssistant:
             if word in text or any(difflib.SequenceMatcher(None, text, word).ratio() > 0.7 for word in text.split()):
                 return f"ready (detected from: {text})"
         
-        return None
+            return None
 
     async def process_with_openai(self, text: str, user: str) -> str:
         """Process user input with OpenAI and return response with conversation context."""
@@ -1291,7 +1277,7 @@ class AIAssistant:
                 
                 if any(phrase in user_input_lower for phrase in ready_phrases):
                     return self.check_spelling_answer(user)
-                
+            
                 # NEW: Visual word detection without saying "ready"
                 elif any(phrase in user_input_lower for phrase in ['auto check', 'smart check', 'visual check', 'camera check']):
                     return self.start_auto_visual_check(user)
