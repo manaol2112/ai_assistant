@@ -1,24 +1,41 @@
+# ============================================================================
+# AI ASSISTANT - .gitignore
+# Exclude unnecessary files from version control
+# ============================================================================
+
 # Python
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
-*.egg
-*.egg-info/
-dist/
+.Python
 build/
-*.whl
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
 
-# Virtual Environment (comprehensive patterns)
+# Virtual Environment
 ai_assistant_env/
 venv/
 env/
 ENV/
-.venv/
-.env/
-*.venv
+env.bak/
+venv.bak/
 
-# Environment variables
+# Environment Variables
 .env
 .env.local
 .env.development.local
@@ -30,48 +47,34 @@ ENV/
 logs/
 ai_assistant.log
 
-# Captured images and camera data
+# Captured Images and Camera Data
 captured_images/
 *.jpg
-*.jpeg
 *.png
+*.jpeg
 *.gif
 *.bmp
 *.tiff
-*.webp
 
-# Face recognition data
-*.pkl
-*.pickle
+# NOTE: people/ directory is INCLUDED for face recognition data
+# This contains the face encodings for Sophia and Eladriel
 
-# Model files and weights
+# Model Files (large files that can be downloaded)
 *.pt
 *.pth
 *.h5
-*.hdf5
-*.pb
-*.onnx
-*.tflite
-*.mlmodel
-*.dat
-*.bin
+*.pkl
+*.model
+yolov8n.pt
 
-# Large binary files
-*.dylib
-*.so.*
-*.dll
-*.exe
-
-# IDE and Editor files
+# IDE and Editor Files
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
-.DS_Store
-Thumbs.db
 
-# OS generated files
+# OS Files
 .DS_Store
 .DS_Store?
 ._*
@@ -80,35 +83,69 @@ Thumbs.db
 ehthumbs.db
 Thumbs.db
 
-# Temporary files
+# Temporary Files
 tmp/
 temp/
 *.tmp
 *.bak
 *.backup
-*.old
 
-# Documentation (unless specifically needed)
+# Audio Files (optional - uncomment if you don't want to track audio)
+# *.wav
+# *.mp3
+# *.m4a
+# *.ogg
+
+# Documentation builds
 docs/_build/
 
-# Test coverage
+# PyInstaller
+*.manifest
+*.spec
+
+# Unit test / coverage reports
 htmlcov/
+.tox/
+.nox/
 .coverage
 .coverage.*
+.cache
+nosetests.xml
 coverage.xml
 *.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
 
 # Jupyter Notebook
 .ipynb_checkpoints
 
-# PyCharm
-.idea/
+# IPython
+profile_default/
+ipython_config.py
 
-# Spyder
+# pyenv
+.python-version
+
+# pipenv
+Pipfile.lock
+
+# poetry
+poetry.lock
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Spyder project settings
 .spyderproject
 .spyproject
 
-# Rope
+# Rope project settings
 .ropeproject
 
 # mkdocs documentation
@@ -117,4 +154,10 @@ coverage.xml
 # mypy
 .mypy_cache/
 .dmypy.json
-dmypy.json 
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# pytype static type analyzer
+.pytype/ 
