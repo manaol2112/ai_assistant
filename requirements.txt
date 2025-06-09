@@ -1,0 +1,56 @@
+# Core AI and Speech Dependencies
+openai>=1.0.0
+speech-recognition>=3.10.0
+pyttsx3>=2.90
+pyaudio>=0.2.11
+
+# Audio Processing
+numpy>=1.21.0
+scipy>=1.7.0
+
+# Environment and Configuration
+python-dotenv>=0.19.0
+
+# Wake Word Detection (Optional)
+pvporcupine>=2.2.0
+
+# Raspberry Pi Optimization
+RPi.GPIO>=0.7.1; sys_platform == "linux"
+
+# Camera and Computer Vision for Dinosaur Identification
+opencv-python>=4.8.0
+Pillow>=9.0.0
+
+# Additional utilities
+requests>=2.28.0
+
+# Speech Recognition and Audio Processing
+SpeechRecognition>=3.10.0
+pyttsx3>=2.90
+pyaudio>=0.2.13
+numpy>=1.24.0
+
+# Optional Advanced Wake Word Detection
+# Uncomment if you want to use Picovoice Porcupine (requires subscription)
+# pvporcupine>=3.0.0
+
+# Raspberry Pi Optimized Audio Libraries
+# These provide better performance on Raspberry Pi
+portaudio19-dev  # System dependency
+python3-pyaudio  # System dependency alternative
+
+# Development and Testing (Optional)
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+
+# Logging and Utilities
+colorlog>=6.7.0
+
+# HTTP Client for API calls
+aiohttp>=3.8.0
+
+# Audio file handling (optional, for custom sounds)
+pydub>=0.25.1
+
+# System monitoring (for Raspberry Pi performance)
+psutil>=5.9.0 

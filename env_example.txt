@@ -1,0 +1,35 @@
+# Copy this file to .env and fill in your actual values
+
+# OpenAI Configuration (REQUIRED)
+OPENAI_API_KEY=your_openai_api_key_here
+
+# OpenAI Model Settings
+OPENAI_MODEL=gpt-3.5-turbo
+OPENAI_MAX_TOKENS=150
+OPENAI_TEMPERATURE=0.7
+
+# Audio Configuration
+AUDIO_SAMPLE_RATE=16000
+AUDIO_CHUNK_SIZE=1024
+AUDIO_CHANNELS=1
+
+# Speech Recognition Settings
+SPEECH_TIMEOUT=5
+SPEECH_PHRASE_LIMIT=10
+
+# Text-to-Speech Settings
+TTS_RATE=180
+TTS_VOLUME=0.9
+
+# Wake Word Detection
+WAKE_WORD_SENSITIVITY=0.5
+# Optional: Picovoice Porcupine Access Key (for advanced wake word detection)
+PORCUPINE_ACCESS_KEY=
+
+# Logging Configuration
+LOG_LEVEL=INFO
+LOG_FILE=ai_assistant.log
+
+# Raspberry Pi Optimization
+PI_OPTIMIZATION=true
+LOW_POWER_MODE=false 
