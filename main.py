@@ -79,6 +79,9 @@ class AIAssistant:
         logger.info("🧮 Setting up Math Quiz Game...")
         self.math_quiz = MathQuizGame(self.camera_handler)
         
+        # Set AI assistant reference for audio feedback
+        self.math_quiz.ai_assistant = self
+        
         # Setup dinosaur identifier for Eladriel (specialized for dinosaurs)
         logger.info("Setting up dinosaur identification for Eladriel...")
         self.dinosaur_identifier = DinosaurIdentifier(self.client, self.config)

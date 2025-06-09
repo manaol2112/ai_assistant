@@ -592,8 +592,15 @@ FEATURES:
                 difficulty = 'hard'
             return self.start_game(user, difficulty)
         
-        # Check answer commands
-        elif self.game_active and any(cmd in user_input_lower for cmd in ['ready', 'done', 'finished', 'check']):
+        # Check for verbal answers when game is active
+        elif self.game_active and self.current_problem:
+            # Check for verbal answer patterns
+            verbal_answer = self._extract_verbal_answer(user_input_lower)
+            if verbal_answer is not None:
+                return self._handle_verbal_answer(verbal_answer, user)
+        
+        # Check answer commands (camera-based)
+        if self.game_active and any(cmd in user_input_lower for cmd in ['ready', 'done', 'finished', 'check']):
             return self.check_math_answer(user)
         
         # End game commands
@@ -605,4 +612,97 @@ FEATURES:
             return self.get_help_message(user)
         
         else:
-            return "Say 'Math Game' to start, 'Ready' to check your answer, or 'Math Help' for instructions!" 
+            return "Say 'Math Game' to start, 'Ready' to check your answer, or 'Math Help' for instructions!"
+
+    def _extract_verbal_answer(self, user_input: str) -> int:
+        """Extract numerical answer from verbal input."""
+        import re
+        
+        # Common patterns for verbal answers
+        answer_patterns = [
+            r'the answer is (\d+)',
+            r'answer is (\d+)',
+            r'it is (\d+)',
+            r'it\'s (\d+)',
+            r'equals (\d+)',
+            r'is (\d+)',
+            r'^(\d+)$',  # Just a number
+            r'(\d+) is the answer',
+            r'(\d+) is my answer'
+        ]
+        
+        for pattern in answer_patterns:
+            match = re.search(pattern, user_input)
+            if match:
+                try:
+                    return int(match.group(1))
+                except ValueError:
+                    continue
+        
+        # Check for number words
+        number_words = {
+            'zero': 0, 'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
+            'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10,
+            'eleven': 11, 'twelve': 12, 'thirteen': 13, 'fourteen': 14, 'fifteen': 15,
+            'sixteen': 16, 'seventeen': 17, 'eighteen': 18, 'nineteen': 19, 'twenty': 20
+        }
+        
+        for word, num in number_words.items():
+            if f'answer is {word}' in user_input or f'the answer is {word}' in user_input:
+                return num
+        
+        return None
+
+    def _handle_verbal_answer(self, verbal_answer: int, user: str) -> str:
+        """Handle verbal answer from student."""
+        user_name = user.title()
+        correct_answer = self.current_problem['answer']
+        
+        self.problems_answered += 1
+        
+        if verbal_answer == correct_answer:
+            # Correct answer - automatically move to next problem
+            self.score += 1
+            
+            # Play correct sound if available
+            try:
+                if hasattr(self, 'ai_assistant') and self.ai_assistant:
+                    self.ai_assistant.play_math_correct_sound()
+            except:
+                pass
+            
+            if user == 'sophia':
+                feedback = f"🌟 Excellent, Sophia! {verbal_answer} is exactly right!"
+            elif user == 'eladriel':
+                feedback = f"🦕 Roar-some, Eladriel! {verbal_answer} is perfect!"
+            else:
+                feedback = f"Correct! The answer is {verbal_answer}."
+            
+            # Automatically move to next problem
+            if self.problem_index < len(self.current_problems) - 1:
+                self.problem_index += 1
+                self.current_problem = self.current_problems[self.problem_index]
+                next_problem = self._generate_next_problem_text(user)
+                feedback += f"\n\n{next_problem}"
+            else:
+                # Game complete
+                final_score = self._generate_final_score(user)
+                feedback += f"\n\n{final_score}"
+                self.game_active = False
+            
+            return feedback
+        else:
+            # Wrong answer - give hint and stay on same problem
+            try:
+                if hasattr(self, 'ai_assistant') and self.ai_assistant:
+                    self.ai_assistant.play_math_wrong_sound()
+            except:
+                pass
+            
+            hint = self.current_problem['hint']
+            if user == 'sophia':
+                return f"Not quite, Sophia! The answer isn't {verbal_answer}. {hint} Try again! ✨"
+            elif user == 'eladriel':
+                return f"Hmm, not quite, Eladriel! The answer isn't {verbal_answer}. {hint} Keep trying! 🦕"
+            else:
+                return f"Incorrect. The answer isn't {verbal_answer}. {hint}" 
