@@ -391,11 +391,90 @@ class AIAssistant:
             logger.error(f"Error generating wake word tone: {e}")
 
     def toggle_audio_feedback(self, enabled: bool):
-        """Enable or disable audio feedback."""
+        """Toggle audio feedback on/off."""
         self.audio_feedback_enabled = enabled
         status = "enabled" if enabled else "disabled"
-        logger.info(f"Audio feedback {status}")
-        return f"Audio feedback {status}."
+        logger.info(f"🔊 Audio feedback {status}")
+
+    def play_ready_to_speak_sound(self):
+        """Play a clear 'you can speak now' audio cue for kids."""
+        if not self.audio_feedback_enabled:
+            return
+            
+        try:
+            if self.pygame_available:
+                # Create a clear "you can speak now" tone
+                self._generate_ready_to_speak_tone()
+            else:
+                # Fallback to system beep - use a different sound than completion
+                import os
+                os.system('afplay /System/Library/Sounds/Hero.aiff 2>/dev/null &')
+        except Exception as e:
+            logger.error(f"Error playing ready-to-speak sound: {e}")
+
+    def _generate_ready_to_speak_tone(self):
+        """Generate a clear, friendly 'you can speak now' audio cue."""
+        try:
+            import pygame
+            import numpy as np
+            
+            # Create a welcoming, upward musical phrase that clearly signals "your turn"
+            sample_rate = 22050
+            duration = 0.8  # Slightly longer for clarity
+            
+            # Two-tone ascending sequence: G4 -> C5 (friendly and encouraging)
+            freq1 = 392  # G4 - warm, friendly start
+            freq2 = 523  # C5 - clear, confident "go ahead" signal
+            
+            # Split into two distinct notes
+            note_duration = duration / 2
+            t1 = np.linspace(0, note_duration, int(sample_rate * note_duration), False)
+            t2 = np.linspace(0, note_duration, int(sample_rate * note_duration), False)
+            
+            # First note (G4) - gentle invitation
+            note1 = np.sin(2 * np.pi * freq1 * t1) * 0.3
+            
+            # Second note (C5) - clear "your turn" signal
+            note2 = np.sin(2 * np.pi * freq2 * t2) * 0.35
+            
+            # Apply gentle envelopes for each note
+            fade_samples = int(sample_rate * 0.05)  # 50ms fade
+            
+            # Envelope for note 1
+            env1 = np.ones_like(note1)
+            env1[:fade_samples] = np.linspace(0, 1, fade_samples)
+            env1[-fade_samples:] = np.linspace(1, 0.7, fade_samples)  # Don't fade completely
+            note1 *= env1
+            
+            # Envelope for note 2  
+            env2 = np.ones_like(note2)
+            env2[:fade_samples] = np.linspace(0.7, 1, fade_samples)  # Start from previous level
+            env2[-fade_samples:] = np.linspace(1, 0, fade_samples)
+            note2 *= env2
+            
+            # Combine the notes with a tiny gap for clarity
+            gap_samples = int(sample_rate * 0.05)  # 50ms gap
+            gap = np.zeros(gap_samples)
+            combined = np.concatenate([note1, gap, note2])
+            
+            # Convert to 16-bit integers
+            audio_data = (combined * 32767).astype(np.int16)
+            
+            # Ensure array is C-contiguous for pygame
+            audio_data = np.ascontiguousarray(audio_data)
+            
+            # Convert to stereo
+            stereo_data = np.column_stack((audio_data, audio_data))
+            stereo_data = np.ascontiguousarray(stereo_data)
+            
+            # Play the sound
+            sound = pygame.sndarray.make_sound(stereo_data)
+            sound.play()
+            
+            logger.info("🗣️ Ready-to-speak cue played")
+            
+        except Exception as e:
+            logger.error(f"Error generating ready-to-speak tone: {e}")
 
     def _generate_spelling_celebration_sound(self):
         """Generate a celebratory victory sound for correct spelling answers."""
@@ -863,19 +942,23 @@ class AIAssistant:
             # Stop interrupt listener
             self.stop_interrupt_listener()
             
-            # Play completion sound to indicate AI is done speaking and ready to listen
-            self.play_completion_sound()
-            
             # CRITICAL: Add delay after speaking to prevent audio feedback loop
             # This prevents the microphone from picking up the AI's own voice
             import time
             time.sleep(1.5)  # 1.5 second delay to ensure audio output is completely finished
             
+            # NEW: Play clear "you can speak now" cue instead of confusing completion sound
+            self.play_ready_to_speak_sound()
+            
+            # Brief pause to let the cue finish and be clearly understood
+            time.sleep(0.5)
+            
         except Exception as e:
             logger.error(f"TTS Error: {e}")
             self.stop_interrupt_listener()
-            # Still play completion sound even on error
-            self.play_completion_sound()
+            # Still play ready cue even on error
+            self.play_ready_to_speak_sound()
+            time.sleep(0.5)
             # Add delay even on error to prevent feedback
             import time
             time.sleep(1.5)
@@ -904,17 +987,21 @@ class AIAssistant:
                 self.sophia_tts.say(text)
                 self.sophia_tts.runAndWait()
             
-            # Play completion sound
-            self.play_completion_sound()
-            
             # CRITICAL: Add delay after speaking to prevent audio feedback loop
             import time
             time.sleep(1.5)  # 1.5 second delay to ensure audio output is completely finished
             
+            # NEW: Play clear "you can speak now" cue for educational content too
+            self.play_ready_to_speak_sound()
+            
+            # Brief pause to let the cue finish and be clearly understood
+            time.sleep(0.5)
+            
         except Exception as e:
             logger.error(f"TTS Error (no interrupt): {e}")
-            # Still play completion sound even on error
-            self.play_completion_sound()
+            # Still play ready cue even on error
+            self.play_ready_to_speak_sound()
+            time.sleep(0.5)
             # Add delay even on error to prevent feedback
             import time
             time.sleep(1.5)
