@@ -30,6 +30,8 @@ try:
     import pyttsx3
     import speech_recognition as sr
     from voice_activity_detector import VoiceActivityDetector
+    from math_quiz_game import MathQuizGame
+    from camera_handler import CameraHandler
 except ImportError as e:
     print(f"❌ Import error: {e}")
     print("Please install required packages: pip install -r requirements.txt")
@@ -60,11 +62,22 @@ class AIAssistant:
         self.audio_manager = AudioManager()
         self.recognizer = sr.Recognizer()
         
-        # NEW: Initialize Voice Activity Detector with speaker differentiation
+        # Initialize Voice Activity Detector with speaker differentiation
         self.voice_detector = VoiceActivityDetector(self.recognizer)
         
         # Setup wake word detector
         self.wake_word_detector = WakeWordDetector(self.config)
+        
+        # Initialize Filipino translator (after OpenAI client is set up)
+        self.filipino_translator = FilipinoTranslator(self.client, self)
+        
+        # Setup camera and microphone
+        logger.info("Setting up camera for visual identification...")
+        self.camera_handler = CameraHandler()
+        
+        # Initialize Math Quiz Game (after camera setup)
+        logger.info("🧮 Setting up Math Quiz Game...")
+        self.math_quiz = MathQuizGame(self.camera_handler)
         
         # Setup dinosaur identifier for Eladriel (specialized for dinosaurs)
         logger.info("Setting up dinosaur identification for Eladriel...")
@@ -73,10 +86,6 @@ class AIAssistant:
         # Setup universal object identifier for both users
         logger.info("🔍 Setting up universal object identification system...")
         self.object_identifier = ObjectIdentifier()
-        
-        # Setup Filipino translation game
-        logger.info("🇵🇭 Setting up Filipino translation learning system...")
-        self.filipino_translator = FilipinoTranslator(self.client, self)
         
         # Setup face recognition system
         logger.info("🎭 Setting up face recognition system...")
@@ -160,7 +169,7 @@ class AIAssistant:
                 'greeting': self.get_dynamic_greeting('sophia'),
                 'face_greeting': self.get_dynamic_face_greeting('sophia'),
                 'tts_engine': self.sophia_tts,
-                'special_commands': ['help', 'what can you do', 'identify this', 'what is this', 'tell me about this', 'spelling game', 'play spelling', 'ready', 'end game', 'teach me filipino', 'filipino game']
+                'special_commands': ['help', 'what can you do', 'identify this', 'what is this', 'tell me about this', 'spelling game', 'play spelling', 'ready', 'end game', 'teach me filipino', 'filipino game', 'math game', 'math quiz', 'word problems']
             },
             'eladriel': {
                 'name': 'Eladriel',
@@ -169,7 +178,7 @@ class AIAssistant:
                 'greeting': self.get_dynamic_greeting('eladriel'),
                 'face_greeting': self.get_dynamic_face_greeting('eladriel'),
                 'tts_engine': self.eladriel_tts,
-                'special_commands': ['identify dinosaur', 'identify this', 'what is this', 'tell me about this', 'show me camera', 'dinosaur tips', 'help', 'spelling game', 'play spelling', 'ready', 'end game', 'teach me filipino', 'filipino game']
+                'special_commands': ['identify dinosaur', 'identify this', 'what is this', 'tell me about this', 'show me camera', 'dinosaur tips', 'help', 'spelling game', 'play spelling', 'ready', 'end game', 'teach me filipino', 'filipino game', 'math game', 'math quiz', 'word problems']
             },
             'parent': {
                 'name': 'Parent',
@@ -182,7 +191,7 @@ class AIAssistant:
                     'help', 'status report', 'system check', 'quiet mode on', 'quiet mode off',
                     'identify this', 'what is this', 'tell me about this', 'show me camera',
                     'check on kids', 'home automation', 'schedule reminder', 'weather',
-                    'news update', 'shopping list', 'calendar', 'notes', 'spelling game', 'play spelling', 'ready', 'end game', 'teach me filipino', 'filipino game'
+                    'news update', 'shopping list', 'calendar', 'notes', 'spelling game', 'play spelling', 'ready', 'end game', 'teach me filipino', 'filipino game', 'math game', 'math quiz', 'word problems'
                 ]
             }
         }
@@ -624,20 +633,40 @@ class AIAssistant:
             return None
 
     def play_spelling_correct_sound(self):
-        """Play celebration sound for correct spelling answers."""
+        """Play celebration sound for correct spelling or math answers."""
+        if not self.audio_feedback_enabled:
+            return
         try:
-            if self.spelling_correct_sound and self.audio_feedback_enabled and self.pygame_available:
-                self.spelling_correct_sound.play()
+            if self.pygame_available and hasattr(self, 'spelling_correct_sound'):
+                import pygame
+                pygame.mixer.Sound(self.spelling_correct_sound).play()
+            else:
+                import os
+                os.system('afplay /System/Library/Sounds/Hero.aiff 2>/dev/null &')
         except Exception as e:
-            logger.error(f"Error playing spelling correct sound: {e}")
+            logger.error(f"Error playing correct sound: {e}")
 
     def play_spelling_wrong_sound(self):
-        """Play buzzer sound for wrong spelling answers."""
+        """Play buzzer sound for incorrect spelling or math answers."""
+        if not self.audio_feedback_enabled:
+            return
         try:
-            if self.spelling_wrong_sound and self.audio_feedback_enabled and self.pygame_available:
-                self.spelling_wrong_sound.play()
+            if self.pygame_available and hasattr(self, 'spelling_wrong_sound'):
+                import pygame
+                pygame.mixer.Sound(self.spelling_wrong_sound).play()
+            else:
+                import os
+                os.system('afplay /System/Library/Sounds/Basso.aiff 2>/dev/null &')
         except Exception as e:
-            logger.error(f"Error playing spelling wrong sound: {e}")
+            logger.error(f"Error playing wrong sound: {e}")
+
+    def play_math_correct_sound(self):
+        """Play celebration sound for correct math answers (uses same sound as spelling)."""
+        self.play_spelling_correct_sound()
+
+    def play_math_wrong_sound(self):
+        """Play buzzer sound for incorrect math answers (uses same sound as spelling)."""
+        self.play_spelling_wrong_sound()
 
     def get_parent_greeting(self) -> str:
         """Get time-appropriate greeting for parent mode."""
@@ -1189,7 +1218,7 @@ class AIAssistant:
                     audio = self.recognizer.listen(source, timeout=timeout, phrase_time_limit=10)
                 else:
                     self.recognizer.energy_threshold = max(300, self.recognizer.energy_threshold * 0.8)
-                    audio = self.recognizer.listen(source, timeout=timeout, phrase_time_limit=20)
+                audio = self.recognizer.listen(source, timeout=timeout, phrase_time_limit=20)
                 
                 text = self.recognizer.recognize_google(audio, language='en-US')
                 logger.info(f"Fallback recognized: {text}")
@@ -1415,6 +1444,10 @@ class AIAssistant:
         if any(phrase in user_input_lower for phrase in ['help', 'what can you do', 'commands']):
             return self.get_help_message(user)
         
+        # Math Quiz Game Commands (for all users)
+        if self.math_quiz.is_math_game_command(user_input):
+            return self.math_quiz.handle_math_command(user_input, user)
+        
         return None
     
     def handle_object_identification(self, user: str) -> str:
@@ -1506,6 +1539,14 @@ class AIAssistant:
 • Learn words about animals, family, colors, and more!
 • Quick feedback and automatic next questions!
 
+🧮 MATH WORD PROBLEMS (NEW!):
+• Say "Math Game" to solve fun word problems! ✨
+• I'll give you math stories to solve
+• Write BOTH the equation AND answer on paper
+• Say 'Ready' when you're done, or just show me!
+• Get hints and step-by-step help
+• Practice addition, subtraction, and more!
+
 🤖 SMART SPELLING FEATURES:
 • Enhanced speech recognition - I understand when you're ready!
 • Try saying: "Done", "Finished", "Check it", "Look at this"
@@ -1568,6 +1609,14 @@ Ask me anything, show me any object, or play the spelling game to practice your 
 • Simple: I say English, you say Filipino!
 • Learn words about animals, family, colors, and more!
 • Quick feedback and automatic next questions!
+
+🧮 DINO-MATH ADVENTURES (NEW!):
+• Say "Math Game" for mathematical dinosaur stories! 🦕🧮
+• Solve word problems about dinosaurs and adventures
+• Write equations AND answers like a math-a-saurus!
+• Say 'Ready' when done, or show me your work!
+• Get dino-powered hints and encouragement
+• Count like the smartest dinosaurs!
 
 🦕 DINO-SMART FEATURES:
 • Enhanced ready detection - I hear you roar when you're done!
@@ -1637,6 +1686,14 @@ What do you want to explore today? Show me anything you've discovered, or let's 
 • Say "Filipino Game" to test the language learning system
 • Simple English-to-Filipino translation format
 • Monitors response accuracy and learning progress
+
+🧮 MATH QUIZ GAME TESTING (NEW!):
+• Say "Math Game" to test the word problem system  
+• Validates camera-based equation and answer checking
+• Reviews age-appropriate math problems with hints
+• Tests OCR accuracy for mathematical notation
+• Difficulty levels: Easy, Medium, Hard
+• Use "Ready" and "End Math" commands for full testing
 
 💡 CONVERSATION MODES:
 • VOICE ACTIVATED: Say 'Assistant' to activate
