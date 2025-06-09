@@ -190,17 +190,31 @@ Let's solve this! 🚀"""
             
             if result["success"]:
                 ai_description = result["message"].lower()
+                detected_text = result.get("detected_text", "")
                 
-                # Verify the math work using AI description
-                equation_correct = self._verify_equation_from_description(ai_description, expected_equation)
-                answer_correct = self._verify_answer_from_description(ai_description, expected_answer)
+                # Log what the AI actually detected for debugging
+                logger.info(f"🔍 AI Description: {ai_description}")
+                logger.info(f"📝 Detected Text: {detected_text}")
+                logger.info(f"🎯 Expected: {expected_math_work}")
+                
+                # Extract what was actually written from the AI description
+                actual_equation, actual_answer = self._extract_actual_math_work(ai_description, detected_text)
+                
+                logger.info(f"🧮 Actual equation detected: '{actual_equation}'")
+                logger.info(f"🔢 Actual answer detected: '{actual_answer}'")
+                logger.info(f"✅ Expected equation: '{expected_equation}'")
+                logger.info(f"✅ Expected answer: '{expected_answer}'")
+                
+                # Verify the math work using strict comparison
+                equation_correct = self._verify_equation_strict(actual_equation, expected_equation)
+                answer_correct = self._verify_answer_strict(actual_answer, expected_answer)
                 
                 self.problems_answered += 1
                 
-                # Provide feedback based on correctness
+                # Provide feedback based on correctness with ACTUAL detected values
                 if equation_correct and answer_correct:
                     self.score += 1
-                    feedback = self._generate_correct_feedback(user, expected_equation, expected_answer)
+                    feedback = self._generate_correct_feedback(user, actual_equation, actual_answer)
                     
                     # Play correct sound
                     try:
@@ -210,7 +224,7 @@ Let's solve this! 🚀"""
                         pass
                     
                 elif equation_correct and not answer_correct:
-                    feedback = self._generate_equation_right_answer_wrong_feedback(user, expected_equation, expected_answer)
+                    feedback = self._generate_equation_right_answer_wrong_feedback(user, actual_equation, actual_answer, expected_answer)
                     
                     # Play wrong sound
                     try:
@@ -220,7 +234,7 @@ Let's solve this! 🚀"""
                         pass
                         
                 elif not equation_correct and answer_correct:
-                    feedback = self._generate_equation_wrong_answer_right_feedback(user, expected_equation, expected_answer)
+                    feedback = self._generate_equation_wrong_answer_right_feedback(user, actual_equation, actual_answer, expected_equation)
                     
                     # Play wrong sound  
                     try:
@@ -230,7 +244,7 @@ Let's solve this! 🚀"""
                         pass
                         
                 else:
-                    feedback = self._generate_incorrect_feedback(user, expected_equation, expected_answer)
+                    feedback = self._generate_incorrect_feedback(user, actual_equation, actual_answer, expected_equation, expected_answer)
                     
                     # Play wrong sound
                     try:
@@ -260,82 +274,74 @@ Let's solve this! 🚀"""
             logger.error(f"Error checking math answer: {e}")
             return f"Oops! I had trouble checking your work, {user_name}. Let's try again!"
 
-    def _verify_equation_from_description(self, ai_description: str, expected_equation: str) -> bool:
-        """Verify if the equation is correctly written based on AI description."""
+    def _extract_actual_math_work(self, ai_description: str, detected_text: str) -> tuple:
+        """Extract the actual equation and answer from AI description."""
         import re
         
-        # Normalize the expected equation for comparison
-        normalized_expected = self._normalize_equation(expected_equation)
+        # Try to extract from detected_text first (most reliable)
+        if detected_text:
+            # Look for equation pattern like "10-4=6" or "10 - 4 = 6"
+            equation_match = re.search(r'([0-9]+\s*[-+×÷]\s*[0-9]+)', detected_text)
+            answer_match = re.search(r'=\s*([0-9]+)', detected_text)
+            
+            if equation_match and answer_match:
+                return equation_match.group(1).strip(), answer_match.group(1).strip()
         
-        # Look for equation patterns in the AI description
+        # Fallback to AI description analysis
+        # Look for equations in various formats
         equation_patterns = [
-            rf"{re.escape(expected_equation)}",
-            rf"{re.escape(normalized_expected)}",
-            rf"equation\s*['\"`]?{re.escape(expected_equation)}['\"`]?",
-            rf"written\s*['\"`]?{re.escape(expected_equation)}['\"`]?",
-            rf"shows\s*['\"`]?{re.escape(expected_equation)}['\"`]?",
-            rf"math\s*['\"`]?{re.escape(expected_equation)}['\"`]?",
+            r'([0-9]+\s*[-+×÷]\s*[0-9]+)',  # Basic equation
+            r'equation[:\s]*["\']?([0-9]+\s*[-+×÷]\s*[0-9]+)["\']?',  # "equation: 10-4"
+            r'written[:\s]*["\']?([0-9]+\s*[-+×÷]\s*[0-9]+)["\']?',   # "written: 10-4"
         ]
         
-        # Also check for the individual numbers and operators
-        parts = expected_equation.replace(' ', '').replace('+', ' + ').replace('-', ' - ').replace('×', ' × ').replace('÷', ' ÷ ').split()
-        all_parts_found = True
-        for part in parts:
-            if part.strip() and part not in ai_description:
-                all_parts_found = False
+        # Look for answers
+        answer_patterns = [
+            r'=\s*([0-9]+)',  # = 6
+            r'answer[:\s]*["\']?([0-9]+)["\']?',  # "answer: 6"
+            r'equals[:\s]*["\']?([0-9]+)["\']?',  # "equals: 6"
+        ]
+        
+        equation = ""
+        answer = ""
+        
+        for pattern in equation_patterns:
+            match = re.search(pattern, ai_description, re.IGNORECASE)
+            if match:
+                equation = match.group(1).strip()
                 break
         
-        # Check patterns or all parts
-        for pattern in equation_patterns:
-            if re.search(pattern, ai_description, re.IGNORECASE):
-                logger.info(f"✅ Equation found in AI description: '{expected_equation}'")
-                return True
-        
-        if all_parts_found and len(parts) >= 3:  # At least number operator number
-            logger.info(f"✅ All equation parts found: {parts}")
-            return True
-        
-        logger.info(f"❌ Equation not found in description: '{expected_equation}'")
-        return False
-
-    def _verify_answer_from_description(self, ai_description: str, expected_answer: str) -> bool:
-        """Verify if the answer is correctly written based on AI description."""
-        import re
-        
-        # Look for answer patterns in the AI description
-        answer_patterns = [
-            rf"=\s*{re.escape(expected_answer)}",
-            rf"answer\s*['\"`]?{re.escape(expected_answer)}['\"`]?",
-            rf"equals\s*{re.escape(expected_answer)}",
-            rf"result\s*['\"`]?{re.escape(expected_answer)}['\"`]?",
-            rf"solution\s*['\"`]?{re.escape(expected_answer)}['\"`]?",
-            rf"{re.escape(expected_answer)}\s*written",
-            rf"shows\s*{re.escape(expected_answer)}",
-        ]
-        
         for pattern in answer_patterns:
-            if re.search(pattern, ai_description, re.IGNORECASE):
-                logger.info(f"✅ Answer found in AI description: '{expected_answer}'")
-                return True
+            match = re.search(pattern, ai_description, re.IGNORECASE)
+            if match:
+                answer = match.group(1).strip()
+                break
         
-        # Also check if the number appears prominently
-        if expected_answer in ai_description:
-            # Make sure it's not just part of the equation
-            answer_context_patterns = [
-                rf"=.*{re.escape(expected_answer)}",
-                rf"{re.escape(expected_answer)}.*answer",
-                rf"answer.*{re.escape(expected_answer)}",
-                rf"{re.escape(expected_answer)}.*result",
-                rf"result.*{re.escape(expected_answer)}",
-            ]
-            
-            for pattern in answer_context_patterns:
-                if re.search(pattern, ai_description, re.IGNORECASE):
-                    logger.info(f"✅ Answer found in context: '{expected_answer}'")
-                    return True
+        return equation, answer
+
+    def _verify_equation_strict(self, actual_equation: str, expected_equation: str) -> bool:
+        """Strictly verify if the actual equation matches expected."""
+        if not actual_equation:
+            logger.info(f"❌ No equation detected")
+            return False
         
-        logger.info(f"❌ Answer not found in description: '{expected_answer}'")
-        return False
+        # Normalize both for comparison
+        actual_normalized = self._normalize_equation(actual_equation)
+        expected_normalized = self._normalize_equation(expected_equation)
+        
+        match = actual_normalized == expected_normalized
+        logger.info(f"🧮 Equation comparison: '{actual_normalized}' vs '{expected_normalized}' = {match}")
+        return match
+
+    def _verify_answer_strict(self, actual_answer: str, expected_answer: str) -> bool:
+        """Strictly verify if the actual answer matches expected."""
+        if not actual_answer:
+            logger.info(f"❌ No answer detected")
+            return False
+        
+        match = actual_answer.strip() == expected_answer.strip()
+        logger.info(f"🔢 Answer comparison: '{actual_answer}' vs '{expected_answer}' = {match}")
+        return match
 
     def _normalize_equation(self, equation: str) -> str:
         """Normalize equation for comparison (remove spaces, standardize operators)."""
@@ -363,43 +369,43 @@ Let's solve this! 🚀"""
         
         return feedback
 
-    def _generate_equation_right_answer_wrong_feedback(self, user: str, equation: str, expected_answer: str) -> str:
+    def _generate_equation_right_answer_wrong_feedback(self, user: str, actual_equation: str, actual_answer: str, expected_answer: str) -> str:
         """Generate feedback when equation is right but answer is wrong."""
         user_name = user.title()
         
         if user == 'sophia':
-            feedback = f"Great equation, Sophia! '{equation}' is right! But let's check your math - the answer should be {expected_answer}. 🧮"
+            feedback = f"Great equation, Sophia! '{actual_equation}' is right! But I see you wrote '{actual_answer}' - the answer should be {expected_answer}. 🧮"
         elif user == 'eladriel':
-            feedback = f"Good thinking, Eladriel! Your equation '{equation}' is perfect! But the answer should be {expected_answer}. Let's count again! 🦕"
+            feedback = f"Good thinking, Eladriel! Your equation '{actual_equation}' is perfect! But you wrote '{actual_answer}' and it should be {expected_answer}. Let's count again! 🦕"
         else:
-            feedback = f"Equation correct: {equation}, but answer should be {expected_answer}"
+            feedback = f"Equation correct: {actual_equation}, but you wrote {actual_answer} when it should be {expected_answer}"
         
         return feedback
 
-    def _generate_equation_wrong_answer_right_feedback(self, user: str, expected_equation: str, answer: str) -> str:
+    def _generate_equation_wrong_answer_right_feedback(self, user: str, actual_equation: str, actual_answer: str, expected_equation: str) -> str:
         """Generate feedback when answer is right but equation is wrong."""
         user_name = user.title()
         
         if user == 'sophia':
-            feedback = f"Good answer, Sophia! '{answer}' is right! But the equation should be '{expected_equation}'. 📝"
+            feedback = f"Good answer, Sophia! '{actual_answer}' is right! But I see you wrote '{actual_equation}' when the equation should be '{expected_equation}'. 📝"
         elif user == 'eladriel':
-            feedback = f"Nice counting, Eladriel! '{answer}' is correct! But the equation should be '{expected_equation}'. 🦕"
+            feedback = f"Nice counting, Eladriel! '{actual_answer}' is correct! But you wrote '{actual_equation}' and it should be '{expected_equation}'. 🦕"
         else:
-            feedback = f"Answer correct: {answer}, but equation should be {expected_equation}"
+            feedback = f"Answer correct: {actual_answer}, but equation should be {expected_equation} (you wrote {actual_equation})"
         
         return feedback
 
-    def _generate_incorrect_feedback(self, user: str, expected_equation: str, expected_answer: str) -> str:
+    def _generate_incorrect_feedback(self, user: str, actual_equation: str, actual_answer: str, expected_equation: str, expected_answer: str) -> str:
         """Generate feedback for incorrect answers."""
         user_name = user.title()
         hint = self.current_problem['hint']
         
         if user == 'sophia':
-            feedback = f"Not quite, Sophia! The equation should be '{expected_equation}' and the answer is {expected_answer}. {hint} ✨"
+            feedback = f"I see you wrote '{actual_equation} = {actual_answer}', but the equation should be '{expected_equation}' and the answer is {expected_answer}. {hint} ✨"
         elif user == 'eladriel':
-            feedback = f"Let's try again, Eladriel! The equation is '{expected_equation}' and the answer is {expected_answer}. {hint} 🦕"
+            feedback = f"I see you wrote '{actual_equation} = {actual_answer}', Eladriel! The equation should be '{expected_equation}' and the answer is {expected_answer}. {hint} 🦕"
         else:
-            feedback = f"Incorrect. Correct equation: {expected_equation}, Answer: {expected_answer}"
+            feedback = f"You wrote: {actual_equation} = {actual_answer}. Correct: {expected_equation} = {expected_answer}"
         
         return feedback
 
