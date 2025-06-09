@@ -270,8 +270,12 @@ class AIAssistant:
             # Convert to 16-bit integers
             audio_data = (combined * 32767).astype(np.int16)
             
+            # Ensure array is C-contiguous for pygame
+            audio_data = np.ascontiguousarray(audio_data)
+            
             # Convert to stereo
-            stereo_data = np.array([audio_data, audio_data]).T
+            stereo_data = np.column_stack((audio_data, audio_data))
+            stereo_data = np.ascontiguousarray(stereo_data)
             
             # Play the sound
             sound = pygame.sndarray.make_sound(stereo_data)
@@ -312,8 +316,12 @@ class AIAssistant:
             # Convert to 16-bit integers
             audio_data = (tone * 32767).astype(np.int16)
             
+            # Ensure array is C-contiguous for pygame
+            audio_data = np.ascontiguousarray(audio_data)
+            
             # Convert to stereo
-            stereo_data = np.array([audio_data, audio_data]).T
+            stereo_data = np.column_stack((audio_data, audio_data))
+            stereo_data = np.ascontiguousarray(stereo_data)
             
             # Play the sound
             sound = pygame.sndarray.make_sound(stereo_data)
@@ -352,8 +360,12 @@ class AIAssistant:
             # Convert to 16-bit integers
             audio_data = (chord * 32767).astype(np.int16)
             
+            # Ensure array is C-contiguous for pygame
+            audio_data = np.ascontiguousarray(audio_data)
+            
             # Convert to stereo
-            stereo_data = np.array([audio_data, audio_data]).T
+            stereo_data = np.column_stack((audio_data, audio_data))
+            stereo_data = np.ascontiguousarray(stereo_data)
             
             # Play the sound
             sound = pygame.sndarray.make_sound(stereo_data)
