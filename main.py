@@ -84,6 +84,12 @@ class AIAssistant:
         self.interrupt_listener_active = False
         self.interrupt_thread = None
         
+        # Conversation memory and context tracking
+        self.conversation_history = {}  # Store conversation history per user
+        self.last_ai_response = {}  # Store last response per user for repeat functionality
+        self.conversation_context = {}  # Store ongoing context per user
+        self.max_history_length = 10  # Keep last 10 exchanges per user
+        
         # Spelling game settings
         self.spelling_game_active = False
         self.current_spelling_word = None
@@ -287,7 +293,15 @@ class AIAssistant:
                         'eladriel': "See you later Eladriel! Keep exploring and learning about dinosaurs! Roar!",
                         'parent': "Goodbye! Parent mode deactivated. All systems remain operational for the children."
                     }
-                    self.speak(farewell_messages.get(user, "Goodbye! Talk to you soon!"), user)
+                    farewell_response = farewell_messages.get(user, "Goodbye! Talk to you soon!")
+                    
+                    # Add farewell to history and then clear it
+                    self.add_to_conversation_history(user, user_input, farewell_response)
+                    self.speak(farewell_response, user)
+                    
+                    # Clear conversation history for fresh start next time
+                    self.clear_conversation_history(user)
+                    
                     conversation_active = False
                     break
                 else:
@@ -317,7 +331,15 @@ class AIAssistant:
                         'eladriel': "See you later Eladriel! Keep exploring and learning about dinosaurs! Roar!",
                         'parent': "Goodbye! Parent mode deactivated. All systems remain operational for the children. Call 'Assistant' anytime you need me."
                     }
-                    self.speak(farewell_messages.get(user, "Goodbye! Talk to you soon!"), user)
+                    farewell_response = farewell_messages.get(user, "Goodbye! Talk to you soon!")
+                    
+                    # Add farewell to history and then clear it
+                    self.add_to_conversation_history(user, user_input, farewell_response)
+                    self.speak(farewell_response, user)
+                    
+                    # Clear conversation history for fresh start next time
+                    self.clear_conversation_history(user)
+                    
                     conversation_active = False
                     break
                 
@@ -325,6 +347,8 @@ class AIAssistant:
                 special_response = self.handle_special_commands(user_input, user)
                 
                 if special_response:
+                    # Add special command to conversation history too
+                    self.add_to_conversation_history(user, user_input, special_response)
                     self.speak(special_response, user)
                 else:
                     # Process with OpenAI for regular conversation
@@ -584,31 +608,57 @@ class AIAssistant:
             return None
 
     async def process_with_openai(self, text: str, user: str) -> str:
-        """Process user input with OpenAI and return response."""
+        """Process user input with OpenAI and return response with conversation context."""
         try:
             # Create a personalized system prompt based on user
             user_info = self.users.get(user, {})
             personality = user_info.get('personality', 'helpful and friendly')
+            user_name = user_info.get('name', user.title())
             
-            system_prompt = f"""You are a helpful AI assistant speaking to {user_info.get('name', user.title())}. 
+            # Get conversation context
+            conversation_context = self.get_conversation_context(user)
+            
+            system_prompt = f"""You are a helpful AI assistant speaking to {user_name}. 
             Be {personality}. Keep responses friendly, age-appropriate, and engaging for children. 
-            Be encouraging and educational when possible. Keep responses concise but informative."""
+            Be encouraging and educational when possible. Keep responses concise but informative.
+            
+            Remember to reference previous conversation when relevant. You have context of what you discussed earlier."""
+            
+            # Prepare messages with context
+            messages = [{"role": "system", "content": system_prompt}]
+            
+            # Add conversation history for context (if available)
+            if conversation_context:
+                messages.append({
+                    "role": "system", 
+                    "content": f"Recent conversation context:\n{conversation_context}\n\nUse this context to provide relevant responses and reference earlier topics when appropriate."
+                })
+            
+            # Add current user message
+            messages.append({"role": "user", "content": text})
             
             response = self.client.chat.completions.create(
                 model="gpt-3.5-turbo",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": text}
-                ],
+                messages=messages,
                 max_tokens=150,
                 temperature=0.7
             )
             
-            return response.choices[0].message.content.strip()
+            ai_response = response.choices[0].message.content.strip()
+            
+            # Add this exchange to conversation history
+            self.add_to_conversation_history(user, text, ai_response)
+            
+            return ai_response
             
         except Exception as e:
             logger.error(f"OpenAI API error: {e}")
-            return "I'm sorry, I'm having trouble understanding right now. Can you try again?"
+            error_response = "I'm sorry, I'm having trouble understanding right now. Can you try again?"
+            
+            # Still add to history even for errors
+            self.add_to_conversation_history(user, text, error_response)
+            
+            return error_response
 
     def handle_special_commands(self, user_input: str, user: str) -> Optional[str]:
         """Handle special commands for each user."""
@@ -642,6 +692,16 @@ class AIAssistant:
         
         if any(phrase in user_input_lower for phrase in object_identification_phrases):
             return self.handle_object_identification(user)
+        
+        # Repeat functionality for all users
+        repeat_phrases = [
+            'repeat', 'say that again', 'what did you say', 'can you repeat that',
+            'repeat that', 'say it again', 'what was that', 'i didn\'t hear you',
+            'could you repeat', 'please repeat', 'one more time', 'again'
+        ]
+        
+        if any(phrase in user_input_lower for phrase in repeat_phrases):
+            return self.handle_repeat_request(user)
         
         # Spelling Game Commands (for Sophia, Eladriel, and Parent)
         if user in ['sophia', 'eladriel', 'parent']:
@@ -763,6 +823,12 @@ class AIAssistant:
 • No wake words needed when you're visible!
 • Just step away or say 'goodbye' to end
 
+🧠 SMART FEATURES:
+• I remember our conversation! Ask me to "repeat" what I just said
+• I know what we talked about earlier and can reference it
+• Context-aware responses based on our discussion
+• Each conversation builds on what we discussed before
+
 Ask me anything, show me any object, or play the spelling game to practice your writing!"""
         
         elif user == 'eladriel':
@@ -803,6 +869,12 @@ Ask me anything, show me any object, or play the spelling game to practice your 
 • Perfect for showing me dinosaurs and other objects - no wake words needed!
 • Just step away or say 'goodbye' to end
 
+🧠 SMART FEATURES:
+• I remember our conversation! Say "repeat" if you want to hear something again
+• I know what we talked about earlier and can reference it
+• Context-aware responses based on our discussion
+• Each conversation builds on what we discussed before
+
 What do you want to explore today? Show me anything you've discovered, or let's practice spelling! 🚀"""
         
         elif user == 'parent':
@@ -841,6 +913,12 @@ What do you want to explore today? Show me anything you've discovered, or let's 
 • Real-time system monitoring
 • Error reporting and troubleshooting
 • Configuration adjustments
+
+🧠 CONVERSATION INTELLIGENCE:
+• Full conversation memory and context tracking
+• Repeat functionality for all responses
+• Context-aware responses that reference earlier discussion
+• Conversation history maintained throughout session
 
 All standard features available with enhanced capabilities for household management."""
         
@@ -1078,7 +1156,15 @@ Everything looks good for when the children wake up!"""
                         'eladriel': "See you later Eladriel! Keep exploring and learning about dinosaurs! Roar!",
                         'parent': "Goodbye! Parent mode deactivated. All systems remain operational for the children."
                     }
-                    self.speak(farewell_messages.get(user, "Goodbye! Talk to you soon!"), user)
+                    farewell_response = farewell_messages.get(user, "Goodbye! Talk to you soon!")
+                    
+                    # Add farewell to history and then clear it
+                    self.add_to_conversation_history(user, user_input, farewell_response)
+                    self.speak(farewell_response, user)
+                    
+                    # Clear conversation history for fresh start next time
+                    self.clear_conversation_history(user)
+                    
                     conversation_active = False
                     break
                 else:
@@ -1108,7 +1194,15 @@ Everything looks good for when the children wake up!"""
                         'eladriel': "See you later Eladriel! Keep exploring and learning about dinosaurs! Roar!",
                         'parent': "Goodbye! Parent mode deactivated. All systems remain operational for the children. Call 'Assistant' anytime you need me."
                     }
-                    self.speak(farewell_messages.get(user, "Goodbye! Talk to you soon!"), user)
+                    farewell_response = farewell_messages.get(user, "Goodbye! Talk to you soon!")
+                    
+                    # Add farewell to history and then clear it
+                    self.add_to_conversation_history(user, user_input, farewell_response)
+                    self.speak(farewell_response, user)
+                    
+                    # Clear conversation history for fresh start next time
+                    self.clear_conversation_history(user)
+                    
                     conversation_active = False
                     break
                 
@@ -1116,6 +1210,8 @@ Everything looks good for when the children wake up!"""
                 special_response = self.handle_special_commands(user_input, user)
                 
                 if special_response:
+                    # Add special command to conversation history too
+                    self.add_to_conversation_history(user, user_input, special_response)
                     self.speak(special_response, user)
                 else:
                     # Process with OpenAI for regular conversation
@@ -1520,6 +1616,70 @@ Thanks for playing! Say 'Spelling Game' anytime you want to practice more words!
         self.spelling_score = 0
         
         return final_message
+
+    def add_to_conversation_history(self, user: str, user_message: str, ai_response: str):
+        """Add exchange to conversation history for context."""
+        if user not in self.conversation_history:
+            self.conversation_history[user] = []
+        
+        # Add the exchange
+        exchange = {
+            'timestamp': datetime.now().isoformat(),
+            'user_message': user_message,
+            'ai_response': ai_response
+        }
+        
+        self.conversation_history[user].append(exchange)
+        
+        # Keep only the last N exchanges to prevent memory issues
+        if len(self.conversation_history[user]) > self.max_history_length:
+            self.conversation_history[user] = self.conversation_history[user][-self.max_history_length:]
+        
+        # Store last response for repeat functionality
+        self.last_ai_response[user] = ai_response
+        
+        logger.info(f"Added to conversation history for {user}: {len(self.conversation_history[user])} exchanges")
+
+    def get_conversation_context(self, user: str) -> str:
+        """Get recent conversation context for the user."""
+        if user not in self.conversation_history or not self.conversation_history[user]:
+            return ""
+        
+        # Get last 3 exchanges for context (not too much to overwhelm the prompt)
+        recent_history = self.conversation_history[user][-3:]
+        
+        context_parts = []
+        for exchange in recent_history:
+            context_parts.append(f"Previous - You asked: '{exchange['user_message']}' | You responded: '{exchange['ai_response']}'")
+        
+        return "\n".join(context_parts)
+
+    def clear_conversation_history(self, user: str):
+        """Clear conversation history for a user (e.g., when they say goodbye)."""
+        if user in self.conversation_history:
+            self.conversation_history[user] = []
+        if user in self.last_ai_response:
+            del self.last_ai_response[user]
+        if user in self.conversation_context:
+            del self.conversation_context[user]
+        logger.info(f"Cleared conversation history for {user}")
+
+    def get_last_response(self, user: str) -> str:
+        """Get the last AI response for repeat functionality."""
+        return self.last_ai_response.get(user, "I haven't said anything yet in our conversation!")
+
+    def handle_repeat_request(self, user: str) -> str:
+        """Handle when user asks AI to repeat what it just said."""
+        last_response = self.get_last_response(user)
+        
+        if user == 'sophia':
+            return f"Of course Sophia! I just said: {last_response}"
+        elif user == 'eladriel':
+            return f"Sure thing Eladriel! I just said: {last_response}"
+        elif user == 'parent':
+            return f"Repeating last response: {last_response}"
+        else:
+            return f"I just said: {last_response}"
 
 if __name__ == "__main__":
     assistant = AIAssistant()
