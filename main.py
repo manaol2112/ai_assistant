@@ -31,6 +31,7 @@ try:
     import speech_recognition as sr
     from voice_activity_detector import VoiceActivityDetector
     from math_quiz_game import MathQuizGame
+    from animal_guess_game import AnimalGuessGame
     from camera_handler import CameraHandler
 except ImportError as e:
     print(f"❌ Import error: {e}")
@@ -81,6 +82,10 @@ class AIAssistant:
         
         # Set AI assistant reference for audio feedback
         self.math_quiz.ai_assistant = self
+        
+        # Initialize Animal Guessing Game (after camera setup)
+        logger.info("🦕 Setting up Animal Guessing Game...")
+        self.animal_game = AnimalGuessGame(self)
         
         # Setup dinosaur identifier for Eladriel (specialized for dinosaurs)
         logger.info("Setting up dinosaur identification for Eladriel...")
@@ -172,7 +177,7 @@ class AIAssistant:
                 'greeting': self.get_dynamic_greeting('sophia'),
                 'face_greeting': self.get_dynamic_face_greeting('sophia'),
                 'tts_engine': self.sophia_tts,
-                'special_commands': ['help', 'what can you do', 'identify this', 'what is this', 'tell me about this', 'spelling game', 'play spelling', 'ready', 'end game', 'teach me filipino', 'filipino game', 'math game', 'math quiz', 'word problems']
+                'special_commands': ['help', 'what can you do', 'identify this', 'what is this', 'tell me about this', 'spelling game', 'play spelling', 'ready', 'end game', 'teach me filipino', 'filipino game', 'math game', 'math quiz', 'word problems', 'animal game', 'guess the animal', 'animal guessing']
             },
             'eladriel': {
                 'name': 'Eladriel',
@@ -181,7 +186,7 @@ class AIAssistant:
                 'greeting': self.get_dynamic_greeting('eladriel'),
                 'face_greeting': self.get_dynamic_face_greeting('eladriel'),
                 'tts_engine': self.eladriel_tts,
-                'special_commands': ['identify dinosaur', 'identify this', 'what is this', 'tell me about this', 'show me camera', 'dinosaur tips', 'help', 'spelling game', 'play spelling', 'ready', 'end game', 'teach me filipino', 'filipino game', 'math game', 'math quiz', 'word problems']
+                'special_commands': ['identify dinosaur', 'identify this', 'what is this', 'tell me about this', 'show me camera', 'dinosaur tips', 'help', 'spelling game', 'play spelling', 'ready', 'end game', 'teach me filipino', 'filipino game', 'math game', 'math quiz', 'word problems', 'animal game', 'guess the animal', 'animal guessing']
             },
             'parent': {
                 'name': 'Parent',
@@ -194,7 +199,7 @@ class AIAssistant:
                     'help', 'status report', 'system check', 'quiet mode on', 'quiet mode off',
                     'identify this', 'what is this', 'tell me about this', 'show me camera',
                     'check on kids', 'home automation', 'schedule reminder', 'weather',
-                    'news update', 'shopping list', 'calendar', 'notes', 'spelling game', 'play spelling', 'ready', 'end game', 'teach me filipino', 'filipino game', 'math game', 'math quiz', 'word problems'
+                    'news update', 'shopping list', 'calendar', 'notes', 'spelling game', 'play spelling', 'ready', 'end game', 'teach me filipino', 'filipino game', 'math game', 'math quiz', 'word problems', 'animal game', 'guess the animal', 'animal guessing'
                 ]
             }
         }
@@ -1464,6 +1469,26 @@ class AIAssistant:
                     if verbal_answer is not None:
                         return self.math_quiz._handle_verbal_answer(verbal_answer, user)
         
+        # Animal Guessing Game Commands (for Sophia, Eladriel, and Parent)
+        if user in ['sophia', 'eladriel', 'parent']:
+            # Animal game start commands
+            if any(phrase in user_input_lower for phrase in ['animal game', 'guess the animal', 'animal guessing', 'identify animal']):
+                return self.animal_game.handle_animal_guess(user)
+            
+            # Handle animal game commands when active
+            elif self.animal_game.is_game_active():
+                if any(phrase in user_input_lower for phrase in ['guess the animal', 'identify animal', 'what animal']):
+                    return self.animal_game.handle_animal_guess(user)
+                
+                elif any(phrase in user_input_lower for phrase in ['animal stats', 'my stats', 'game stats']):
+                    return self.animal_game.get_game_stats(user)
+                
+                elif any(phrase in user_input_lower for phrase in ['animal help', 'help me', 'how to play']):
+                    return self.animal_game.get_game_help(user)
+                
+                elif any(phrase in user_input_lower for phrase in ['end animal game', 'stop animal', 'quit animal']):
+                    return self.animal_game.end_game(user)
+        
         # Spelling Game Commands (for Sophia, Eladriel, and Parent)
         if user in ['sophia', 'eladriel', 'parent']:
             if any(phrase in user_input_lower for phrase in ['spelling game', 'play spelling', 'start spelling']):
@@ -1610,6 +1635,16 @@ class AIAssistant:
 • Get hints and step-by-step help
 • Practice addition, subtraction, and more!
 
+🦕 ANIMAL GUESSING GAME (NEW!):
+• Say "Animal Game" or "Guess the Animal" to start! 🐾
+• Show me any animal toy, figure, or picture
+• I'll identify it and share amazing facts!
+• Learn about dinosaurs, mammals, birds, and more!
+• Discover cool abilities and behaviors
+• Build your animal knowledge collection!
+• Say "Animal Stats" to see your discoveries
+• Say "End Animal Game" when you're done
+
 🤖 SMART SPELLING FEATURES:
 • Enhanced speech recognition - I understand when you're ready!
 • Try saying: "Done", "Finished", "Check it", "Look at this"
@@ -1680,6 +1715,16 @@ Ask me anything, show me any object, or play the spelling game to practice your 
 • Say 'Ready' when done, or show me your work!
 • Get dino-powered hints and encouragement
 • Count like the smartest dinosaurs!
+
+🦕 DINO-ANIMAL DISCOVERY GAME (NEW!):
+• Say "Animal Game" or "Guess the Animal" for creature adventures! 🦕🐾
+• Show me ANY animal toy, figure, or picture - especially dinosaurs!
+• I'll identify it with dino-expert knowledge and amazing facts!
+• Learn about prehistoric creatures, modern animals, and their connections!
+• Discover incredible abilities, behaviors, and evolutionary secrets!
+• Build your paleontologist's creature collection!
+• Say "Animal Stats" to see all your discoveries
+• Say "End Animal Game" when your expedition is complete
 
 🦕 DINO-SMART FEATURES:
 • Enhanced ready detection - I hear you roar when you're done!
@@ -1757,6 +1802,15 @@ What do you want to explore today? Show me anything you've discovered, or let's 
 • Tests OCR accuracy for mathematical notation
 • Difficulty levels: Easy, Medium, Hard
 • Use "Ready" and "End Math" commands for full testing
+
+🦕 ANIMAL GUESSING GAME TESTING (NEW!):
+• Say "Animal Game" to test the animal identification system
+• Validates OpenAI Vision API accuracy for toy/figure recognition
+• Reviews educational content and fact delivery
+• Tests specialized prompts for different users (Eladriel vs Sophia)
+• Monitors learning progression and engagement metrics
+• Use "Animal Stats" and "End Animal Game" for full testing
+• Perfect for validating camera positioning and lighting requirements
 
 💡 CONVERSATION MODES:
 • VOICE ACTIVATED: Say 'Assistant' to activate
