@@ -977,23 +977,23 @@ class AIAssistant:
             # CRITICAL: Add delay after speaking to prevent audio feedback loop
             # This prevents the microphone from picking up the AI's own voice
             import time
-            time.sleep(1.5)  # 1.5 second delay to ensure audio output is completely finished
+            time.sleep(0.3)  # Reduced from 1.5 to 0.3 seconds for faster response
             
             # NEW: Play clear "you can speak now" cue instead of confusing completion sound
             self.play_ready_to_speak_sound()
             
             # Brief pause to let the cue finish and be clearly understood
-            time.sleep(0.5)
+            time.sleep(0.2)  # Reduced from 0.5 to 0.2 seconds for faster response
             
         except Exception as e:
             logger.error(f"TTS Error: {e}")
             self.stop_interrupt_listener()
             # Still play ready cue even on error
             self.play_ready_to_speak_sound()
-            time.sleep(0.5)
+            time.sleep(0.2)  # Reduced from 0.5 to 0.2 seconds
             # Add delay even on error to prevent feedback
             import time
-            time.sleep(1.5)
+            time.sleep(0.3)  # Reduced from 1.5 to 0.3 seconds
         finally:
             # CRITICAL: Always reset AI speaking flag when done
             self.voice_detector.set_ai_speaking(False)
@@ -1021,22 +1021,22 @@ class AIAssistant:
             
             # CRITICAL: Add delay after speaking to prevent audio feedback loop
             import time
-            time.sleep(1.5)  # 1.5 second delay to ensure audio output is completely finished
+            time.sleep(0.3)  # Reduced from 1.5 to 0.3 seconds for faster response
             
             # NEW: Play clear "you can speak now" cue for educational content too
             self.play_ready_to_speak_sound()
             
             # Brief pause to let the cue finish and be clearly understood
-            time.sleep(0.5)
+            time.sleep(0.2)  # Reduced from 0.5 to 0.2 seconds for faster response
             
         except Exception as e:
             logger.error(f"TTS Error (no interrupt): {e}")
             # Still play ready cue even on error
             self.play_ready_to_speak_sound()
-            time.sleep(0.5)
+            time.sleep(0.2)  # Reduced from 0.5 to 0.2 seconds
             # Add delay even on error to prevent feedback
             import time
-            time.sleep(1.5)
+            time.sleep(0.3)  # Reduced from 1.5 to 0.3 seconds
         finally:
             # CRITICAL: Always reset AI speaking flag when done
             self.voice_detector.set_ai_speaking(False)

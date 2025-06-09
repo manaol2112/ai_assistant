@@ -150,14 +150,7 @@ class MathQuizGame:
 Problem #1:
 {problem_text}
 
-📝 ON YOUR PAPER, WRITE:
-• The math equation (like: 3 + 2)
-• The answer (like: = 5)
-
 💡 Hint: {hint}
-
-🗣️ Say 'Ready' when you're done!
-👀 Or just show me your paper!
 
 Let's solve this! 🚀"""
             
@@ -426,9 +419,7 @@ Let's solve this! 🚀"""
 
 {problem_text}
 
-💡 Hint: {hint}
-
-📝 Write your equation and answer, then say 'Ready'!"""
+💡 Hint: {hint}"""
 
     def _generate_final_score(self, user: str) -> str:
         """Generate final score message."""
