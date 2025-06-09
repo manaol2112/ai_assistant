@@ -24,6 +24,7 @@ try:
     from dinosaur_identifier import DinosaurIdentifier
     from object_identifier import ObjectIdentifier
     from smart_camera_detector import SmartCameraDetector
+    from filipino_translator import FilipinoTranslator  # NEW: Filipino translation game
     import openai
     import pyttsx3
     import speech_recognition as sr
@@ -68,6 +69,10 @@ class AIAssistant:
         logger.info("🔍 Setting up universal object identification system...")
         self.object_identifier = ObjectIdentifier()
         
+        # Setup Filipino translation game
+        logger.info("🇵🇭 Setting up Filipino translation learning system...")
+        self.filipino_translator = FilipinoTranslator(self.client, self)
+        
         # Setup face recognition system
         logger.info("🎭 Setting up face recognition system...")
         self.face_detector = SmartCameraDetector(model_size='n', confidence_threshold=0.4)
@@ -94,11 +99,17 @@ class AIAssistant:
         self.audio_feedback_enabled = True
         self.setup_audio_feedback()
         
+        # Spelling game sound effects (same as Filipino game)
+        self.spelling_correct_sound = self._generate_spelling_celebration_sound()
+        self.spelling_wrong_sound = self._generate_spelling_buzzer_sound()
+        
         # Spelling game settings
         self.spelling_game_active = False
         self.current_spelling_word = None
         self.spelling_word_index = 0
         self.spelling_score = 0
+        self.auto_check_active = False  # New: for automatic visual checking
+        self.persistent_auto_check = False  # NEW: for continuous auto-check across all words
         self.spelling_words_grade2_3 = [
             # Grade 2 words
             {'word': 'cat', 'hint': 'A furry pet that says meow'},
@@ -144,7 +155,7 @@ class AIAssistant:
                 'greeting': self.get_dynamic_greeting('sophia'),
                 'face_greeting': self.get_dynamic_face_greeting('sophia'),
                 'tts_engine': self.sophia_tts,
-                'special_commands': ['help', 'what can you do', 'identify this', 'what is this', 'tell me about this', 'spelling game', 'play spelling', 'ready', 'end game']
+                'special_commands': ['help', 'what can you do', 'identify this', 'what is this', 'tell me about this', 'spelling game', 'play spelling', 'ready', 'end game', 'teach me filipino', 'filipino game']
             },
             'eladriel': {
                 'name': 'Eladriel',
@@ -153,7 +164,7 @@ class AIAssistant:
                 'greeting': self.get_dynamic_greeting('eladriel'),
                 'face_greeting': self.get_dynamic_face_greeting('eladriel'),
                 'tts_engine': self.eladriel_tts,
-                'special_commands': ['identify dinosaur', 'identify this', 'what is this', 'tell me about this', 'show me camera', 'dinosaur tips', 'help', 'spelling game', 'play spelling', 'ready', 'end game']
+                'special_commands': ['identify dinosaur', 'identify this', 'what is this', 'tell me about this', 'show me camera', 'dinosaur tips', 'help', 'spelling game', 'play spelling', 'ready', 'end game', 'teach me filipino', 'filipino game']
             },
             'parent': {
                 'name': 'Parent',
@@ -166,7 +177,7 @@ class AIAssistant:
                     'help', 'status report', 'system check', 'quiet mode on', 'quiet mode off',
                     'identify this', 'what is this', 'tell me about this', 'show me camera',
                     'check on kids', 'home automation', 'schedule reminder', 'weather',
-                    'news update', 'shopping list', 'calendar', 'notes', 'spelling game', 'play spelling', 'ready', 'end game'
+                    'news update', 'shopping list', 'calendar', 'notes', 'spelling game', 'play spelling', 'ready', 'end game', 'teach me filipino', 'filipino game'
                 ]
             }
         }
@@ -381,6 +392,169 @@ class AIAssistant:
         logger.info(f"Audio feedback {status}")
         return f"Audio feedback {status}."
 
+    def _generate_spelling_celebration_sound(self):
+        """Generate a celebratory victory sound for correct spelling answers."""
+        try:
+            import numpy as np
+            import pygame
+            sample_rate = 22050
+            duration = 1.8  # 1.8 seconds
+            t = np.linspace(0, duration, int(sample_rate * duration))
+            
+            # Create a "Ta-Da!" victory sound with ascending musical notes
+            celebration = np.zeros_like(t)
+            
+            # First part: Rising musical phrase (Ta!)
+            first_part_end = 0.6
+            first_mask = t <= first_part_end
+            
+            # Rising chord progression for excitement
+            frequencies_rising = [
+                (220, 0.0, 0.2),   # A3 
+                (277, 0.1, 0.3),   # C#4
+                (330, 0.2, 0.4),   # E4
+                (440, 0.3, 0.6),   # A4 (climax)
+            ]
+            
+            for freq, start_time, end_time in frequencies_rising:
+                note_mask = (t >= start_time) & (t <= end_time)
+                if np.any(note_mask):
+                    note_t = t[note_mask] - start_time
+                    # Create a bell-like tone with harmonics
+                    fundamental = np.sin(2 * np.pi * freq * note_t)
+                    harmonic2 = 0.3 * np.sin(2 * np.pi * freq * 2 * note_t)
+                    harmonic3 = 0.1 * np.sin(2 * np.pi * freq * 3 * note_t)
+                    
+                    # Bell envelope - quick attack, gradual decay
+                    envelope = np.exp(-note_t * 4) * (1 - np.exp(-note_t * 50))
+                    
+                    note = (fundamental + harmonic2 + harmonic3) * envelope
+                    celebration[note_mask] += note * 0.4
+            
+            # Second part: Sparkle effect (Da!)
+            sparkle_start = 0.5
+            sparkle_end = 1.8
+            sparkle_mask = (t >= sparkle_start) & (t <= sparkle_end)
+            
+            if np.any(sparkle_mask):
+                sparkle_t = t[sparkle_mask] - sparkle_start
+                
+                # Add magical sparkle with high frequency components
+                sparkle_freqs = [880, 1108, 1397, 1760, 2217]  # High harmonious frequencies
+                
+                for i, freq in enumerate(sparkle_freqs):
+                    delay = i * 0.08  # Staggered sparkles
+                    if len(sparkle_t) > int(delay * sample_rate):
+                        delayed_t = sparkle_t[int(delay * sample_rate):]
+                        if len(delayed_t) > 0:
+                            # Create shimmering effect
+                            shimmer = np.sin(2 * np.pi * freq * delayed_t)
+                            shimmer *= np.exp(-delayed_t * 2)  # Decay
+                            shimmer *= (1 + 0.5 * np.sin(10 * delayed_t))  # Tremolo effect
+                            
+                            # Add to the celebration sound
+                            start_idx = int((sparkle_start + delay) * sample_rate)
+                            end_idx = start_idx + len(shimmer)
+                            if end_idx <= len(celebration):
+                                celebration[start_idx:end_idx] += shimmer * 0.15
+            
+            # Third part: Final triumphant chord
+            final_start = 1.2
+            final_mask = t >= final_start
+            
+            if np.any(final_mask):
+                final_t = t[final_mask] - final_start
+                
+                # Major chord for triumphant ending
+                chord_freqs = [440, 554, 659]  # A major chord
+                for freq in chord_freqs:
+                    chord_note = np.sin(2 * np.pi * freq * final_t)
+                    chord_envelope = np.exp(-final_t * 1.5) * 0.6
+                    celebration[final_mask] += chord_note * chord_envelope * 0.3
+            
+            # Add some gentle reverb effect
+            reverb_delay = int(0.05 * sample_rate)  # 50ms delay
+            if len(celebration) > reverb_delay:
+                reverb = np.zeros_like(celebration)
+                reverb[reverb_delay:] = celebration[:-reverb_delay] * 0.2
+                celebration += reverb
+            
+            # Apply overall envelope for natural sound
+            overall_envelope = np.ones_like(t)
+            # Gentle fade out at the end
+            fade_start = 1.5
+            fade_mask = t >= fade_start
+            if np.any(fade_mask):
+                fade_t = (t[fade_mask] - fade_start) / (duration - fade_start)
+                overall_envelope[fade_mask] = 1 - fade_t
+            
+            celebration *= overall_envelope
+            
+            # Normalize and convert to pygame sound format
+            celebration = np.clip(celebration, -1, 1)
+            celebration = (celebration * 32767 * 0.7).astype(np.int16)  # Good volume level
+            
+            # Create stereo sound
+            stereo_sound = np.zeros((len(celebration), 2), dtype=np.int16)
+            stereo_sound[:, 0] = celebration  # Left channel
+            stereo_sound[:, 1] = celebration  # Right channel
+            
+            return pygame.sndarray.make_sound(stereo_sound)
+        except Exception as e:
+            logger.error(f"Error generating spelling celebration sound: {e}")
+            return None
+
+    def _generate_spelling_buzzer_sound(self):
+        """Generate a buzzer sound for wrong spelling answers."""
+        try:
+            import numpy as np
+            import pygame
+            sample_rate = 22050
+            duration = 0.8  # 0.8 seconds
+            t = np.linspace(0, duration, int(sample_rate * duration))
+            
+            # Create buzzer sound with low frequency
+            frequency = 150  # Low buzzer frequency
+            wave = np.sin(2 * np.pi * frequency * t)
+            
+            # Add some harmonics to make it sound more like a buzzer
+            wave += 0.5 * np.sin(2 * np.pi * frequency * 2 * t)  # Octave
+            wave += 0.3 * np.sin(2 * np.pi * frequency * 3 * t)  # Fifth
+            
+            # Apply envelope for natural sound decay
+            envelope = np.exp(-t * 1.5)
+            buzzer = wave * envelope
+            
+            # Normalize and convert to pygame sound format
+            buzzer = np.clip(buzzer, -1, 1)
+            buzzer = (buzzer * 32767).astype(np.int16)
+            
+            # Create stereo sound
+            stereo_sound = np.zeros((len(buzzer), 2), dtype=np.int16)
+            stereo_sound[:, 0] = buzzer  # Left channel
+            stereo_sound[:, 1] = buzzer  # Right channel
+            
+            return pygame.sndarray.make_sound(stereo_sound)
+        except Exception as e:
+            logger.error(f"Error generating spelling buzzer sound: {e}")
+            return None
+
+    def play_spelling_correct_sound(self):
+        """Play celebration sound for correct spelling answers."""
+        try:
+            if self.spelling_correct_sound and self.audio_feedback_enabled and self.pygame_available:
+                self.spelling_correct_sound.play()
+        except Exception as e:
+            logger.error(f"Error playing spelling correct sound: {e}")
+
+    def play_spelling_wrong_sound(self):
+        """Play buzzer sound for wrong spelling answers."""
+        try:
+            if self.spelling_wrong_sound and self.audio_feedback_enabled and self.pygame_available:
+                self.spelling_wrong_sound.play()
+        except Exception as e:
+            logger.error(f"Error playing spelling wrong sound: {e}")
+
     def get_parent_greeting(self) -> str:
         """Get time-appropriate greeting for parent mode."""
         current_hour = datetime.now().hour
@@ -432,7 +606,7 @@ class AIAssistant:
                     
                     # Process detected faces
                     for face in face_detections:
-                        if face['name'] != "Unknown" and face['confidence'] > 0.6:
+                        if face['name'] != "Unknown" and face['confidence'] > 0.5:
                             person_name = face['name'].lower()
                             
                             # Check if this person is in our user profiles
@@ -561,13 +735,23 @@ class AIAssistant:
                 if special_response:
                     # Add special command to conversation history too
                     self.add_to_conversation_history(user, user_input, special_response)
-                    self.speak(special_response, user)
+                    
+                    # Use no-interrupt speak for Filipino game responses to prevent recording during explanations
+                    if self.filipino_translator.is_filipino_game_command(user_input) or self.filipino_translator.game_active:
+                        self.speak_no_interrupt(special_response, user)
+                    else:
+                        self.speak(special_response, user)
                 else:
                     # Process with OpenAI for regular conversation
                     import asyncio
                     try:
                         response = asyncio.run(self.process_with_openai(user_input, user))
-                        self.speak(response, user)
+                        
+                        # Use no-interrupt speak if Filipino game is active to prevent recording during explanations
+                        if self.filipino_translator.game_active:
+                            self.speak_no_interrupt(response, user)
+                        else:
+                            self.speak(response, user)
                     except Exception as e:
                         logger.error(f"Error processing request: {e}")
                         self.speak("I'm sorry, something went wrong. Let me try again.", user)
@@ -674,6 +858,29 @@ class AIAssistant:
         except Exception as e:
             logger.error(f"TTS Error: {e}")
             self.stop_interrupt_listener()
+            # Still play completion sound even on error
+            self.play_completion_sound()
+
+    def speak_no_interrupt(self, text: str, user: Optional[str] = None):
+        """Convert text to speech without interrupt capability - for educational content like Filipino game."""
+        try:
+            # Use personalized TTS engine for each user
+            if user and user in self.users:
+                tts_engine = self.users[user]['tts_engine']
+                logger.info(f"Speaking to {user} (no interrupt): {text}")
+                tts_engine.say(text)
+                tts_engine.runAndWait()
+            else:
+                # Default to Sophia's engine if no user specified
+                logger.info(f"Speaking (default, no interrupt): {text}")
+                self.sophia_tts.say(text)
+                self.sophia_tts.runAndWait()
+            
+            # Play completion sound to indicate AI is done speaking and ready to listen
+            self.play_completion_sound()
+            
+        except Exception as e:
+            logger.error(f"TTS Error (no interrupt): {e}")
             # Still play completion sound even on error
             self.play_completion_sound()
 
@@ -797,7 +1004,7 @@ class AIAssistant:
         return False
 
     def listen_for_speech(self, timeout: int = 15) -> Optional[str]:
-        """Listen for speech input and convert to text with longer timeout for children."""
+        """Listen for speech input and convert to text with enhanced sensitivity for better recognition."""
         try:
             # Play listening sound to indicate AI is ready to hear
             self.play_listening_sound()
@@ -805,16 +1012,87 @@ class AIAssistant:
             with sr.Microphone() as source:
                 logger.info("Listening for speech...")
                 
-                # Adjust for ambient noise
+                # Enhanced microphone calibration for better sensitivity
+                # Longer calibration for more accurate ambient noise detection
                 self.recognizer.adjust_for_ambient_noise(source, duration=0.5)
                 
-                # Listen for audio with longer timeout and phrase limit for children
-                # Kids need more time to think and formulate their thoughts
-                audio = self.recognizer.listen(source, timeout=timeout, phrase_time_limit=20)
+                # Improved sensitivity settings for all scenarios
+                if self.spelling_game_active:
+                    # Very sensitive settings for spelling game
+                    self.recognizer.energy_threshold = max(200, self.recognizer.energy_threshold * 0.6)
+                    self.recognizer.dynamic_energy_threshold = True
+                    # Shorter phrase limit for quick "ready" commands
+                    audio = self.recognizer.listen(source, timeout=timeout, phrase_time_limit=10)
+                elif hasattr(self, 'filipino_translator') and self.filipino_translator.game_active:
+                    # Enhanced sensitivity for Filipino game
+                    self.recognizer.energy_threshold = max(250, self.recognizer.energy_threshold * 0.7)
+                    self.recognizer.dynamic_energy_threshold = True
+                    # Allow longer phrases for Filipino words
+                    audio = self.recognizer.listen(source, timeout=timeout, phrase_time_limit=15)
+                else:
+                    # Improved standard settings for regular conversation
+                    self.recognizer.energy_threshold = max(300, self.recognizer.energy_threshold * 0.8)
+                    self.recognizer.dynamic_energy_threshold = True
+                    audio = self.recognizer.listen(source, timeout=timeout, phrase_time_limit=20)
                 
-                # Convert speech to text
-                text = self.recognizer.recognize_google(audio)
-                logger.info(f"Recognized speech: {text}")
+                # Multi-attempt speech recognition with fallbacks
+                text = None
+                recognition_attempts = 0
+                max_attempts = 3
+                
+                while text is None and recognition_attempts < max_attempts:
+                    recognition_attempts += 1
+                    try:
+                        # Convert speech to text with language support
+                        # Use Filipino language when Filipino game is active for better accuracy
+                        if hasattr(self, 'filipino_translator') and self.filipino_translator.game_active:
+                            try:
+                                # Try Filipino first for better recognition of Filipino words
+                                text = self.recognizer.recognize_google(audio, language='fil-PH')
+                                logger.info(f"Recognized speech (Filipino, attempt {recognition_attempts}): {text}")
+                                break
+                            except (sr.UnknownValueError, sr.RequestError):
+                                # Fallback to English if Filipino recognition fails
+                                text = self.recognizer.recognize_google(audio, language='en-US')
+                                logger.info(f"Recognized speech (English fallback, attempt {recognition_attempts}): {text}")
+                                break
+                        else:
+                            # Try different language models for better recognition
+                            languages_to_try = ['en-US', 'en-GB', 'en-AU']
+                            for lang in languages_to_try:
+                                try:
+                                    text = self.recognizer.recognize_google(audio, language=lang)
+                                    logger.info(f"Recognized speech ({lang}, attempt {recognition_attempts}): {text}")
+                                    break
+                                except (sr.UnknownValueError, sr.RequestError):
+                                    continue
+                            
+                            if text:
+                                break
+                    
+                    except (sr.UnknownValueError, sr.RequestError) as e:
+                        logger.warning(f"Recognition attempt {recognition_attempts} failed: {e}")
+                        if recognition_attempts < max_attempts:
+                            # Brief pause before retry
+                            import time
+                            time.sleep(0.2)
+                        continue
+                
+                # If all attempts failed, return None
+                if text is None:
+                    logger.info("Could not understand audio after multiple attempts")
+                    return None
+                
+                # Post-process the recognized text for better accuracy
+                text = self._clean_recognized_text(text)
+                
+                # Special handling for "ready" detection in spelling game
+                if self.spelling_game_active:
+                    detected_ready = self.detect_ready_command(text.lower())
+                    if detected_ready:
+                        logger.info(f"Ready command detected: '{text}' -> '{detected_ready}'")
+                        return detected_ready
+                
                 return text.lower()
                 
         except sr.WaitTimeoutError:
@@ -826,6 +1104,73 @@ class AIAssistant:
         except sr.RequestError as e:
             logger.error(f"Speech recognition error: {e}")
             return None
+    
+    def _clean_recognized_text(self, text: str) -> str:
+        """Clean and improve recognized text for better accuracy."""
+        if not text:
+            return text
+        
+        # Remove common speech recognition artifacts
+        cleaned = text.strip()
+        
+        # Fix common recognition errors
+        common_fixes = {
+            # Common misrecognitions
+            "filipina": "filipino",
+            "philipino": "filipino", 
+            "philippino": "filipino",
+            "tagalog": "filipino",
+            "ready ready": "ready",
+            "done done": "done",
+            "check check": "check",
+            
+            # Common word corrections
+            "colour": "color",
+            "grey": "gray",
+            "centre": "center",
+            
+            # Remove extra spaces and punctuation
+        }
+        
+        # Apply common fixes
+        for wrong, correct in common_fixes.items():
+            cleaned = cleaned.replace(wrong, correct)
+        
+        # Remove extra whitespace
+        cleaned = ' '.join(cleaned.split())
+        
+        return cleaned
+
+    def detect_ready_command(self, text: str) -> Optional[str]:
+        """Enhanced detection of 'ready' and similar commands with fuzzy matching."""
+        import difflib
+        
+        # List of target ready commands
+        ready_commands = [
+            'ready', 'im ready', 'i am ready', 'check my answer', 'done', 
+            'finished', 'check it', 'look at this', 'all done', 'complete'
+        ]
+        
+        # Direct match first
+        for command in ready_commands:
+            if command in text:
+                return command
+        
+        # Fuzzy matching for speech recognition errors
+        for command in ready_commands:
+            # Check if the text is similar enough to a ready command
+            similarity = difflib.SequenceMatcher(None, text, command).ratio()
+            if similarity > 0.7:  # 70% similarity threshold
+                logger.info(f"Fuzzy match: '{text}' matches '{command}' with {similarity:.2f} similarity")
+                return command
+        
+        # Check for partial matches of key words
+        key_words = ['ready', 'done', 'finished', 'check', 'complete']
+        for word in key_words:
+            if word in text or any(difflib.SequenceMatcher(None, text, word).ratio() > 0.7 for word in text.split()):
+                return f"ready (detected from: {text})"
+        
+        return None
 
     async def process_with_openai(self, text: str, user: str) -> str:
         """Process user input with OpenAI and return response with conversation context."""
@@ -935,11 +1280,32 @@ class AIAssistant:
             if any(phrase in user_input_lower for phrase in ['spelling game', 'play spelling', 'start spelling']):
                 return self.start_spelling_game(user)
             
-            elif self.spelling_game_active and any(phrase in user_input_lower for phrase in ['ready', 'i\'m ready', 'check my answer']):
-                return self.check_spelling_answer(user)
-            
-            elif self.spelling_game_active and any(phrase in user_input_lower for phrase in ['end game', 'stop game', 'quit game']):
-                return self.end_spelling_game(user)
+            # Enhanced "ready" detection with more variations and automatic visual check option
+            elif self.spelling_game_active:
+                ready_phrases = [
+                    'ready', 'i\'m ready', 'check my answer', 'done', 'finished', 
+                    'check it', 'look at this', 'see my answer', 'check this',
+                    'here it is', 'all done', 'complete', 'i finished',
+                    'can you check', 'please check', 'look', 'see this'
+                ]
+                
+                if any(phrase in user_input_lower for phrase in ready_phrases):
+                    return self.check_spelling_answer(user)
+                
+                # NEW: Visual word detection without saying "ready"
+                elif any(phrase in user_input_lower for phrase in ['auto check', 'smart check', 'visual check', 'camera check']):
+                    return self.start_auto_visual_check(user)
+                
+                # Stop auto check mode
+                elif any(phrase in user_input_lower for phrase in ['stop auto check', 'stop monitoring', 'manual mode', 'stop watching']):
+                    return self.stop_auto_visual_check(user)
+                
+                elif any(phrase in user_input_lower for phrase in ['end game', 'stop game', 'quit game']):
+                    return self.end_spelling_game(user)
+        
+        # Filipino Translation Game Commands (for all users)
+        if self.filipino_translator.is_filipino_game_command(user_input):
+            return self.filipino_translator.handle_filipino_command(user_input, user)
         
         # Eladriel's special dinosaur commands (keep existing functionality)
         if user == 'eladriel':
@@ -1034,9 +1400,25 @@ class AIAssistant:
 📝 SPELLING GAME (NEW!):
 • Say "Spelling Game" to start an interactive spelling practice!
 • I'll give you words to spell - write them on paper
-• Say "Ready" when you want me to check your answer with my camera
+• THREE ways to check your answer:
+  - Say "Ready" (or "Done", "Finished", "Check it") - I understand many phrases!
+  - Say "Auto Check" for smart camera monitoring (continuous for all words!)
+  - Just show me your paper - I'm always watching! 👀
 • Get helpful tips if you need help with tricky words
 • Say "End Game" to stop playing anytime
+
+🇵🇭 FILIPINO TRANSLATION GAME (NEW!):
+• Say "Filipino Game" for a language exploration! 🦕🇵🇭
+• Simple: I say English, you say Filipino!
+• Learn words about animals, family, colors, and more!
+• Quick feedback and automatic next questions!
+
+🤖 SMART SPELLING FEATURES:
+• Enhanced speech recognition - I understand when you're ready!
+• Try saying: "Done", "Finished", "Check it", "Look at this"
+• Automatic visual detection - no speech needed!
+• NEW: Auto-check is now continuous by default - works for ALL words!
+• Multiple checking modes for different preferences
 
 💡 CONVERSATION MODES:
 • AUTOMATIC: Just step in front of the camera - I'll start listening immediately!
@@ -1081,9 +1463,25 @@ Ask me anything, show me any object, or play the spelling game to practice your 
 📝 SPELLING GAME (NEW!):
 • Say "Spelling Game" for a roar-some spelling adventure! 🦕📝
 • I'll give you words to spell - write them clearly on paper
-• Say "Ready" when you want me to check your writing with my camera
+• THREE dino-powered ways to check your answer:
+  - Say "Ready" (or "Done", "Finished") - I understand dino-speak!
+  - Say "Auto Check" for dino-vision monitoring 🦕👁️ (continuous for all words!)
+  - Just show me your paper - my dino-eyes are always watching!
 • Get dinosaur-themed help and encouragement for tricky words
 • Say "End Game" whenever you want to stop
+
+🇵🇭 FILIPINO TRANSLATION ADVENTURE (NEW!):
+• Say "Filipino Game" for a language exploration! 🦕🇵🇭
+• Simple: I say English, you say Filipino!
+• Learn words about animals, family, colors, and more!
+• Quick feedback and automatic next questions!
+
+🦕 DINO-SMART FEATURES:
+• Enhanced ready detection - I hear you roar when you're done!
+• Try dino-phrases: "All done!", "Check it!", "Finished!"
+• Automatic dino-vision - no need to say anything!
+• NEW: Dino-vision is now continuous by default - watches ALL your spelling!
+• Multiple modes for every young paleontologist!
 
 🌟 GENERAL FEATURES:
 • Ask me questions about dinosaurs, animals, or anything!
@@ -1140,6 +1538,12 @@ What do you want to explore today? Show me anything you've discovered, or let's 
 • Review Grade 2-3 word list and educational feedback
 • Test all game mechanics before kids use it
 • Use "Ready" and "End Game" commands for full testing
+• NEW: Auto check is now continuous by default - automatically monitors all words
+
+🇵🇭 FILIPINO TRANSLATION GAME TESTING:
+• Say "Filipino Game" to test the language learning system
+• Simple English-to-Filipino translation format
+• Monitors response accuracy and learning progress
 
 💡 CONVERSATION MODES:
 • VOICE ACTIVATED: Say 'Assistant' to activate
@@ -1458,13 +1862,23 @@ Everything looks good for when the children wake up!"""
                 if special_response:
                     # Add special command to conversation history too
                     self.add_to_conversation_history(user, user_input, special_response)
-                    self.speak(special_response, user)
+                    
+                    # Use no-interrupt speak for Filipino game responses to prevent recording during explanations
+                    if self.filipino_translator.is_filipino_game_command(user_input) or self.filipino_translator.game_active:
+                        self.speak_no_interrupt(special_response, user)
+                    else:
+                        self.speak(special_response, user)
                 else:
                     # Process with OpenAI for regular conversation
                     import asyncio
                     try:
                         response = asyncio.run(self.process_with_openai(user_input, user))
-                        self.speak(response, user)
+                        
+                        # Use no-interrupt speak if Filipino game is active to prevent recording during explanations
+                        if self.filipino_translator.game_active:
+                            self.speak_no_interrupt(response, user)
+                        else:
+                            self.speak(response, user)
                     except Exception as e:
                         logger.error(f"Error processing request: {e}")
                         self.speak("I'm sorry, something went wrong. Let me try again.", user)
@@ -1593,7 +2007,7 @@ Everything looks good for when the children wake up!"""
         print("👋 AI Assistant stopped. Goodbye!")
 
     def start_spelling_game(self, user: str) -> str:
-        """Start an interactive spelling game for kids."""
+        """Start an interactive spelling game for kids with streamlined, exciting instructions."""
         try:
             import random
             
@@ -1610,37 +2024,36 @@ Everything looks good for when the children wake up!"""
             
             user_name = user.title()
             
+            # Super short, exciting intros
             if user == 'sophia':
-                intro = f"Hi Sophia! Let's play the spelling game! 📝✨ I'll give you words to spell, and you can write them down on paper."
+                intro = f"🌟 Hi Sophia! Let's spell some words! Ready to be a spelling star? ✨"
             elif user == 'eladriel':
-                intro = f"Hey Eladriel! Ready for a spelling adventure? 🦕📝 Let's see how well you can spell these words!"
+                intro = f"🦕 Hey Eladriel! Time for a spelling adventure! Let's go! 🌟"
             else:  # parent
-                intro = f"Parent Mode: Spelling Game Test. This allows you to validate the game functionality before the children use it."
+                intro = f"📝 Parent Mode: Quick Spelling Game Test"
             
             word = self.current_spelling_word['word']
             hint = self.current_spelling_word['hint']
             
+            # Super streamlined instructions
             game_instructions = f"""{intro}
 
-Here's how to play:
-1. I'll say a word and give you a hint
-2. Write the word on paper with big, clear letters
-3. When you're done, say 'Ready' and show me your paper
-4. I'll check if it's correct and help you learn!
-5. Say 'End Game' anytime to stop playing
+✏️ SPELLING TIME! ✏️
 
-Let's start! 🌟
+Word #1: {word.upper()}
+💡 Hint: {hint}
 
-Word #{self.spelling_word_index + 1}: {word.upper()}
-Hint: {hint}
+📝 Write '{word}' on paper with BIG letters!
+🗣️ Say 'Ready' when you're done!
+👀 Or just show me - I'm watching!
 
-Take your time and write '{word}' on your paper. Remember to make your letters big and clear! When you're finished, say 'Ready' and show me your answer."""
+Let's go! 🚀"""
             
             return game_instructions
             
         except Exception as e:
             logger.error(f"Error starting spelling game: {e}")
-            return "Sorry! I had trouble starting the spelling game. Let's try again later!"
+            return "Oops! Let's try starting the spelling game again! 🎮"
 
     def check_spelling_answer(self, user: str) -> str:
         """Check the student's written spelling answer using camera."""
@@ -1671,6 +2084,9 @@ Take your time and write '{word}' on your paper. Remember to make your letters b
                     # Correct answer!
                     self.spelling_score += 1
                     
+                    # Play celebration sound for correct answer
+                    self.play_spelling_correct_sound()
+                    
                     if user == 'sophia':
                         praise = f"Excellent work Sophia! ⭐ You spelled '{correct_word}' perfectly! You're doing amazing!"
                     elif user == 'eladriel':
@@ -1688,7 +2104,7 @@ Take your time and write '{word}' on your paper. Remember to make your letters b
 🎉 Congratulations! You completed the spelling game! 🎉
 Final Score: {self.spelling_score} out of {len(self.spelling_words_grade2_3)} words correct!
 
-You're an amazing speller! Great job practicing your writing! 📝✨"""
+You're an amazing speller! Great job! 📝✨"""
                         self.spelling_game_active = False
                         return final_score
                     else:
@@ -1699,35 +2115,39 @@ You're an amazing speller! Great job practicing your writing! 📝✨"""
                         
                         return f"""{praise}
 
-Ready for the next word? Here we go! 
+⚡ Next word! ⚡
 
 Word #{self.spelling_word_index + 1}: {next_word.upper()}
-Hint: {next_hint}
+💡 Hint: {next_hint}
 
-Write '{next_word}' on your paper, and say 'Ready' when you want me to check it!"""
+📝 Write '{next_word}' and say 'Ready'! 🚀"""
                 
                 else:
                     # Incorrect answer - provide helpful feedback with what was detected
+                    
+                    # Play buzzer sound for incorrect answer
+                    self.play_spelling_wrong_sound()
+                    
                     detected_info = f" (I saw: '{detected_text}')" if detected_text else ""
                     
                     if user == 'sophia':
-                        feedback = f"Good try Sophia! The correct spelling is '{correct_word.upper()}'{detected_info}. Let me help you learn it!"
+                        feedback = f"Good try Sophia! ✨ The correct spelling is '{correct_word.upper()}'{detected_info}."
                     elif user == 'eladriel':
-                        feedback = f"Nice effort Eladriel! The correct spelling is '{correct_word.upper()}'{detected_info}. Let's learn it together!"
+                        feedback = f"Nice effort Eladriel! 🦕 The correct spelling is '{correct_word.upper()}'{detected_info}."
                     else:  # parent
-                        feedback = f"❌ Incorrect spelling detected. Expected: '{correct_word.upper()}'{detected_info}. Testing educational feedback system."
+                        feedback = f"❌ Incorrect. Expected: '{correct_word.upper()}'{detected_info}."
                     
-                    # Provide detailed spelling help
-                    spelling_help = self.provide_spelling_help(correct_word, user)
+                    # Provide quick spelling help
+                    letters = " - ".join(correct_word.upper())
                     
                     return f"""{feedback}
 
-{spelling_help}
-
-Try writing '{correct_word}' again! Take your time and remember the tips I gave you. Say 'Ready' when you want me to check your new answer!"""
+💡 Quick help: {letters}
+📝 Try writing '{correct_word}' again!
+🗣️ Say 'Ready' when done! ✨"""
             
             else:
-                return f"I had trouble seeing your paper clearly. {result['message']} Make sure to write with big, dark letters and hold it steady in front of the camera. Say 'Ready' when you're ready to try again!"
+                return f"Can't see your paper clearly! 👀 Make sure to write with BIG, dark letters. Say 'Ready' to try again! 📝"
                 
         except Exception as e:
             logger.error(f"Error checking spelling answer: {e}")
@@ -1843,26 +2263,25 @@ Try writing '{correct_word}' again! Take your time and remember the tips I gave 
         user_name = user.title()
         
         if user == 'sophia':
-            farewell = f"Great job playing the spelling game, Sophia! 📝✨"
+            farewell = f"🌟 Great job Sophia! You're a spelling star! ✨"
         elif user == 'eladriel':
-            farewell = f"Awesome spelling adventure, Eladriel! 🦕📝"
+            farewell = f"🦕 Awesome job Eladriel! Dino-mite spelling! 🌟"
         else:  # parent
-            farewell = f"Spelling Game Test Complete - Parent Mode"
+            farewell = f"📝 Spelling Game Complete - Parent Mode"
         
         final_message = f"""{farewell}
 
-Game Summary:
-📊 Words attempted: {self.spelling_word_index + 1}
-⭐ Score: {self.spelling_score} correct
-🎯 You're doing fantastic with your spelling practice!
+📊 Score: {self.spelling_score} out of {self.spelling_word_index + 1} words!
 
-Thanks for playing! Say 'Spelling Game' anytime you want to practice more words! Keep up the great work! 🌟"""
+🎯 Keep practicing! Say 'Spelling Game' to play again! 🚀"""
         
         # Reset game state
         self.spelling_game_active = False
         self.current_spelling_word = None
         self.spelling_word_index = 0
         self.spelling_score = 0
+        self.auto_check_active = False  # Reset auto check mode
+        self.persistent_auto_check = False  # Reset persistent auto check mode
         
         return final_message
 
@@ -2043,6 +2462,260 @@ Thanks for playing! Say 'Spelling Game' anytime you want to practice more words!
             ]
         
         return random.choice(face_greetings)
+
+    def start_auto_visual_check(self, user: str) -> str:
+        """Start automatic visual checking mode - monitors camera for written words without needing 'ready' command."""
+        try:
+            if not self.spelling_game_active or not self.current_spelling_word:
+                return "We're not playing the spelling game right now. Say 'Spelling Game' to start!"
+            
+            # Automatically enable persistent mode when starting auto check
+            self.persistent_auto_check = True
+            
+            user_name = user.title()
+            correct_word = self.current_spelling_word['word']
+            
+            if user == 'sophia':
+                intro = f"Great idea Sophia! 🎯 I'll use my smart camera to watch for your writing - and I'll keep watching for ALL words!"
+            elif user == 'eladriel':
+                intro = f"Awesome Eladriel! 🦕📱 My dino-vision will spot your spelling - and keep watching ALL your words!"
+            else:  # parent
+                intro = f"Auto Visual Check Mode activated with continuous monitoring for all remaining words."
+            
+            instructions = f"""{intro}
+
+🤖 CONTINUOUS AUTO CHECK ACTIVATED! 
+
+How it works:
+• Just write '{correct_word}' clearly on paper
+• Hold it up to the camera when you're done
+• I'll automatically check it - no need to say 'Ready'!
+• ✨ NEW: After this word, I'll automatically watch the next word too!
+• This continues for ALL remaining words in the game!
+
+📝 Current word: {correct_word.upper()}
+💡 Hint: {self.current_spelling_word['hint']}
+
+✨ SMART FEATURES:
+• I'm watching for handwritten text continuously
+• Write with dark ink/pencil for best results  
+• Hold the paper steady and well-lit
+• Say 'stop auto check' to return to manual mode anytime
+• You can still say 'Ready' if you prefer manual checking
+
+Starting visual monitoring in 3 seconds... Get your paper ready! 📄✏️"""
+            
+            self.speak(instructions, user)
+            
+            # Start the automatic visual monitoring
+            import threading
+            import time
+            
+            def auto_check_monitor():
+                """Background monitoring for written words."""
+                self.auto_check_active = True
+                consecutive_failures = 0
+                max_failures = 8  # Allow 8 failed attempts before suggesting manual check
+                
+                time.sleep(3)  # Give user time to prepare
+                
+                while self.auto_check_active and self.spelling_game_active:
+                    try:
+                        # Capture and check for text
+                        result = self.object_identifier.capture_and_identify_text(user, expected_word=correct_word)
+                        
+                        if result["success"]:
+                            detected_text = result.get("detected_text", "").strip().lower()
+                            ai_description = result["message"].lower()
+                            
+                            # Check if we found the correct word
+                            is_correct = self.verify_spelling_accuracy(detected_text, ai_description, correct_word)
+                            
+                            if is_correct:
+                                # Found correct word! Process the answer
+                                self.auto_check_active = False
+                                success_msg = f"🎉 Perfect! I detected '{correct_word}' in your writing! Let me give you the full result..."
+                                self.speak(success_msg, user)
+                                return self.process_correct_spelling(user, correct_word)
+                            
+                            elif detected_text and len(detected_text) > 1:
+                                # Found some text but not correct - give gentle feedback
+                                consecutive_failures += 1
+                                if consecutive_failures % 3 == 0:  # Every 3rd attempt
+                                    hint_msg = f"I can see you're writing! Keep going - I'm looking for '{correct_word}'"
+                                    self.speak(hint_msg, user)
+                        
+                        else:
+                            consecutive_failures += 1
+                            if consecutive_failures >= max_failures:
+                                # Suggest manual check after too many failures
+                                self.auto_check_active = False
+                                fallback_msg = f"I'm having trouble seeing clearly. Would you like to say 'Ready' to check manually?"
+                                self.speak(fallback_msg, user)
+                                return
+                    
+                    except Exception as e:
+                        logger.error(f"Error in auto check monitor: {e}")
+                        consecutive_failures += 1
+                    
+                    # Wait before next check (don't spam the camera)
+                    time.sleep(2)
+                
+                # Auto check ended
+                if self.spelling_game_active:
+                    end_msg = "Auto check mode ended. Say 'Ready' when you want me to check your answer!"
+                    self.speak(end_msg, user)
+            
+            # Start monitoring in background thread
+            monitor_thread = threading.Thread(target=auto_check_monitor, daemon=True)
+            monitor_thread.start()
+            
+            return "🔍 Continuous auto visual check started! Write your words and show them to the camera - I'm watching ALL of them! 👀"
+            
+        except Exception as e:
+            logger.error(f"Error starting auto visual check: {e}")
+            return "Sorry! I had trouble starting the automatic checker. You can still say 'Ready' to check manually!"
+
+    def start_auto_check_for_current_word(self, user: str):
+        """Start auto-check monitoring for the current word (used by persistent mode)."""
+        try:
+            if not self.spelling_game_active or not self.current_spelling_word:
+                return
+            
+            correct_word = self.current_spelling_word['word']
+            
+            # Start the automatic visual monitoring (similar to start_auto_visual_check but without the speech)
+            import threading
+            import time
+            
+            def auto_check_monitor():
+                """Background monitoring for written words."""
+                self.auto_check_active = True
+                consecutive_failures = 0
+                max_failures = 8  # Allow 8 failed attempts before suggesting manual check
+                
+                time.sleep(1)  # Brief delay to let user prepare
+                
+                while self.auto_check_active and self.spelling_game_active:
+                    try:
+                        # Capture and check for text
+                        result = self.object_identifier.capture_and_identify_text(user, expected_word=correct_word)
+                        
+                        if result["success"]:
+                            detected_text = result.get("detected_text", "").strip().lower()
+                            ai_description = result["message"].lower()
+                            
+                            # Check if we found the correct word
+                            is_correct = self.verify_spelling_accuracy(detected_text, ai_description, correct_word)
+                            
+                            if is_correct:
+                                # Found correct word! Process the answer
+                                self.auto_check_active = False
+                                success_msg = f"🎉 Perfect! I detected '{correct_word}' in your writing! Let me give you the full result..."
+                                self.speak(success_msg, user)
+                                return self.process_correct_spelling(user, correct_word)
+                            
+                            elif detected_text and len(detected_text) > 1:
+                                # Found some text but not correct - give gentle feedback
+                                consecutive_failures += 1
+                                if consecutive_failures % 3 == 0:  # Every 3rd attempt
+                                    hint_msg = f"I can see you're writing! Keep going - I'm looking for '{correct_word}'"
+                                    self.speak(hint_msg, user)
+                        
+                        else:
+                            consecutive_failures += 1
+                            if consecutive_failures >= max_failures:
+                                # Suggest manual check after too many failures
+                                self.auto_check_active = False
+                                fallback_msg = f"I'm having trouble seeing clearly. Would you like to say 'Ready' to check manually?"
+                                self.speak(fallback_msg, user)
+                                return
+                    
+                    except Exception as e:
+                        logger.error(f"Error in auto check monitor: {e}")
+                        consecutive_failures += 1
+                    
+                    # Wait before next check (don't spam the camera)
+                    time.sleep(2)
+                
+                # Auto check ended
+                if self.spelling_game_active and not self.persistent_auto_check:
+                    end_msg = "Auto check mode ended. Say 'Ready' when you want me to check your answer!"
+                    self.speak(end_msg, user)
+            
+            # Start monitoring in background thread
+            monitor_thread = threading.Thread(target=auto_check_monitor, daemon=True)
+            monitor_thread.start()
+            
+        except Exception as e:
+            logger.error(f"Error starting auto check for current word: {e}")
+
+    def process_correct_spelling(self, user: str, correct_word: str) -> str:
+        """Process a correct spelling and move to next word."""
+        try:
+            # Increment score
+            self.spelling_score += 1
+            
+            if user == 'sophia':
+                praise = f"Excellent work Sophia! ⭐ You spelled '{correct_word}' perfectly! You're doing amazing!"
+            elif user == 'eladriel':
+                praise = f"Roar-some job Eladriel! 🦕⭐ You spelled '{correct_word}' correctly! You're a spelling champion!"
+            else:  # parent
+                praise = f"✅ Correct spelling detected: '{correct_word}'. Auto-detection system working properly."
+            
+            # Move to next word
+            self.spelling_word_index += 1
+            
+            if self.spelling_word_index >= len(self.spelling_words_grade2_3):
+                # Game completed!
+                final_score = f"""{praise}
+
+🎉 Congratulations! You completed the spelling game! 🎉
+Final Score: {self.spelling_score} out of {len(self.spelling_words_grade2_3)} words correct!
+
+You're an amazing speller! Great job! 📝✨"""
+                self.spelling_game_active = False
+                return final_score
+            else:
+                # Next word
+                self.current_spelling_word = self.spelling_words_grade2_3[self.spelling_word_index]
+                next_word = self.current_spelling_word['word']
+                next_hint = self.current_spelling_word['hint']
+                
+                return f"""{praise}
+
+⚡ Next word! ⚡
+
+Word #{self.spelling_word_index + 1}: {next_word.upper()}
+💡 Hint: {next_hint}
+
+📝 Write '{next_word}' and say 'Ready'! 🚀"""
+        
+        except Exception as e:
+            logger.error(f"Error processing correct spelling: {e}")
+            return "Great job! Let's continue with the next word!"
+
+    def stop_auto_visual_check(self, user: str) -> str:
+        """Stop the automatic visual checking mode."""
+        try:
+            if hasattr(self, 'auto_check_active') and self.auto_check_active:
+                self.auto_check_active = False
+                self.persistent_auto_check = False  # Also disable persistent mode
+                
+                if user == 'sophia':
+                    message = "Auto check stopped, Sophia! 🛑 Say 'Ready' when you want me to check your spelling!"
+                elif user == 'eladriel':
+                    message = "Dino-vision monitoring stopped, Eladriel! 🦕🛑 Say 'Ready' to check manually!"
+                else:  # parent
+                    message = "Auto Visual Check Mode deactivated. Persistent mode also disabled. Returning to manual 'Ready' command mode."
+                
+                return message
+            else:
+                return "Auto check isn't currently running. You can say 'Auto Check' to start it, or 'Ready' to check manually!"
+                
+        except Exception as e:
+            logger.error(f"Error stopping auto visual check: {e}")
+            return "Auto check mode stopped. Say 'Ready' when you want me to check your answer!"
 
 if __name__ == "__main__":
     assistant = AIAssistant()
