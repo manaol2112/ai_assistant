@@ -151,7 +151,7 @@ class AIAssistant:
                     'help', 'status report', 'system check', 'quiet mode on', 'quiet mode off',
                     'identify this', 'what is this', 'tell me about this', 'show me camera',
                     'check on kids', 'home automation', 'schedule reminder', 'weather',
-                    'news update', 'shopping list', 'calendar', 'notes'
+                    'news update', 'shopping list', 'calendar', 'notes', 'spelling game', 'play spelling', 'ready', 'end game'
                 ]
             }
         }
@@ -450,8 +450,8 @@ class AIAssistant:
         if any(phrase in user_input_lower for phrase in object_identification_phrases):
             return self.handle_object_identification(user)
         
-        # Spelling Game Commands (for Sophia and Eladriel)
-        if user in ['sophia', 'eladriel']:
+        # Spelling Game Commands (for Sophia, Eladriel, and Parent)
+        if user in ['sophia', 'eladriel', 'parent']:
             if any(phrase in user_input_lower for phrase in ['spelling game', 'play spelling', 'start spelling']):
                 return self.start_spelling_game(user)
             
@@ -629,6 +629,13 @@ What do you want to explore today? Show me anything you've discovered, or let's 
 • Same advanced object identification as the kids
 • "What is this?" works for any household item
 • Great for identifying unknown objects or tools
+
+📝 SPELLING GAME TESTING:
+• Say "Spelling Game" to test the interactive spelling system
+• Validate camera-based answer checking functionality
+• Review Grade 2-3 word list and educational feedback
+• Test all game mechanics before kids use it
+• Use "Ready" and "End Game" commands for full testing
 
 💡 CONVERSATION MODES:
 • VOICE ACTIVATED: Say 'Assistant' to activate
@@ -993,8 +1000,10 @@ Everything looks good for when the children wake up!"""
             
             if user == 'sophia':
                 intro = f"Hi Sophia! Let's play the spelling game! 📝✨ I'll give you words to spell, and you can write them down on paper."
-            else:  # eladriel
+            elif user == 'eladriel':
                 intro = f"Hey Eladriel! Ready for a spelling adventure? 🦕📝 Let's see how well you can spell these words!"
+            else:  # parent
+                intro = f"Parent Mode: Spelling Game Test. This allows you to validate the game functionality before the children use it."
             
             word = self.current_spelling_word['word']
             hint = self.current_spelling_word['hint']
@@ -1049,8 +1058,10 @@ Take your time and write '{word}' on your paper. Remember to make your letters b
                     
                     if user == 'sophia':
                         praise = f"Excellent work Sophia! ⭐ You spelled '{correct_word}' perfectly! You're doing amazing!"
-                    else:  # eladriel
+                    elif user == 'eladriel':
                         praise = f"Roar-some job Eladriel! 🦕⭐ You spelled '{correct_word}' correctly! You're a spelling champion!"
+                    else:  # parent
+                        praise = f"✅ Correct spelling detected: '{correct_word}'. Camera recognition system working properly."
                     
                     # Move to next word
                     self.spelling_word_index += 1
@@ -1084,8 +1095,10 @@ Write '{next_word}' on your paper, and say 'Ready' when you want me to check it!
                     # Incorrect answer - provide helpful feedback
                     if user == 'sophia':
                         feedback = f"Good try Sophia! The correct spelling is '{correct_word.upper()}'. Let me help you learn it!"
-                    else:  # eladriel
+                    elif user == 'eladriel':
                         feedback = f"Nice effort Eladriel! The correct spelling is '{correct_word.upper()}'. Let's learn it together!"
+                    else:  # parent
+                        feedback = f"❌ Incorrect spelling detected. Expected: '{correct_word.upper()}'. Testing educational feedback system."
                     
                     # Provide detailed spelling help
                     spelling_help = self.provide_spelling_help(correct_word, user)
@@ -1128,12 +1141,19 @@ Try writing '{correct_word}' again! Take your time and remember the tips I gave 
 📝 Letter by letter: {letters}
 🔤 The word has {len(word)} letters
 💡 Remember: {self.current_spelling_word['hint']}"""
-        else:  # eladriel
+        elif user == 'eladriel':
             help_text = f"""Let's break down '{word}' like a dinosaur discovery! 🦕
 
 📝 Letter by letter: {letters}
 🔤 This word has {len(word)} letters - count them like dinosaur footprints!
 💡 Remember: {self.current_spelling_word['hint']}"""
+        else:  # parent
+            help_text = f"""Spelling Help System Test for '{word}':
+
+📝 Letter breakdown: {letters}
+🔤 Word length: {len(word)} characters
+💡 Hint provided: {self.current_spelling_word['hint']}
+🔧 Testing educational feedback delivery"""
         
         # Add specific tips for common tricky words
         if 'double' in word_lower or any(word_lower.count(c) > 1 for c in word_lower):
@@ -1153,8 +1173,10 @@ Try writing '{correct_word}' again! Take your time and remember the tips I gave 
         
         if user == 'sophia':
             farewell = f"Great job playing the spelling game, Sophia! 📝✨"
-        else:  # eladriel
+        elif user == 'eladriel':
             farewell = f"Awesome spelling adventure, Eladriel! 🦕📝"
+        else:  # parent
+            farewell = f"Spelling Game Test Complete - Parent Mode"
         
         final_message = f"""{farewell}
 
