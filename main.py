@@ -90,6 +90,10 @@ class AIAssistant:
         self.conversation_context = {}  # Store ongoing context per user
         self.max_history_length = 10  # Keep last 10 exchanges per user
         
+        # Audio feedback system
+        self.audio_feedback_enabled = True
+        self.setup_audio_feedback()
+        
         # Spelling game settings
         self.spelling_game_active = False
         self.current_spelling_word = None
@@ -168,6 +172,202 @@ class AIAssistant:
         }
         
         logger.info("🚀 AI Assistant initialized with premium natural voices, face recognition, and universal object identification!")
+
+    def setup_audio_feedback(self):
+        """Setup audio feedback system for interaction cues."""
+        try:
+            import pygame
+            pygame.mixer.init(frequency=22050, size=-16, channels=2, buffer=512)
+            self.pygame_available = True
+            logger.info("🔊 Audio feedback system initialized")
+        except ImportError:
+            logger.warning("pygame not available - using system beeps for audio feedback")
+            self.pygame_available = False
+        except Exception as e:
+            logger.error(f"Error initializing audio feedback: {e}")
+            self.pygame_available = False
+
+    def play_listening_sound(self):
+        """Play a sound to indicate AI is listening."""
+        if not self.audio_feedback_enabled:
+            return
+            
+        try:
+            if self.pygame_available:
+                # Create a pleasant "listening" tone - rising notes
+                self._generate_listening_tone()
+            else:
+                # Fallback to system beep
+                import os
+                os.system('afplay /System/Library/Sounds/Tink.aiff 2>/dev/null &')
+        except Exception as e:
+            logger.error(f"Error playing listening sound: {e}")
+
+    def play_completion_sound(self):
+        """Play a sound to indicate AI is done speaking and ready to listen."""
+        if not self.audio_feedback_enabled:
+            return
+            
+        try:
+            if self.pygame_available:
+                # Create a gentle "completion" tone - descending notes
+                self._generate_completion_tone()
+            else:
+                # Fallback to system beep
+                import os
+                os.system('afplay /System/Library/Sounds/Glass.aiff 2>/dev/null &')
+        except Exception as e:
+            logger.error(f"Error playing completion sound: {e}")
+
+    def play_wake_word_sound(self):
+        """Play a sound to confirm wake word detection."""
+        if not self.audio_feedback_enabled:
+            return
+            
+        try:
+            if self.pygame_available:
+                # Create an acknowledgment tone
+                self._generate_wake_word_tone()
+            else:
+                # Fallback to system beep
+                import os
+                os.system('afplay /System/Library/Sounds/Ping.aiff 2>/dev/null &')
+        except Exception as e:
+            logger.error(f"Error playing wake word sound: {e}")
+
+    def _generate_listening_tone(self):
+        """Generate a pleasant listening tone using pygame."""
+        try:
+            import pygame
+            import numpy as np
+            
+            # Create a rising two-note tone (C to E)
+            sample_rate = 22050
+            duration = 0.3
+            
+            # Generate frequencies (C4 to E4)
+            freq1 = 261.63  # C4
+            freq2 = 329.63  # E4
+            
+            # Create time array
+            t = np.linspace(0, duration, int(sample_rate * duration), False)
+            
+            # Generate first note (rising)
+            note1 = np.sin(freq1 * 2 * np.pi * t) * 0.3
+            # Generate second note
+            note2 = np.sin(freq2 * 2 * np.pi * t) * 0.3
+            
+            # Fade in/out for smoothness
+            fade_samples = int(sample_rate * 0.05)  # 50ms fade
+            note1[:fade_samples] *= np.linspace(0, 1, fade_samples)
+            note1[-fade_samples:] *= np.linspace(1, 0, fade_samples)
+            note2[:fade_samples] *= np.linspace(0, 1, fade_samples)
+            note2[-fade_samples:] *= np.linspace(1, 0, fade_samples)
+            
+            # Combine notes with slight delay
+            combined = np.concatenate([note1, note2])
+            
+            # Convert to 16-bit integers
+            audio_data = (combined * 32767).astype(np.int16)
+            
+            # Convert to stereo
+            stereo_data = np.array([audio_data, audio_data]).T
+            
+            # Play the sound
+            sound = pygame.sndarray.make_sound(stereo_data)
+            sound.play()
+            
+        except Exception as e:
+            logger.error(f"Error generating listening tone: {e}")
+
+    def _generate_completion_tone(self):
+        """Generate a gentle completion tone using pygame."""
+        try:
+            import pygame
+            import numpy as np
+            
+            # Create a descending gentle tone (G to C)
+            sample_rate = 22050
+            duration = 0.4
+            
+            # Generate frequencies (G4 to C4)
+            freq1 = 392.00  # G4
+            freq2 = 261.63  # C4
+            
+            # Create time array
+            t = np.linspace(0, duration, int(sample_rate * duration), False)
+            
+            # Generate descending tone with frequency sweep
+            freq_sweep = np.linspace(freq1, freq2, len(t))
+            tone = np.sin(2 * np.pi * freq_sweep * t) * 0.25
+            
+            # Apply gentle envelope
+            envelope = np.exp(-t * 3)  # Gentle decay
+            tone *= envelope
+            
+            # Fade in for smoothness
+            fade_samples = int(sample_rate * 0.05)  # 50ms fade
+            tone[:fade_samples] *= np.linspace(0, 1, fade_samples)
+            
+            # Convert to 16-bit integers
+            audio_data = (tone * 32767).astype(np.int16)
+            
+            # Convert to stereo
+            stereo_data = np.array([audio_data, audio_data]).T
+            
+            # Play the sound
+            sound = pygame.sndarray.make_sound(stereo_data)
+            sound.play()
+            
+        except Exception as e:
+            logger.error(f"Error generating completion tone: {e}")
+
+    def _generate_wake_word_tone(self):
+        """Generate a confirmation tone for wake word detection."""
+        try:
+            import pygame
+            import numpy as np
+            
+            # Create a cheerful acknowledgment tone (C-E-G chord)
+            sample_rate = 22050
+            duration = 0.2
+            
+            # Generate frequencies (C-E-G major chord)
+            freq1 = 261.63  # C4
+            freq2 = 329.63  # E4
+            freq3 = 392.00  # G4
+            
+            # Create time array
+            t = np.linspace(0, duration, int(sample_rate * duration), False)
+            
+            # Generate chord
+            chord = (np.sin(freq1 * 2 * np.pi * t) + 
+                    np.sin(freq2 * 2 * np.pi * t) + 
+                    np.sin(freq3 * 2 * np.pi * t)) * 0.15
+            
+            # Apply envelope
+            envelope = np.exp(-t * 5)  # Quick decay
+            chord *= envelope
+            
+            # Convert to 16-bit integers
+            audio_data = (chord * 32767).astype(np.int16)
+            
+            # Convert to stereo
+            stereo_data = np.array([audio_data, audio_data]).T
+            
+            # Play the sound
+            sound = pygame.sndarray.make_sound(stereo_data)
+            sound.play()
+            
+        except Exception as e:
+            logger.error(f"Error generating wake word tone: {e}")
+
+    def toggle_audio_feedback(self, enabled: bool):
+        """Enable or disable audio feedback."""
+        self.audio_feedback_enabled = enabled
+        status = "enabled" if enabled else "disabled"
+        logger.info(f"Audio feedback {status}")
+        return f"Audio feedback {status}."
 
     def get_parent_greeting(self) -> str:
         """Get time-appropriate greeting for parent mode."""
@@ -456,9 +656,14 @@ class AIAssistant:
             # Stop interrupt listener
             self.stop_interrupt_listener()
             
+            # Play completion sound to indicate AI is done speaking and ready to listen
+            self.play_completion_sound()
+            
         except Exception as e:
             logger.error(f"TTS Error: {e}")
             self.stop_interrupt_listener()
+            # Still play completion sound even on error
+            self.play_completion_sound()
 
     def _speak_with_interrupt_check(self, tts_engine, text: str):
         """Speak with smooth delivery but interrupt capability."""
@@ -582,6 +787,9 @@ class AIAssistant:
     def listen_for_speech(self, timeout: int = 15) -> Optional[str]:
         """Listen for speech input and convert to text with longer timeout for children."""
         try:
+            # Play listening sound to indicate AI is ready to hear
+            self.play_listening_sound()
+            
             with sr.Microphone() as source:
                 logger.info("Listening for speech...")
                 
@@ -680,6 +888,13 @@ class AIAssistant:
             
             elif any(phrase in user_input_lower for phrase in ['check on kids', 'kids status', 'children']):
                 return self.check_kids_status()
+        
+        # Audio feedback controls for all users
+        if any(phrase in user_input_lower for phrase in ['turn off sounds', 'disable sounds', 'no sounds', 'mute sounds']):
+            return self.toggle_audio_feedback(False)
+        
+        if any(phrase in user_input_lower for phrase in ['turn on sounds', 'enable sounds', 'sounds on', 'unmute sounds']):
+            return self.toggle_audio_feedback(True)
         
         # Universal object identification commands for all users - expanded with natural phrases
         object_identification_phrases = [
@@ -829,6 +1044,12 @@ class AIAssistant:
 • Context-aware responses based on our discussion
 • Each conversation builds on what we discussed before
 
+🔊 AUDIO FEEDBACK:
+• Listen for sounds! I beep when I'm ready to hear you
+• I play a gentle tone when I'm done talking
+• Say "turn off sounds" to disable audio cues
+• Say "turn on sounds" to re-enable them
+
 Ask me anything, show me any object, or play the spelling game to practice your writing!"""
         
         elif user == 'eladriel':
@@ -875,6 +1096,12 @@ Ask me anything, show me any object, or play the spelling game to practice your 
 • Context-aware responses based on our discussion
 • Each conversation builds on what we discussed before
 
+🔊 AUDIO FEEDBACK:
+• Listen for sounds! I beep when I'm ready to hear you
+• I play a gentle tone when I'm done talking
+• Say "turn off sounds" to disable audio cues
+• Say "turn on sounds" to re-enable them
+
 What do you want to explore today? Show me anything you've discovered, or let's practice spelling! 🚀"""
         
         elif user == 'parent':
@@ -919,6 +1146,12 @@ What do you want to explore today? Show me anything you've discovered, or let's 
 • Repeat functionality for all responses
 • Context-aware responses that reference earlier discussion
 • Conversation history maintained throughout session
+
+🔊 AUDIO FEEDBACK SYSTEM:
+• Pleasant audio cues for interaction flow
+• Listening confirmation sounds
+• Speech completion indicators
+• "turn off sounds" / "turn on sounds" controls
 
 All standard features available with enhanced capabilities for household management."""
         
@@ -1307,6 +1540,9 @@ Everything looks good for when the children wake up!"""
                     if detected_user:
                         logger.info(f"Wake word detected for: {detected_user}")
                         print(f"👋 Hello {detected_user.title()}! Starting voice-activated conversation...")
+                        
+                        # Play wake word confirmation sound
+                        self.play_wake_word_sound()
                         
                         # Handle the user interaction with conversation mode
                         self.handle_user_interaction(detected_user)
