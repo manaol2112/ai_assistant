@@ -103,8 +103,8 @@ class AIAssistant:
                 'name': 'Parent',
                 'wake_word': 'assistant',
                 'personality': 'professional, intelligent, and efficient',
-                'greeting': "Hello! Parent mode activated. I'm ready to assist you with any requests. Speaking quietly to avoid waking the children.",
-                'face_greeting': "Hello! I see you. Parent mode ready - speaking softly.",
+                'greeting': self.get_parent_greeting(),
+                'face_greeting': self.get_parent_face_greeting(),
                 'tts_engine': self.sophia_tts,  # Use calm voice for parent mode
                 'special_commands': [
                     'help', 'status report', 'system check', 'quiet mode on', 'quiet mode off',
@@ -116,6 +116,24 @@ class AIAssistant:
         }
         
         logger.info("🚀 AI Assistant initialized with premium natural voices, face recognition, and universal object identification!")
+
+    def get_parent_greeting(self) -> str:
+        """Get time-appropriate greeting for parent mode."""
+        current_hour = datetime.now().hour
+        
+        if current_hour >= 21 or current_hour <= 6:  # 9 PM to 6 AM
+            return "Hello! Parent mode activated. I'm ready to assist you with any requests. Speaking quietly to avoid waking the children."
+        else:
+            return "Hello! Parent mode activated. I'm ready to assist you with any requests."
+
+    def get_parent_face_greeting(self) -> str:
+        """Get time-appropriate face greeting for parent mode."""
+        current_hour = datetime.now().hour
+        
+        if current_hour >= 21 or current_hour <= 6:  # 9 PM to 6 AM
+            return "Hello! I see you. Parent mode ready - speaking softly."
+        else:
+            return "Hello! I see you. Parent mode ready."
 
     def should_greet_face(self, person_name: str) -> bool:
         """Check if we should greet this person based on face detection cooldown."""
@@ -157,7 +175,11 @@ class AIAssistant:
                             if person_name in self.users:
                                 # If no one is currently in conversation, start automatic conversation
                                 if not self.current_user and self.should_greet_face(person_name):
-                                    face_greeting = self.users[person_name].get('face_greeting', f"Hello {person_name.title()}!")
+                                    # Get appropriate face greeting (time-aware for parent mode)
+                                    if person_name == 'parent':
+                                        face_greeting = self.get_parent_face_greeting()
+                                    else:
+                                        face_greeting = self.users[person_name].get('face_greeting', f"Hello {person_name.title()}!")
                                     
                                     logger.info(f"👋 Face detected: {person_name.title()} - Starting automatic conversation")
                                     print(f"🎉 Face detected: {person_name.title()}! Starting automatic conversation...")
@@ -648,38 +670,42 @@ Overall Status: {'✅ All systems operational' if all(['✅' in result for resul
             return "❌ Diagnostic test failed. Unable to complete system check."
 
     def enable_quiet_mode(self) -> str:
-        """Enable quiet mode for nighttime use."""
+        """Enable quiet mode with reduced volume and slower speech."""
         try:
-            # Reduce TTS volume/speed for all engines
-            for user_profile in self.users.values():
-                tts_engine = user_profile['tts_engine']
-                if tts_engine:
-                    tts_engine.setProperty('volume', 0.3)  # Lower volume
-                    tts_engine.setProperty('rate', 150)    # Slower speech
-            
             self.quiet_mode = True
-            return "Quiet mode enabled. Speaking softly to avoid waking the children. Volume reduced to 30%."
+            
+            # Reduce volume and slow down speech for all TTS engines
+            engines = [self.sophia_tts, self.eladriel_tts]
+            for engine in engines:
+                engine.setProperty('volume', 0.3)  # 30% volume
+                current_rate = engine.getProperty('rate')
+                engine.setProperty('rate', max(100, int(current_rate * 0.7)))  # Slower speech
+            
+            current_hour = datetime.now().hour
+            if current_hour >= 21 or current_hour <= 6:  # 9 PM to 6 AM
+                return "Quiet mode enabled. Speaking softly to avoid waking the children. Volume reduced to 30%."
+            else:
+                return "Quiet mode enabled. Volume reduced to 30% and speaking more slowly."
             
         except Exception as e:
             logger.error(f"Error enabling quiet mode: {e}")
-            return "Could not enable quiet mode. Audio settings may not be adjustable."
+            return "Error enabling quiet mode. Please try again."
 
     def disable_quiet_mode(self) -> str:
-        """Disable quiet mode and return to normal volume."""
+        """Disable quiet mode and restore normal volume and speech rate."""
         try:
-            # Restore normal TTS volume/speed
-            for user_profile in self.users.values():
-                tts_engine = user_profile['tts_engine']
-                if tts_engine:
-                    tts_engine.setProperty('volume', 0.8)  # Normal volume
-                    tts_engine.setProperty('rate', 200)    # Normal speech rate
+            # Restore normal volume and speech rate for all TTS engines
+            engines = [self.sophia_tts, self.eladriel_tts]
+            for engine in engines:
+                engine.setProperty('volume', 0.8)  # 80% volume
+                engine.setProperty('rate', 200)  # Normal speech rate
             
             self.quiet_mode = False
             return "Quiet mode disabled. Volume restored to normal levels."
             
         except Exception as e:
             logger.error(f"Error disabling quiet mode: {e}")
-            return "Could not disable quiet mode. Audio settings may not be adjustable."
+            return "Error disabling quiet mode. Please try again."
 
     def check_kids_status(self) -> str:
         """Check on kids' recent activity and interactions."""
@@ -739,8 +765,14 @@ Everything looks good for when the children wake up!"""
         self.current_user = user
         user_info = self.users[user]
         
+        # Get greeting (fresh for parent mode to check current time)
+        if user == 'parent':
+            greeting = self.get_parent_greeting()
+        else:
+            greeting = user_info['greeting']
+        
         # Greet the user
-        self.speak(user_info['greeting'], user)
+        self.speak(greeting, user)
         
         # Start conversation loop - keep listening until user says goodbye
         conversation_active = True
