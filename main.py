@@ -79,6 +79,47 @@ class AIAssistant:
         # Parent mode settings
         self.quiet_mode = False
         
+        # Spelling game settings
+        self.spelling_game_active = False
+        self.current_spelling_word = None
+        self.spelling_word_index = 0
+        self.spelling_score = 0
+        self.spelling_words_grade2_3 = [
+            # Grade 2 words
+            {'word': 'cat', 'hint': 'A furry pet that says meow'},
+            {'word': 'dog', 'hint': 'A loyal pet that barks'},
+            {'word': 'sun', 'hint': 'The bright star in the sky'},
+            {'word': 'run', 'hint': 'Moving fast with your legs'},
+            {'word': 'big', 'hint': 'Very large in size'},
+            {'word': 'red', 'hint': 'The color of strawberries'},
+            {'word': 'blue', 'hint': 'The color of the sky'},
+            {'word': 'tree', 'hint': 'A tall plant with leaves'},
+            {'word': 'book', 'hint': 'Something you read'},
+            {'word': 'ball', 'hint': 'A round toy you can throw'},
+            {'word': 'fish', 'hint': 'Animals that swim in water'},
+            {'word': 'bird', 'hint': 'Animals that can fly'},
+            {'word': 'milk', 'hint': 'A white drink from cows'},
+            {'word': 'cake', 'hint': 'A sweet dessert for birthdays'},
+            {'word': 'home', 'hint': 'The place where you live'},
+            
+            # Grade 3 words
+            {'word': 'school', 'hint': 'The place where you learn'},
+            {'word': 'happy', 'hint': 'Feeling very good and joyful'},
+            {'word': 'friend', 'hint': 'Someone you like to play with'},
+            {'word': 'water', 'hint': 'Clear liquid you drink'},
+            {'word': 'funny', 'hint': 'Something that makes you laugh'},
+            {'word': 'pretty', 'hint': 'Beautiful and nice to look at'},
+            {'word': 'family', 'hint': 'People who love you at home'},
+            {'word': 'garden', 'hint': 'A place where flowers grow'},
+            {'word': 'cookie', 'hint': 'A sweet snack you can eat'},
+            {'word': 'animal', 'hint': 'Living creatures like cats and dogs'},
+            {'word': 'winter', 'hint': 'The cold season with snow'},
+            {'word': 'summer', 'hint': 'The warm season for swimming'},
+            {'word': 'birthday', 'hint': 'The special day you were born'},
+            {'word': 'rainbow', 'hint': 'Colorful arc in the sky after rain'},
+            {'word': 'playground', 'hint': 'A fun place with swings and slides'}
+        ]
+        
         # User profiles with personalized settings
         self.users = {
             'sophia': {
@@ -88,7 +129,7 @@ class AIAssistant:
                 'greeting': "Hi Sophia! I'm here to help you with anything you need! My voice sounds so much more natural now!",
                 'face_greeting': "Hello Sophia! I can see you! 👋 How wonderful to see your beautiful face!",
                 'tts_engine': self.sophia_tts,
-                'special_commands': ['help', 'what can you do', 'identify this', 'what is this', 'tell me about this']
+                'special_commands': ['help', 'what can you do', 'identify this', 'what is this', 'tell me about this', 'spelling game', 'play spelling', 'ready', 'end game']
             },
             'eladriel': {
                 'name': 'Eladriel',
@@ -97,7 +138,7 @@ class AIAssistant:
                 'greeting': "Hey Eladriel! Ready for some fun discoveries? I can identify your dinosaur toys and any other objects! And listen to how natural my voice sounds now!",
                 'face_greeting': "Hey Eladriel! I see you there! 🦕 Ready for some dinosaur adventures?",
                 'tts_engine': self.eladriel_tts,
-                'special_commands': ['identify dinosaur', 'identify this', 'what is this', 'tell me about this', 'show me camera', 'dinosaur tips', 'help']
+                'special_commands': ['identify dinosaur', 'identify this', 'what is this', 'tell me about this', 'show me camera', 'dinosaur tips', 'help', 'spelling game', 'play spelling', 'ready', 'end game']
             },
             'parent': {
                 'name': 'Parent',
@@ -409,6 +450,17 @@ class AIAssistant:
         if any(phrase in user_input_lower for phrase in object_identification_phrases):
             return self.handle_object_identification(user)
         
+        # Spelling Game Commands (for Sophia and Eladriel)
+        if user in ['sophia', 'eladriel']:
+            if any(phrase in user_input_lower for phrase in ['spelling game', 'play spelling', 'start spelling']):
+                return self.start_spelling_game(user)
+            
+            elif self.spelling_game_active and any(phrase in user_input_lower for phrase in ['ready', 'i\'m ready', 'check my answer']):
+                return self.check_spelling_answer(user)
+            
+            elif self.spelling_game_active and any(phrase in user_input_lower for phrase in ['end game', 'stop game', 'quit game']):
+                return self.end_spelling_game(user)
+        
         # Eladriel's special dinosaur commands (keep existing functionality)
         if user == 'eladriel':
             if any(phrase in user_input_lower for phrase in ['identify dinosaur', 'what is this dinosaur', 'look at this dinosaur']):
@@ -499,6 +551,13 @@ class AIAssistant:
 • Learn about colors, materials, history, and fun facts
 • Perfect for exploring household items, toys, books, and more!
 
+📝 SPELLING GAME (NEW!):
+• Say "Spelling Game" to start an interactive spelling practice!
+• I'll give you words to spell - write them on paper
+• Say "Ready" when you want me to check your answer with my camera
+• Get helpful tips if you need help with tricky words
+• Say "End Game" to stop playing anytime
+
 💡 CONVERSATION MODES:
 • AUTOMATIC: Just step in front of the camera - I'll start listening immediately!
 • VOICE ACTIVATED: Say 'Miley' if I don't see you
@@ -511,7 +570,7 @@ class AIAssistant:
 • No wake words needed when you're visible!
 • Just step away or say 'goodbye' to end
 
-Ask me anything or show me any object you're curious about!"""
+Ask me anything, show me any object, or play the spelling game to practice your writing!"""
         
         elif user == 'eladriel':
             return """Hey Eladriel! I'm your dinosaur-loving assistant! Here's what I can do:
@@ -526,6 +585,13 @@ Ask me anything or show me any object you're curious about!"""
 • Learn about toys, tools, household items, nature objects, and more!
 • I'll connect things to dinosaurs and adventures when possible!
 • Perfect for exploring everything around you!
+
+📝 SPELLING GAME (NEW!):
+• Say "Spelling Game" for a roar-some spelling adventure! 🦕📝
+• I'll give you words to spell - write them clearly on paper
+• Say "Ready" when you want me to check your writing with my camera
+• Get dinosaur-themed help and encouragement for tricky words
+• Say "End Game" whenever you want to stop
 
 🌟 GENERAL FEATURES:
 • Ask me questions about dinosaurs, animals, or anything!
@@ -544,7 +610,7 @@ Ask me anything or show me any object you're curious about!"""
 • Perfect for showing me dinosaurs and other objects - no wake words needed!
 • Just step away or say 'goodbye' to end
 
-What do you want to explore today? Show me anything you've discovered! 🚀"""
+What do you want to explore today? Show me anything you've discovered, or let's practice spelling! 🚀"""
         
         elif user == 'parent':
             return """Parent Mode Active - Advanced Features Available:
@@ -906,6 +972,206 @@ Everything looks good for when the children wake up!"""
         
         logger.info("AI Assistant stopped")
         print("👋 AI Assistant stopped. Goodbye!")
+
+    def start_spelling_game(self, user: str) -> str:
+        """Start an interactive spelling game for kids."""
+        try:
+            import random
+            
+            # Initialize game state
+            self.spelling_game_active = True
+            self.spelling_word_index = 0
+            self.spelling_score = 0
+            
+            # Shuffle the words for variety
+            random.shuffle(self.spelling_words_grade2_3)
+            
+            # Get first word
+            self.current_spelling_word = self.spelling_words_grade2_3[self.spelling_word_index]
+            
+            user_name = user.title()
+            
+            if user == 'sophia':
+                intro = f"Hi Sophia! Let's play the spelling game! 📝✨ I'll give you words to spell, and you can write them down on paper."
+            else:  # eladriel
+                intro = f"Hey Eladriel! Ready for a spelling adventure? 🦕📝 Let's see how well you can spell these words!"
+            
+            word = self.current_spelling_word['word']
+            hint = self.current_spelling_word['hint']
+            
+            game_instructions = f"""{intro}
+
+Here's how to play:
+1. I'll say a word and give you a hint
+2. Write the word on paper with big, clear letters
+3. When you're done, say 'Ready' and show me your paper
+4. I'll check if it's correct and help you learn!
+5. Say 'End Game' anytime to stop playing
+
+Let's start! 🌟
+
+Word #{self.spelling_word_index + 1}: {word.upper()}
+Hint: {hint}
+
+Take your time and write '{word}' on your paper. Remember to make your letters big and clear! When you're finished, say 'Ready' and show me your answer."""
+            
+            return game_instructions
+            
+        except Exception as e:
+            logger.error(f"Error starting spelling game: {e}")
+            return "Sorry! I had trouble starting the spelling game. Let's try again later!"
+
+    def check_spelling_answer(self, user: str) -> str:
+        """Check the student's written spelling answer using camera."""
+        try:
+            if not self.spelling_game_active or not self.current_spelling_word:
+                return "We're not playing the spelling game right now. Say 'Spelling Game' to start!"
+            
+            user_name = user.title()
+            correct_word = self.current_spelling_word['word']
+            
+            self.speak(f"Great {user_name}! Let me see what you wrote. Hold your paper steady in front of the camera...", user)
+            
+            # Give time to position the paper
+            time.sleep(3)
+            
+            # Capture and analyze the written answer
+            result = self.object_identifier.capture_and_identify(user)
+            
+            if result["success"]:
+                # Analyze if the written text matches the word
+                written_text = result["message"].lower()
+                
+                # Check if the correct word appears in the AI's analysis
+                if correct_word.lower() in written_text or self.check_spelling_similarity(written_text, correct_word):
+                    # Correct answer!
+                    self.spelling_score += 1
+                    
+                    if user == 'sophia':
+                        praise = f"Excellent work Sophia! ⭐ You spelled '{correct_word}' perfectly! You're doing amazing!"
+                    else:  # eladriel
+                        praise = f"Roar-some job Eladriel! 🦕⭐ You spelled '{correct_word}' correctly! You're a spelling champion!"
+                    
+                    # Move to next word
+                    self.spelling_word_index += 1
+                    
+                    if self.spelling_word_index >= len(self.spelling_words_grade2_3):
+                        # Game completed!
+                        final_score = f"""{praise}
+
+🎉 Congratulations! You completed the spelling game! 🎉
+Final Score: {self.spelling_score} out of {len(self.spelling_words_grade2_3)} words correct!
+
+You're an amazing speller! Great job practicing your writing! 📝✨"""
+                        self.spelling_game_active = False
+                        return final_score
+                    else:
+                        # Next word
+                        self.current_spelling_word = self.spelling_words_grade2_3[self.spelling_word_index]
+                        next_word = self.current_spelling_word['word']
+                        next_hint = self.current_spelling_word['hint']
+                        
+                        return f"""{praise}
+
+Ready for the next word? Here we go! 
+
+Word #{self.spelling_word_index + 1}: {next_word.upper()}
+Hint: {next_hint}
+
+Write '{next_word}' on your paper, and say 'Ready' when you want me to check it!"""
+                
+                else:
+                    # Incorrect answer - provide helpful feedback
+                    if user == 'sophia':
+                        feedback = f"Good try Sophia! The correct spelling is '{correct_word.upper()}'. Let me help you learn it!"
+                    else:  # eladriel
+                        feedback = f"Nice effort Eladriel! The correct spelling is '{correct_word.upper()}'. Let's learn it together!"
+                    
+                    # Provide detailed spelling help
+                    spelling_help = self.provide_spelling_help(correct_word, user)
+                    
+                    return f"""{feedback}
+
+{spelling_help}
+
+Try writing '{correct_word}' again! Take your time and remember the tips I gave you. Say 'Ready' when you want me to check your new answer!"""
+            
+            else:
+                return f"I had trouble seeing your paper clearly. {result['message']} Make sure to write with big, dark letters and hold it steady in front of the camera. Say 'Ready' when you're ready to try again!"
+                
+        except Exception as e:
+            logger.error(f"Error checking spelling answer: {e}")
+            return "Sorry! I had trouble checking your answer. Let's try again!"
+
+    def check_spelling_similarity(self, written_text: str, correct_word: str) -> bool:
+        """Check if the written text is similar enough to the correct word."""
+        # Simple similarity check - look for the word or its letters
+        correct_letters = set(correct_word.lower())
+        written_letters = set(''.join(c for c in written_text.lower() if c.isalpha()))
+        
+        # If most of the correct letters are present, consider it a match
+        if len(correct_letters.intersection(written_letters)) >= len(correct_letters) * 0.7:
+            return True
+        
+        return False
+
+    def provide_spelling_help(self, word: str, user: str) -> str:
+        """Provide helpful spelling tips for the word."""
+        word_lower = word.lower()
+        
+        # Letter-by-letter breakdown
+        letters = " - ".join(word.upper())
+        
+        if user == 'sophia':
+            help_text = f"""Here's how to spell '{word}' step by step:
+
+📝 Letter by letter: {letters}
+🔤 The word has {len(word)} letters
+💡 Remember: {self.current_spelling_word['hint']}"""
+        else:  # eladriel
+            help_text = f"""Let's break down '{word}' like a dinosaur discovery! 🦕
+
+📝 Letter by letter: {letters}
+🔤 This word has {len(word)} letters - count them like dinosaur footprints!
+💡 Remember: {self.current_spelling_word['hint']}"""
+        
+        # Add specific tips for common tricky words
+        if 'double' in word_lower or any(word_lower.count(c) > 1 for c in word_lower):
+            help_text += f"\n⚠️ Special tip: This word has double letters - watch out for them!"
+        
+        if any(combo in word_lower for combo in ['th', 'ch', 'sh', 'ck']):
+            help_text += f"\n⚠️ Special tip: This word has a letter combination - two letters that make one sound!"
+        
+        return help_text
+
+    def end_spelling_game(self, user: str) -> str:
+        """End the spelling game and provide final feedback."""
+        if not self.spelling_game_active:
+            return "We weren't playing the spelling game. Say 'Spelling Game' if you want to start playing!"
+        
+        user_name = user.title()
+        
+        if user == 'sophia':
+            farewell = f"Great job playing the spelling game, Sophia! 📝✨"
+        else:  # eladriel
+            farewell = f"Awesome spelling adventure, Eladriel! 🦕📝"
+        
+        final_message = f"""{farewell}
+
+Game Summary:
+📊 Words attempted: {self.spelling_word_index + 1}
+⭐ Score: {self.spelling_score} correct
+🎯 You're doing fantastic with your spelling practice!
+
+Thanks for playing! Say 'Spelling Game' anytime you want to practice more words! Keep up the great work! 🌟"""
+        
+        # Reset game state
+        self.spelling_game_active = False
+        self.current_spelling_word = None
+        self.spelling_word_index = 0
+        self.spelling_score = 0
+        
+        return final_message
 
 if __name__ == "__main__":
     assistant = AIAssistant()
