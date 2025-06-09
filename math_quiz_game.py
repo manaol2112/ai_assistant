@@ -1,17 +1,13 @@
 """
 Math Quiz Game Module for AI Assistant
 Provides word problems where kids write equations and answers on paper
-Uses camera to evaluate work and provides feedback
+Uses camera and OpenAI vision API to evaluate work and provides feedback
 """
 
 import logging
 import random
 import re
 from typing import Dict, List, Optional, Tuple
-import cv2
-import numpy as np
-from PIL import Image
-import pytesseract
 
 logger = logging.getLogger(__name__)
 
@@ -172,208 +168,174 @@ Let's solve this! 🚀"""
             return "Oops! Let's try starting the math game again! 🧮"
 
     def check_math_answer(self, user: str) -> str:
-        """Check the student's written math work using camera."""
+        """Check the student's written math work using camera and OpenAI vision."""
         try:
             if not self.game_active or not self.current_problem:
                 return "No math game is currently active. Say 'Math Game' to start!"
 
             user_name = user.title()
             
-            # Capture image from camera
-            result = self._capture_and_analyze_math_work()
+            # Use the same approach as spelling game - OpenAI vision without custom_prompt
+            expected_equation = self.current_problem['equation']
+            expected_answer = str(self.current_problem['answer'])
             
-            if not result['success']:
-                return f"I couldn't see your work clearly, {user_name}. {result['message']} Try holding your paper closer to the camera with good lighting!"
+            # Create expected_word format that the vision system can understand
+            expected_math_work = f"{expected_equation} = {expected_answer}"
             
-            detected_equation = result.get('equation', '')
-            detected_answer = result.get('answer', '')
+            # Use the existing object identifier with correct parameters
+            result = self.ai_assistant.object_identifier.capture_and_identify_text(
+                user, 
+                expected_word=expected_math_work
+            )
             
-            # Verify the math work
-            equation_correct = self._verify_equation(detected_equation, self.current_problem['equation'])
-            answer_correct = self._verify_answer(detected_answer, self.current_problem['answer'])
-            
-            self.problems_answered += 1
-            
-            # Provide feedback based on correctness
-            if equation_correct and answer_correct:
-                self.score += 1
-                feedback = self._generate_correct_feedback(user, detected_equation, detected_answer)
-                sound_type = 'correct'
-            elif equation_correct and not answer_correct:
-                feedback = self._generate_equation_right_answer_wrong_feedback(user, detected_equation, detected_answer)
-                sound_type = 'partial'
-            elif not equation_correct and answer_correct:
-                feedback = self._generate_equation_wrong_answer_right_feedback(user, detected_equation, detected_answer)
-                sound_type = 'partial'
+            if result["success"]:
+                ai_description = result["message"].lower()
+                
+                # Verify the math work using AI description
+                equation_correct = self._verify_equation_from_description(ai_description, expected_equation)
+                answer_correct = self._verify_answer_from_description(ai_description, expected_answer)
+                
+                self.problems_answered += 1
+                
+                # Provide feedback based on correctness
+                if equation_correct and answer_correct:
+                    self.score += 1
+                    feedback = self._generate_correct_feedback(user, expected_equation, expected_answer)
+                    
+                    # Play correct sound
+                    try:
+                        if hasattr(self, 'ai_assistant') and self.ai_assistant:
+                            self.ai_assistant.play_math_correct_sound()
+                    except:
+                        pass
+                    
+                elif equation_correct and not answer_correct:
+                    feedback = self._generate_equation_right_answer_wrong_feedback(user, expected_equation, expected_answer)
+                    
+                    # Play wrong sound
+                    try:
+                        if hasattr(self, 'ai_assistant') and self.ai_assistant:
+                            self.ai_assistant.play_math_wrong_sound()
+                    except:
+                        pass
+                        
+                elif not equation_correct and answer_correct:
+                    feedback = self._generate_equation_wrong_answer_right_feedback(user, expected_equation, expected_answer)
+                    
+                    # Play wrong sound  
+                    try:
+                        if hasattr(self, 'ai_assistant') and self.ai_assistant:
+                            self.ai_assistant.play_math_wrong_sound()
+                    except:
+                        pass
+                        
+                else:
+                    feedback = self._generate_incorrect_feedback(user, expected_equation, expected_answer)
+                    
+                    # Play wrong sound
+                    try:
+                        if hasattr(self, 'ai_assistant') and self.ai_assistant:
+                            self.ai_assistant.play_math_wrong_sound()
+                    except:
+                        pass
+                
+                # Move to next problem or end game automatically if correct
+                if equation_correct and answer_correct:
+                    if self.problem_index < len(self.current_problems) - 1:
+                        self.problem_index += 1
+                        self.current_problem = self.current_problems[self.problem_index]
+                        next_problem = self._generate_next_problem_text(user)
+                        feedback += f"\n\n{next_problem}"
+                    else:
+                        # Game complete
+                        final_score = self._generate_final_score(user)
+                        feedback += f"\n\n{final_score}"
+                        self.game_active = False
+                
+                return feedback
             else:
-                feedback = self._generate_incorrect_feedback(user, detected_equation, detected_answer)
-                sound_type = 'incorrect'
-            
-            # Move to next problem or end game
-            if self.problem_index < len(self.current_problems) - 1:
-                self.problem_index += 1
-                self.current_problem = self.current_problems[self.problem_index]
-                next_problem = self._generate_next_problem_text(user)
-                feedback += f"\n\n{next_problem}"
-            else:
-                # Game complete
-                final_score = self._generate_final_score(user)
-                feedback += f"\n\n{final_score}"
-                self.game_active = False
-            
-            return feedback
+                return f"I can't see your math work clearly, {user_name}. Make sure to write with BIG, dark numbers and hold your paper steady in front of the camera. Say 'Ready' to try again! 📝"
             
         except Exception as e:
             logger.error(f"Error checking math answer: {e}")
             return f"Oops! I had trouble checking your work, {user_name}. Let's try again!"
 
-    def _capture_and_analyze_math_work(self) -> Dict:
-        """Capture image and analyze math work written on paper."""
-        try:
-            # Take a photo
-            success, frame = self.camera_handler.cap.read()
-            if not success:
-                return {'success': False, 'message': 'Camera not available'}
-            
-            # Convert to PIL Image for processing
-            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            pil_image = Image.fromarray(rgb_frame)
-            
-            # Enhance image for better OCR
-            enhanced_image = self._enhance_image_for_math_ocr(pil_image)
-            
-            # Extract text using OCR
-            extracted_text = pytesseract.image_to_string(enhanced_image, config='--psm 6')
-            
-            # Parse equation and answer from text
-            parsed_result = self._parse_math_work(extracted_text)
-            
-            if parsed_result['equation'] or parsed_result['answer']:
-                return {
-                    'success': True,
-                    'equation': parsed_result['equation'],
-                    'answer': parsed_result['answer'],
-                    'raw_text': extracted_text
-                }
-            else:
-                return {
-                    'success': False,
-                    'message': 'Could not detect math work clearly'
-                }
-                
-        except Exception as e:
-            logger.error(f"Error in math work analysis: {e}")
-            return {'success': False, 'message': 'Analysis failed'}
-
-    def _enhance_image_for_math_ocr(self, image: Image.Image) -> Image.Image:
-        """Enhance image specifically for math equation OCR."""
-        # Convert to numpy array
-        img_array = np.array(image)
+    def _verify_equation_from_description(self, ai_description: str, expected_equation: str) -> bool:
+        """Verify if the equation is correctly written based on AI description."""
+        import re
         
-        # Convert to grayscale
-        gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
+        # Normalize the expected equation for comparison
+        normalized_expected = self._normalize_equation(expected_equation)
         
-        # Apply Gaussian blur to reduce noise
-        blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-        
-        # Apply adaptive thresholding for better contrast
-        thresh = cv2.adaptiveThreshold(blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
-                                     cv2.THRESH_BINARY, 11, 2)
-        
-        # Morphological operations to clean up
-        kernel = np.ones((2, 2), np.uint8)
-        cleaned = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
-        
-        # Convert back to PIL Image
-        return Image.fromarray(cleaned)
-
-    def _parse_math_work(self, text: str) -> Dict[str, str]:
-        """Parse equation and answer from OCR text."""
-        text = text.strip().replace('\n', ' ')
-        
-        # Common OCR corrections for math symbols
-        text = self._clean_math_text(text)
-        
-        # Look for equation patterns (like "3 + 2" or "3+2")
+        # Look for equation patterns in the AI description
         equation_patterns = [
-            r'(\d+\s*[+\-×÷∗/]\s*\d+(?:\s*[+\-×÷∗/]\s*\d+)*)',
-            r'(\d+\s*[\+\-\*\/]\s*\d+(?:\s*[\+\-\*\/]\s*\d+)*)',
-            r'(\(\s*\d+\s*[×∗]\s*\d+\s*\)\s*[+\-]\s*\(\s*\d+\s*[×∗]\s*\d+\s*\))'
+            rf"{re.escape(expected_equation)}",
+            rf"{re.escape(normalized_expected)}",
+            rf"equation\s*['\"`]?{re.escape(expected_equation)}['\"`]?",
+            rf"written\s*['\"`]?{re.escape(expected_equation)}['\"`]?",
+            rf"shows\s*['\"`]?{re.escape(expected_equation)}['\"`]?",
+            rf"math\s*['\"`]?{re.escape(expected_equation)}['\"`]?",
         ]
         
-        equation = ''
+        # Also check for the individual numbers and operators
+        parts = expected_equation.replace(' ', '').replace('+', ' + ').replace('-', ' - ').replace('×', ' × ').replace('÷', ' ÷ ').split()
+        all_parts_found = True
+        for part in parts:
+            if part.strip() and part not in ai_description:
+                all_parts_found = False
+                break
+        
+        # Check patterns or all parts
         for pattern in equation_patterns:
-            match = re.search(pattern, text)
-            if match:
-                equation = match.group(1).strip()
-                break
+            if re.search(pattern, ai_description, re.IGNORECASE):
+                logger.info(f"✅ Equation found in AI description: '{expected_equation}'")
+                return True
         
-        # Look for answer patterns (like "= 5" or "5")
+        if all_parts_found and len(parts) >= 3:  # At least number operator number
+            logger.info(f"✅ All equation parts found: {parts}")
+            return True
+        
+        logger.info(f"❌ Equation not found in description: '{expected_equation}'")
+        return False
+
+    def _verify_answer_from_description(self, ai_description: str, expected_answer: str) -> bool:
+        """Verify if the answer is correctly written based on AI description."""
+        import re
+        
+        # Look for answer patterns in the AI description
         answer_patterns = [
-            r'=\s*(\d+)',  # "= 5"
-            r'(\d+)(?:\s*$|\s+(?![\+\-×÷∗/]))',  # standalone number
+            rf"=\s*{re.escape(expected_answer)}",
+            rf"answer\s*['\"`]?{re.escape(expected_answer)}['\"`]?",
+            rf"equals\s*{re.escape(expected_answer)}",
+            rf"result\s*['\"`]?{re.escape(expected_answer)}['\"`]?",
+            rf"solution\s*['\"`]?{re.escape(expected_answer)}['\"`]?",
+            rf"{re.escape(expected_answer)}\s*written",
+            rf"shows\s*{re.escape(expected_answer)}",
         ]
         
-        answer = ''
         for pattern in answer_patterns:
-            matches = re.findall(pattern, text)
-            if matches:
-                # Take the last number found (likely the answer)
-                answer = matches[-1].strip()
-                break
+            if re.search(pattern, ai_description, re.IGNORECASE):
+                logger.info(f"✅ Answer found in AI description: '{expected_answer}'")
+                return True
         
-        return {
-            'equation': equation,
-            'answer': answer
-        }
-
-    def _clean_math_text(self, text: str) -> str:
-        """Clean and correct common OCR errors in math text."""
-        # Common OCR corrections
-        corrections = {
-            'x': '×',
-            'X': '×',
-            '*': '×',
-            '|': '1',
-            'l': '1',
-            'I': '1',
-            'O': '0',
-            'o': '0',
-            'S': '5',
-            's': '5',
-            'B': '8',
-            'Z': '2',
-            'G': '6',
-            '÷': '÷',
-            '/': '÷'
-        }
+        # Also check if the number appears prominently
+        if expected_answer in ai_description:
+            # Make sure it's not just part of the equation
+            answer_context_patterns = [
+                rf"=.*{re.escape(expected_answer)}",
+                rf"{re.escape(expected_answer)}.*answer",
+                rf"answer.*{re.escape(expected_answer)}",
+                rf"{re.escape(expected_answer)}.*result",
+                rf"result.*{re.escape(expected_answer)}",
+            ]
+            
+            for pattern in answer_context_patterns:
+                if re.search(pattern, ai_description, re.IGNORECASE):
+                    logger.info(f"✅ Answer found in context: '{expected_answer}'")
+                    return True
         
-        for wrong, right in corrections.items():
-            text = text.replace(wrong, right)
-        
-        return text
-
-    def _verify_equation(self, detected: str, correct: str) -> bool:
-        """Verify if the detected equation matches the correct one."""
-        if not detected:
-            return False
-        
-        # Normalize both equations for comparison
-        detected_normalized = self._normalize_equation(detected)
-        correct_normalized = self._normalize_equation(correct)
-        
-        return detected_normalized == correct_normalized
-
-    def _verify_answer(self, detected: str, correct: int) -> bool:
-        """Verify if the detected answer matches the correct one."""
-        if not detected:
-            return False
-        
-        try:
-            detected_num = int(detected.strip())
-            return detected_num == correct
-        except ValueError:
-            return False
+        logger.info(f"❌ Answer not found in description: '{expected_answer}'")
+        return False
 
     def _normalize_equation(self, equation: str) -> str:
         """Normalize equation for comparison (remove spaces, standardize operators)."""
@@ -401,47 +363,43 @@ Let's solve this! 🚀"""
         
         return feedback
 
-    def _generate_equation_right_answer_wrong_feedback(self, user: str, equation: str, answer: str) -> str:
+    def _generate_equation_right_answer_wrong_feedback(self, user: str, equation: str, expected_answer: str) -> str:
         """Generate feedback when equation is right but answer is wrong."""
         user_name = user.title()
-        correct_answer = self.current_problem['answer']
         
         if user == 'sophia':
-            feedback = f"Great equation, Sophia! '{equation}' is right! But let's check your math - the answer should be {correct_answer}. 🧮"
+            feedback = f"Great equation, Sophia! '{equation}' is right! But let's check your math - the answer should be {expected_answer}. 🧮"
         elif user == 'eladriel':
-            feedback = f"Good thinking, Eladriel! Your equation '{equation}' is perfect! But the answer should be {correct_answer}. Let's count again! 🦕"
+            feedback = f"Good thinking, Eladriel! Your equation '{equation}' is perfect! But the answer should be {expected_answer}. Let's count again! 🦕"
         else:
-            feedback = f"Equation correct: {equation}, but answer should be {correct_answer}"
+            feedback = f"Equation correct: {equation}, but answer should be {expected_answer}"
         
         return feedback
 
-    def _generate_equation_wrong_answer_right_feedback(self, user: str, equation: str, answer: str) -> str:
+    def _generate_equation_wrong_answer_right_feedback(self, user: str, expected_equation: str, answer: str) -> str:
         """Generate feedback when answer is right but equation is wrong."""
         user_name = user.title()
-        correct_equation = self.current_problem['equation']
         
         if user == 'sophia':
-            feedback = f"Good answer, Sophia! '{answer}' is right! But the equation should be '{correct_equation}'. 📝"
+            feedback = f"Good answer, Sophia! '{answer}' is right! But the equation should be '{expected_equation}'. 📝"
         elif user == 'eladriel':
-            feedback = f"Nice counting, Eladriel! '{answer}' is correct! But the equation should be '{correct_equation}'. 🦕"
+            feedback = f"Nice counting, Eladriel! '{answer}' is correct! But the equation should be '{expected_equation}'. 🦕"
         else:
-            feedback = f"Answer correct: {answer}, but equation should be {correct_equation}"
+            feedback = f"Answer correct: {answer}, but equation should be {expected_equation}"
         
         return feedback
 
-    def _generate_incorrect_feedback(self, user: str, equation: str, answer: str) -> str:
+    def _generate_incorrect_feedback(self, user: str, expected_equation: str, expected_answer: str) -> str:
         """Generate feedback for incorrect answers."""
         user_name = user.title()
-        correct_equation = self.current_problem['equation']
-        correct_answer = self.current_problem['answer']
         hint = self.current_problem['hint']
         
         if user == 'sophia':
-            feedback = f"Not quite, Sophia! The equation should be '{correct_equation}' and the answer is {correct_answer}. {hint} ✨"
+            feedback = f"Not quite, Sophia! The equation should be '{expected_equation}' and the answer is {expected_answer}. {hint} ✨"
         elif user == 'eladriel':
-            feedback = f"Let's try again, Eladriel! The equation is '{correct_equation}' and the answer is {correct_answer}. {hint} 🦕"
+            feedback = f"Let's try again, Eladriel! The equation is '{expected_equation}' and the answer is {expected_answer}. {hint} 🦕"
         else:
-            feedback = f"Incorrect. Correct equation: {correct_equation}, Answer: {correct_answer}"
+            feedback = f"Incorrect. Correct equation: {expected_equation}, Answer: {expected_answer}"
         
         return feedback
 

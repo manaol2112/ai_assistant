@@ -1400,6 +1400,34 @@ class AIAssistant:
         if any(phrase in user_input_lower for phrase in repeat_phrases):
             return self.handle_repeat_request(user)
         
+        # Math Quiz Game Commands (for Sophia, Eladriel, and Parent) - CHECK FIRST!
+        if user in ['sophia', 'eladriel', 'parent']:
+            # Math game start commands
+            if self.math_quiz.is_math_game_command(user_input):
+                return self.math_quiz.handle_math_command(user_input, user)
+            
+            # Handle "ready" commands when math game is active - PRIORITY!
+            elif self.math_quiz.game_active:
+                ready_phrases = [
+                    'ready', 'i\'m ready', 'check my answer', 'done', 'finished', 
+                    'check it', 'look at this', 'see my answer', 'check this',
+                    'here it is', 'all done', 'complete', 'i finished',
+                    'can you check', 'please check', 'look', 'see this'
+                ]
+                
+                if any(phrase in user_input_lower for phrase in ready_phrases):
+                    return self.math_quiz.check_math_answer(user)
+                
+                # Handle end game commands
+                elif any(phrase in user_input_lower for phrase in ['end math', 'stop math', 'quit math', 'end game']):
+                    return self.math_quiz.end_game(user)
+                
+                # Handle verbal answers when math game is active (fallback)
+                else:
+                    verbal_answer = self.math_quiz._extract_verbal_answer(user_input_lower)
+                    if verbal_answer is not None:
+                        return self.math_quiz._handle_verbal_answer(verbal_answer, user)
+        
         # Spelling Game Commands (for Sophia, Eladriel, and Parent)
         if user in ['sophia', 'eladriel', 'parent']:
             if any(phrase in user_input_lower for phrase in ['spelling game', 'play spelling', 'start spelling']):
@@ -1446,10 +1474,6 @@ class AIAssistant:
         # General help commands for all users
         if any(phrase in user_input_lower for phrase in ['help', 'what can you do', 'commands']):
             return self.get_help_message(user)
-        
-        # Math Quiz Game Commands (for all users)
-        if self.math_quiz.is_math_game_command(user_input):
-            return self.math_quiz.handle_math_command(user_input, user)
         
         return None
     
