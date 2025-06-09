@@ -79,6 +79,11 @@ class AIAssistant:
         # Parent mode settings
         self.quiet_mode = False
         
+        # Interrupt system for speech control
+        self.speech_interrupted = False
+        self.interrupt_listener_active = False
+        self.interrupt_thread = None
+        
         # Spelling game settings
         self.spelling_game_active = False
         self.current_spelling_word = None
@@ -268,6 +273,37 @@ class AIAssistant:
         max_timeouts = 6 if self.spelling_game_active else 2  # Allow 6 timeouts for spelling game, 2 for normal conversation
         
         while conversation_active and self.running and self.current_user == user:
+            # Check if speech was interrupted before listening for new input
+            if self.speech_interrupted:
+                logger.info("Handling speech interruption")
+                
+                # Check if the interruption was a goodbye command
+                last_interrupt_input = getattr(self, 'last_interrupt_input', '')
+                
+                if any(phrase in last_interrupt_input for phrase in ['goodbye', 'bye', 'see you later', 'talk to you later']):
+                    # User said goodbye as interruption - end conversation
+                    farewell_messages = {
+                        'sophia': "Goodbye Sophia! I'm always here when you need me. Have a wonderful day!",
+                        'eladriel': "See you later Eladriel! Keep exploring and learning about dinosaurs! Roar!",
+                        'parent': "Goodbye! Parent mode deactivated. All systems remain operational for the children."
+                    }
+                    self.speak(farewell_messages.get(user, "Goodbye! Talk to you soon!"), user)
+                    conversation_active = False
+                    break
+                else:
+                    # Regular interruption - acknowledge and continue
+                    interrupt_responses = {
+                        'sophia': "Oh! Sorry Sophia! I'm listening now.",
+                        'eladriel': "Whoops! You got my attention, Eladriel! What's up?",
+                        'parent': "Interrupted. Ready for your next request."
+                    }
+                    
+                    # Brief acknowledgment (will also be interruptible)
+                    self.speak(interrupt_responses.get(user, "Yes? I'm listening!"), user)
+                
+                # Reset the interrupt flag
+                self.speech_interrupted = False
+            
             # Listen for their request with a 5-second timeout
             user_input = self.listen_for_speech(timeout=5)
             
@@ -372,22 +408,164 @@ class AIAssistant:
             logger.info("🎭 Face recognition system stopped")
 
     def speak(self, text: str, user: Optional[str] = None):
-        """Convert text to speech with user-specific voice settings."""
+        """Convert text to speech with user-specific voice settings and interrupt capability."""
         try:
+            # Reset interrupt flag
+            self.speech_interrupted = False
+            
+            # Start interrupt listener
+            self.start_interrupt_listener()
+            
             # Use personalized TTS engine for each user
             if user and user in self.users:
                 tts_engine = self.users[user]['tts_engine']
                 logger.info(f"Speaking to {user}: {text}")
-                tts_engine.say(text)
-                tts_engine.runAndWait()
+                
+                # Split text into chunks for interrupt checking
+                sentences = self.split_text_for_interruption(text)
+                
+                for sentence in sentences:
+                    if self.speech_interrupted:
+                        logger.info("Speech interrupted by user")
+                        break
+                    
+                    tts_engine.say(sentence)
+                    tts_engine.runAndWait()
+                    
+                    # Brief pause to check for interrupts
+                    time.sleep(0.1)
+                    
             else:
                 # Default to Sophia's engine if no user specified
                 logger.info(f"Speaking (default): {text}")
-                self.sophia_tts.say(text)
-                self.sophia_tts.runAndWait()
+                sentences = self.split_text_for_interruption(text)
+                
+                for sentence in sentences:
+                    if self.speech_interrupted:
+                        logger.info("Speech interrupted by user")
+                        break
+                    
+                    self.sophia_tts.say(sentence)
+                    self.sophia_tts.runAndWait()
+                    
+                    # Brief pause to check for interrupts
+                    time.sleep(0.1)
+            
+            # Stop interrupt listener
+            self.stop_interrupt_listener()
             
         except Exception as e:
             logger.error(f"TTS Error: {e}")
+            self.stop_interrupt_listener()
+
+    def split_text_for_interruption(self, text: str) -> list:
+        """Split text into manageable chunks for interrupt checking."""
+        import re
+        
+        # Split by sentences (periods, exclamation marks, question marks)
+        sentences = re.split(r'[.!?]+', text)
+        
+        # Remove empty strings and add punctuation back
+        result = []
+        for i, sentence in enumerate(sentences):
+            sentence = sentence.strip()
+            if sentence:
+                # Add back punctuation except for the last sentence
+                if i < len(sentences) - 1:
+                    # Try to preserve original punctuation
+                    if '!' in text:
+                        sentence += '!'
+                    elif '?' in text:
+                        sentence += '?'
+                    else:
+                        sentence += '.'
+                result.append(sentence)
+        
+        # If no sentences found, return original text
+        if not result:
+            result = [text]
+        
+        return result
+
+    def start_interrupt_listener(self):
+        """Start background listener for interrupt commands."""
+        if not self.interrupt_listener_active:
+            self.interrupt_listener_active = True
+            self.interrupt_thread = threading.Thread(target=self.interrupt_listener, daemon=True)
+            self.interrupt_thread.start()
+
+    def stop_interrupt_listener(self):
+        """Stop background interrupt listener."""
+        self.interrupt_listener_active = False
+        if self.interrupt_thread:
+            self.interrupt_thread.join(timeout=1)
+
+    def interrupt_listener(self):
+        """Background thread that listens for interrupt commands during speech."""
+        try:
+            while self.interrupt_listener_active and not self.speech_interrupted:
+                try:
+                    with sr.Microphone() as source:
+                        # Very quick listen with short timeout
+                        self.recognizer.adjust_for_ambient_noise(source, duration=0.1)
+                        audio = self.recognizer.listen(source, timeout=0.5, phrase_time_limit=2)
+                        
+                        # Convert to text
+                        user_input = self.recognizer.recognize_google(audio).lower()
+                        logger.info(f"Interrupt check detected: {user_input}")
+                        
+                        # Check for interrupt commands
+                        if self.is_interrupt_command(user_input):
+                            logger.info(f"Interrupt command detected: {user_input}")
+                            self.speech_interrupted = True
+                            
+                            # Store the interrupt input for handling
+                            self.last_interrupt_input = user_input
+                            
+                            # Stop TTS engines immediately
+                            try:
+                                self.sophia_tts.stop()
+                                self.eladriel_tts.stop()
+                            except:
+                                pass
+                            
+                            break
+                            
+                except sr.WaitTimeoutError:
+                    # No speech detected, continue listening
+                    continue
+                except sr.UnknownValueError:
+                    # Could not understand audio, continue
+                    continue
+                except sr.RequestError:
+                    # Speech recognition error, continue
+                    continue
+                except Exception as e:
+                    # Any other error, log and continue
+                    logger.error(f"Interrupt listener error: {e}")
+                    continue
+                    
+        except Exception as e:
+            logger.error(f"Interrupt listener thread error: {e}")
+
+    def is_interrupt_command(self, user_input: str) -> bool:
+        """Check if the user input is an interrupt command."""
+        interrupt_commands = [
+            'stop', 'stop talking', 'be quiet', 'quiet', 'silence', 'hush',
+            'goodbye', 'bye', 'bye bye', 'see you later', 'talk to you later',
+            'enough', 'that\'s enough', 'okay stop', 'stop please',
+            'shh', 'shhh', 'shut up', 'pause', 'hold on', 'wait',
+            'interrupt', 'cut it out', 'end', 'finish', 'done'
+        ]
+        
+        user_input_lower = user_input.lower().strip()
+        
+        # Check for exact matches or partial matches
+        for command in interrupt_commands:
+            if command in user_input_lower:
+                return True
+                
+        return False
 
     def listen_for_speech(self, timeout: int = 5) -> Optional[str]:
         """Listen for speech input and convert to text."""
@@ -896,9 +1074,40 @@ Everything looks good for when the children wake up!"""
         # Extend timeout when spelling game is active to give more time for writing
         max_timeouts = 6 if self.spelling_game_active else 2  # Allow 6 timeouts for spelling game, 2 for normal conversation
         
-        while conversation_active and self.running:
-            # Listen for their request with a reasonable timeout
-            user_input = self.listen_for_speech(timeout=8)
+        while conversation_active and self.running and self.current_user == user:
+            # Check if speech was interrupted before listening for new input
+            if self.speech_interrupted:
+                logger.info("Handling speech interruption")
+                
+                # Check if the interruption was a goodbye command
+                last_interrupt_input = getattr(self, 'last_interrupt_input', '')
+                
+                if any(phrase in last_interrupt_input for phrase in ['goodbye', 'bye', 'see you later', 'talk to you later']):
+                    # User said goodbye as interruption - end conversation
+                    farewell_messages = {
+                        'sophia': "Goodbye Sophia! I'm always here when you need me. Have a wonderful day!",
+                        'eladriel': "See you later Eladriel! Keep exploring and learning about dinosaurs! Roar!",
+                        'parent': "Goodbye! Parent mode deactivated. All systems remain operational for the children."
+                    }
+                    self.speak(farewell_messages.get(user, "Goodbye! Talk to you soon!"), user)
+                    conversation_active = False
+                    break
+                else:
+                    # Regular interruption - acknowledge and continue
+                    interrupt_responses = {
+                        'sophia': "Oh! Sorry Sophia! I'm listening now.",
+                        'eladriel': "Whoops! You got my attention, Eladriel! What's up?",
+                        'parent': "Interrupted. Ready for your next request."
+                    }
+                    
+                    # Brief acknowledgment (will also be interruptible)
+                    self.speak(interrupt_responses.get(user, "Yes? I'm listening!"), user)
+                
+                # Reset the interrupt flag
+                self.speech_interrupted = False
+            
+            # Listen for their request with a 5-second timeout
+            user_input = self.listen_for_speech(timeout=5)
             
             if user_input:
                 conversation_timeout_count = 0  # Reset timeout counter
@@ -1031,6 +1240,11 @@ Everything looks good for when the children wake up!"""
     def stop(self):
         """Gracefully shutdown the assistant."""
         self.running = False
+        
+        # Stop interrupt system
+        self.stop_interrupt_listener()
+        
+        # Stop other components
         self.wake_word_detector.stop()
         self.stop_face_recognition()
         
