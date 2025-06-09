@@ -264,7 +264,8 @@ class AIAssistant:
         # Start conversation loop - keep listening until user says goodbye or timeout
         conversation_active = True
         conversation_timeout_count = 0
-        max_timeouts = 12  # 12 timeouts of 5 seconds each = 1 minute total
+        # Extend timeout when spelling game is active to give more time for writing
+        max_timeouts = 6 if self.spelling_game_active else 2  # Allow 6 timeouts for spelling game, 2 for normal conversation
         
         while conversation_active and self.running and self.current_user == user:
             # Listen for their request with a 5-second timeout
@@ -307,27 +308,52 @@ class AIAssistant:
                 # No speech detected
                 conversation_timeout_count += 1
                 
-                if conversation_timeout_count == 6:  # 30 seconds of silence
+                # Update max timeouts dynamically based on current spelling game state
+                current_max_timeouts = 6 if self.spelling_game_active else 2
+                
+                if conversation_timeout_count == 1:
                     # First timeout - gentle prompt
-                    prompts = {
-                        'sophia': "I'm still here if you have more questions, Sophia!",
-                        'eladriel': "Still here for more dinosaur fun, Eladriel! What's next?"
-                    }
+                    if self.spelling_game_active:
+                        prompts = {
+                            'sophia': "Take your time writing, Sophia! I'm waiting for you to say 'Ready'.",
+                            'eladriel': "No rush Eladriel! Let me know when you're ready to show me your spelling!",
+                            'parent': "Spelling game active. Say 'Ready' when you want me to check your answer."
+                        }
+                    else:
+                        prompts = {
+                            'sophia': "I'm still here if you have more questions, Sophia!",
+                            'eladriel': "Still here for more dinosaur fun, Eladriel! What's next?",
+                            'parent': "I'm still here and ready to assist. Any additional requests?"
+                        }
                     self.speak(prompts.get(user, "I'm still listening if you have more to say!"), user)
-                    print(f"⏰ Waiting for {user.title()} to continue... (30 seconds left)")
+                    print(f"⏰ Waiting for {user.title()} to continue...")
                     
-                elif conversation_timeout_count >= max_timeouts:
-                    # 1 minute timeout - end conversation gracefully
-                    timeout_messages = {
-                        'sophia': "I'll be here whenever you need me, Sophia. Just step in front of the camera or say 'Miley' to chat again!",
-                        'eladriel': "I'll be waiting for more adventures, Eladriel! Just show your face to the camera or say 'Dino' when you're ready!"
-                    }
-                    self.speak(timeout_messages.get(user, "I'll be here when you need me. Just show your face or call my name!"), user)
+                elif conversation_timeout_count >= current_max_timeouts:
+                    # Multiple timeouts - end conversation gracefully
+                    if self.spelling_game_active:
+                        # Special handling for spelling game timeout
+                        timeout_messages = {
+                            'sophia': "I'll pause the spelling game for now, Sophia. Say 'Spelling Game' to continue practicing anytime!",
+                            'eladriel': "Let's pause our spelling adventure, Eladriel! Say 'Spelling Game' when you want to play again!",
+                            'parent': "Spelling game test paused due to timeout. Game state preserved for continuation."
+                        }
+                        # Don't reset spelling game state on timeout - just pause it
+                    else:
+                        timeout_messages = {
+                            'sophia': "I'll be here whenever you need me, Sophia. Just say 'Miley' to chat again!",
+                            'eladriel': "I'll be waiting for more dinosaur adventures, Eladriel! Just say 'Dino' when you're ready!",
+                            'parent': "Returning to standby mode. Say 'Assistant' anytime for immediate assistance."
+                        }
+                    self.speak(timeout_messages.get(user, "I'll be here when you need me. Just call my name!"), user)
                     conversation_active = False
         
         self.current_user = None
         logger.info(f"🎤 Automatic conversation with {user.title()} ended")
         print("🎤 Returning to face detection and wake word listening mode...")
+        
+        self.current_user = None
+        print("🎤 Conversation ended. Listening for wake words again...")
+        # Note: Spelling game state persists between conversations - only reset when user explicitly ends game
 
     def start_face_recognition(self):
         """Start the background face recognition system."""
@@ -824,14 +850,21 @@ Everything looks good for when the children wake up!"""
 
     def is_conversation_ending(self, user_input: str) -> bool:
         """Check if the user wants to end the conversation."""
-        ending_phrases = [
-            'goodbye', 'bye', 'see you later', 'talk to you later', 
-            'that\'s all', 'thanks', 'thank you', 'stop', 'exit',
-            'done', 'finished', 'end conversation', 'go away'
-        ]
+        # If spelling game is active, only allow explicit game ending
+        if self.spelling_game_active:
+            explicit_end_phrases = [
+                'goodbye', 'bye', 'see you later', 'talk to you later', 
+                'exit', 'end conversation', 'go away'
+            ]
+        else:
+            explicit_end_phrases = [
+                'goodbye', 'bye', 'see you later', 'talk to you later', 
+                'that\'s all', 'thanks', 'thank you', 'stop', 'exit',
+                'done', 'finished', 'end conversation', 'go away'
+            ]
         
         user_input_lower = user_input.lower()
-        return any(phrase in user_input_lower for phrase in ending_phrases)
+        return any(phrase in user_input_lower for phrase in explicit_end_phrases)
 
     def handle_user_interaction(self, user: str):
         """Handle the complete interaction flow with natural conversation mode."""
@@ -844,13 +877,24 @@ Everything looks good for when the children wake up!"""
         else:
             greeting = user_info['greeting']
         
+        # If spelling game is active, modify greeting to indicate game continuation
+        if self.spelling_game_active and self.current_spelling_word:
+            word = self.current_spelling_word['word']
+            if user == 'sophia':
+                greeting = f"Hi Sophia! I see you're back! We were working on spelling '{word}'. Are you ready to show me your answer, or do you need me to repeat the word?"
+            elif user == 'eladriel':
+                greeting = f"Hey Eladriel! Welcome back to our spelling adventure! We were practicing '{word}'. Ready to show me what you wrote, or need the word again?"
+            elif user == 'parent':
+                greeting = f"Parent mode resumed. Spelling game test in progress - current word: '{word}'. Say 'Ready' to test answer checking or 'End Game' to stop."
+        
         # Greet the user
         self.speak(greeting, user)
         
         # Start conversation loop - keep listening until user says goodbye
         conversation_active = True
         conversation_timeout_count = 0
-        max_timeouts = 2  # Allow 2 timeouts before ending conversation
+        # Extend timeout when spelling game is active to give more time for writing
+        max_timeouts = 6 if self.spelling_game_active else 2  # Allow 6 timeouts for spelling game, 2 for normal conversation
         
         while conversation_active and self.running:
             # Listen for their request with a reasonable timeout
@@ -893,28 +937,48 @@ Everything looks good for when the children wake up!"""
                 # No speech detected
                 conversation_timeout_count += 1
                 
+                # Update max timeouts dynamically based on current spelling game state
+                current_max_timeouts = 6 if self.spelling_game_active else 2
+                
                 if conversation_timeout_count == 1:
                     # First timeout - gentle prompt
-                    prompts = {
-                        'sophia': "I'm still here if you have more questions, Sophia!",
-                        'eladriel': "Still here for more dinosaur fun, Eladriel! What's next?",
-                        'parent': "I'm still here and ready to assist. Any additional requests?"
-                    }
+                    if self.spelling_game_active:
+                        prompts = {
+                            'sophia': "Take your time writing, Sophia! I'm waiting for you to say 'Ready'.",
+                            'eladriel': "No rush Eladriel! Let me know when you're ready to show me your spelling!",
+                            'parent': "Spelling game active. Say 'Ready' when you want me to check your answer."
+                        }
+                    else:
+                        prompts = {
+                            'sophia': "I'm still here if you have more questions, Sophia!",
+                            'eladriel': "Still here for more dinosaur fun, Eladriel! What's next?",
+                            'parent': "I'm still here and ready to assist. Any additional requests?"
+                        }
                     self.speak(prompts.get(user, "I'm still listening if you have more to say!"), user)
                     print(f"⏰ Waiting for {user.title()} to continue...")
                     
-                elif conversation_timeout_count >= max_timeouts:
+                elif conversation_timeout_count >= current_max_timeouts:
                     # Multiple timeouts - end conversation gracefully
-                    goodbye_messages = {
-                        'sophia': "I'll be here whenever you need me, Sophia. Just say 'Miley' to chat again!",
-                        'eladriel': "I'll be waiting for more dinosaur adventures, Eladriel! Just say 'Dino' when you're ready!",
-                        'parent': "Returning to standby mode. Say 'Assistant' anytime for immediate assistance."
-                    }
-                    self.speak(goodbye_messages.get(user, "I'll be here when you need me. Just call my name!"), user)
+                    if self.spelling_game_active:
+                        # Special handling for spelling game timeout
+                        timeout_messages = {
+                            'sophia': "I'll pause the spelling game for now, Sophia. Say 'Spelling Game' to continue practicing anytime!",
+                            'eladriel': "Let's pause our spelling adventure, Eladriel! Say 'Spelling Game' when you want to play again!",
+                            'parent': "Spelling game test paused due to timeout. Game state preserved for continuation."
+                        }
+                        # Don't reset spelling game state on timeout - just pause it
+                    else:
+                        timeout_messages = {
+                            'sophia': "I'll be here whenever you need me, Sophia. Just say 'Miley' to chat again!",
+                            'eladriel': "I'll be waiting for more dinosaur adventures, Eladriel! Just say 'Dino' when you're ready!",
+                            'parent': "Returning to standby mode. Say 'Assistant' anytime for immediate assistance."
+                        }
+                    self.speak(timeout_messages.get(user, "I'll be here when you need me. Just call my name!"), user)
                     conversation_active = False
         
         self.current_user = None
         print("🎤 Conversation ended. Listening for wake words again...")
+        # Note: Spelling game state persists between conversations - only reset when user explicitly ends game
 
     def run(self):
         """Main loop - listen for wake words and handle natural conversations with face recognition."""
