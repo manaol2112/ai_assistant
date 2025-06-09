@@ -137,8 +137,8 @@ class AIAssistant:
                 'name': 'Sophia',
                 'wake_word': 'miley',
                 'personality': 'friendly, encouraging, and supportive',
-                'greeting': "Hi Sophia! I'm here to help you with anything you need! My voice sounds so much more natural now!",
-                'face_greeting': "Hello Sophia! I can see you! 👋 How wonderful to see your beautiful face!",
+                'greeting': self.get_dynamic_greeting('sophia'),
+                'face_greeting': self.get_dynamic_face_greeting('sophia'),
                 'tts_engine': self.sophia_tts,
                 'special_commands': ['help', 'what can you do', 'identify this', 'what is this', 'tell me about this', 'spelling game', 'play spelling', 'ready', 'end game']
             },
@@ -146,8 +146,8 @@ class AIAssistant:
                 'name': 'Eladriel',
                 'wake_word': 'dino',
                 'personality': 'playful, curious, and energetic',
-                'greeting': "Hey Eladriel! Ready for some fun discoveries? I can identify your dinosaur toys and any other objects! And listen to how natural my voice sounds now!",
-                'face_greeting': "Hey Eladriel! I see you there! 🦕 Ready for some dinosaur adventures?",
+                'greeting': self.get_dynamic_greeting('eladriel'),
+                'face_greeting': self.get_dynamic_face_greeting('eladriel'),
                 'tts_engine': self.eladriel_tts,
                 'special_commands': ['identify dinosaur', 'identify this', 'what is this', 'tell me about this', 'show me camera', 'dinosaur tips', 'help', 'spelling game', 'play spelling', 'ready', 'end game']
             },
@@ -231,7 +231,7 @@ class AIAssistant:
                                     if person_name == 'parent':
                                         face_greeting = self.get_parent_face_greeting()
                                     else:
-                                        face_greeting = self.users[person_name].get('face_greeting', f"Hello {person_name.title()}!")
+                                        face_greeting = self.get_dynamic_face_greeting(person_name)
                                     
                                     logger.info(f"👋 Face detected: {person_name.title()} - Starting automatic conversation")
                                     print(f"🎉 Face detected: {person_name.title()}! Starting automatic conversation...")
@@ -1120,7 +1120,8 @@ Everything looks good for when the children wake up!"""
         if user == 'parent':
             greeting = self.get_parent_greeting()
         else:
-            greeting = user_info['greeting']
+            # Generate fresh dynamic greeting each time
+            greeting = self.get_dynamic_greeting(user)
         
         # If spelling game is active, modify greeting to indicate game continuation
         if self.spelling_game_active and self.current_spelling_word:
@@ -1680,6 +1681,120 @@ Thanks for playing! Say 'Spelling Game' anytime you want to practice more words!
             return f"Repeating last response: {last_response}"
         else:
             return f"I just said: {last_response}"
+
+    def get_dynamic_greeting(self, user: str) -> str:
+        """Generate dynamic, exciting greetings that change each time."""
+        import random
+        
+        current_hour = datetime.now().hour
+        current_day = datetime.now().strftime("%A")
+        
+        if user == 'sophia':
+            # Sophia's dynamic greetings with educational themes
+            morning_greetings = [
+                "Good morning Sophia! ☀️ Did you know that butterflies taste with their feet? What amazing discovery shall we make today?",
+                "Rise and shine Sophia! 🌅 Fun fact: A group of flamingos is called a 'flamboyance'! Ready for some colorful learning?",
+                "Hello sunshine Sophia! ☀️ Today's cool fact: Honey never spoils! Ancient honey is still edible! What sweet adventures await us?",
+                "Morning star Sophia! ⭐ Amazing fact: Your brain uses 20% of your body's energy! Let's put that powerful brain to work today!",
+                "Good morning brilliant Sophia! 🧠 Did you know octopuses have three hearts? What heart-pumping fun should we have today?"
+            ]
+            
+            afternoon_greetings = [
+                "Hey there Sophia! 🌞 Cool fact: Dolphins have names for each other! They use special clicks and whistles! What shall we explore?",
+                "Afternoon superstar Sophia! ⭐ Did you know that a cloud can weigh over a million pounds? Let's make today as amazing as clouds!",
+                "Hi amazing Sophia! 🎨 Fun fact: Crayons are made from petroleum wax! Ready to color our day with knowledge?",
+                "Hello wonderful Sophia! 🌈 Did you know that rainbows have infinite colors? Let's discover something spectacular together!",
+                "Hey curious Sophia! 🔍 Cool fact: Your nose can remember 50,000 different scents! What interesting things can we sniff out today?"
+            ]
+            
+            evening_greetings = [
+                "Evening explorer Sophia! 🌙 Did you know that owls can't move their eyes? They turn their whole head instead! What wise discoveries await?",
+                "Good evening Sophia! ✨ Amazing fact: Stars are actually giant balls of gas! Let's make tonight stellar with learning!",
+                "Hello nighttime scientist Sophia! 🔬 Fun fact: Fireflies create light without heat! Ready to brighten up our conversation?",
+                "Evening adventurer Sophia! 🦉 Did you know that some bamboo grows 3 feet in one day? Let's grow our knowledge tonight!",
+                "Hey there evening star Sophia! ⭐ Cool fact: The moon is slowly moving away from Earth! What cosmic fun shall we have?"
+            ]
+            
+            # Time-based greeting selection
+            if 6 <= current_hour < 12:
+                base_greeting = random.choice(morning_greetings)
+            elif 12 <= current_hour < 17:
+                base_greeting = random.choice(afternoon_greetings)
+            else:
+                base_greeting = random.choice(evening_greetings)
+                
+        elif user == 'eladriel':
+            # Eladriel's dynamic greetings with dinosaur and adventure themes
+            roar_greetings = [
+                "ROAR! Hey Eladriel! 🦕 Did you know that T-Rex had teeth as big as bananas? Ready for some prehistoric adventures?",
+                "Greetings, young paleontologist Eladriel! 🦴 Cool fact: Some dinosaurs had feathers like colorful birds! What dino-mite discoveries await?",
+                "Hey there, dino explorer Eladriel! 🌋 Amazing fact: Dinosaurs lived on Earth for 165 million years! That's REALLY long! What shall we discover?",
+                "STOMP STOMP! Hi Eladriel! 🦕 Fun fact: The Microraptor had four wings! It could glide between trees! Ready to soar into learning?",
+                "Dino-hello Eladriel! 🥚 Did you know some dinosaur eggs were as big as footballs? What egg-citing adventures should we hatch today?"
+            ]
+            
+            adventure_greetings = [
+                "Adventure time, Eladriel! 🏔️ Did you know that mountains can 'walk'? They move about 2 inches per year! Where shall we explore?",
+                "Hey brave explorer Eladriel! 🌊 Cool fact: The ocean has underwater waterfalls! Some are taller than skyscrapers! Ready to dive into knowledge?",
+                "Jungle greetings Eladriel! 🐆 Amazing fact: Leopards can't roar, they can only purr! What wild discoveries await us in our learning jungle?",
+                "Safari hello Eladriel! 🦒 Fun fact: Giraffes only need 5-30 minutes of sleep per day! You must have more energy than a giraffe today!",
+                "Expedition time Eladriel! 🗺️ Did you know that Earth has more than 8 million animal species? Let's discover something amazing together!"
+            ]
+            
+            mystery_greetings = [
+                "Mystery time, Detective Eladriel! 🕵️ Did you know that ancient Egyptians used sliced onions to predict the future? What mysteries shall we solve?",
+                "Hey super sleuth Eladriel! 🔍 Cool fact: Penguins propose to each other with pebbles! What clues can we uncover today?",
+                "Puzzle master Eladriel is here! 🧩 Amazing fact: Your tongue print is as unique as your fingerprint! Ready for some tongue-twisting discoveries?",
+                "Code-breaker Eladriel! 🔐 Fun fact: Bees communicate by dancing! They do a waggle dance to share information! What secrets shall we decode?",
+                "Investigation time Eladriel! 🔬 Did you know that chameleons change color based on mood, not just camouflage? What colorful clues await us?"
+            ]
+            
+            # Random theme selection for variety
+            all_greetings = roar_greetings + adventure_greetings + mystery_greetings
+            base_greeting = random.choice(all_greetings)
+        
+        # Add day-of-week special touches
+        day_specials = {
+            'Monday': "It's Monster Monday! Let's make today monstrously fun! 👹",
+            'Tuesday': "Terrific Tuesday vibes! Today's going to be amazing! ⚡",
+            'Wednesday': "Wild Wednesday energy! Let's go on a learning adventure! 🌪️",
+            'Thursday': "Thrilling Thursday excitement! Ready for some mind-blowing discoveries? 🎢",
+            'Friday': "Fantastic Friday fun! Let's end the week with something spectacular! 🎉",
+            'Saturday': "Super Saturday adventures! Weekend learning is the best learning! 🚀",
+            'Sunday': "Sunny Sunday vibes! Perfect day for exploring and discovering! ☀️"
+        }
+        
+        if current_day in day_specials:
+            base_greeting += f" {day_specials[current_day]}"
+        
+        return base_greeting
+
+    def get_dynamic_face_greeting(self, user: str) -> str:
+        """Generate dynamic face recognition greetings."""
+        import random
+        
+        if user == 'sophia':
+            face_greetings = [
+                "Sophia! I can see your beautiful, curious face! 👀✨ Ready to explore the world together?",
+                "There's my favorite learner! Hi Sophia! 👋 Your smile brightens up my camera sensors!",
+                "Look who's here! It's brilliant Sophia! 🌟 I love seeing your face - it means adventure time!",
+                "Sophia detected! 📸 And you look ready for some amazing discoveries! What shall we learn today?",
+                "My sensors are lighting up because Sophia is here! 🚨✨ Time for some fantastic fun!",
+                "Face recognition complete: One amazing Sophia found! 🎯 Ready for mind-blowing learning?",
+                "Sophia's in the house! 🏠 My camera is so happy to see you! Let's make today extraordinary!"
+            ]
+        elif user == 'eladriel':
+            face_greetings = [
+                "DINO ALERT! Eladriel spotted! 🚨🦕 Ready for some roar-some adventures?",
+                "My prehistoric sensors detect one amazing Eladriel! 🔬🦴 Time for dino-mite discoveries!",
+                "Eladriel's face activated my adventure mode! 🗺️⚡ What epic exploration shall we begin?",
+                "Camera says: 'One awesome Eladriel detected!' 📸🎉 Let's stomp into some learning!",
+                "Face scan complete: It's the legendary explorer Eladriel! 🏆🔍 Ready to unlock mysteries?",
+                "Eladriel vision confirmed! 👁️🦕 My circuits are buzzing with excitement for our next quest!",
+                "Alert! Alert! Super cool Eladriel is here! 🚨😎 Time for some dino-sized fun!"
+            ]
+        
+        return random.choice(face_greetings)
 
 if __name__ == "__main__":
     assistant = AIAssistant()
