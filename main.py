@@ -304,8 +304,8 @@ class AIAssistant:
                 # Reset the interrupt flag
                 self.speech_interrupted = False
             
-            # Listen for their request with a 5-second timeout
-            user_input = self.listen_for_speech(timeout=5)
+            # Listen for their request with a 15-second timeout (longer for children)
+            user_input = self.listen_for_speech(timeout=15)
             
             if user_input:
                 conversation_timeout_count = 0  # Reset timeout counter
@@ -421,35 +421,13 @@ class AIAssistant:
                 tts_engine = self.users[user]['tts_engine']
                 logger.info(f"Speaking to {user}: {text}")
                 
-                # Split text into chunks for interrupt checking
-                sentences = self.split_text_for_interruption(text)
-                
-                for sentence in sentences:
-                    if self.speech_interrupted:
-                        logger.info("Speech interrupted by user")
-                        break
-                    
-                    tts_engine.say(sentence)
-                    tts_engine.runAndWait()
-                    
-                    # Brief pause to check for interrupts
-                    time.sleep(0.1)
+                # Use threaded TTS for smooth speech with interrupt capability
+                self._speak_with_interrupt_check(tts_engine, text)
                     
             else:
                 # Default to Sophia's engine if no user specified
                 logger.info(f"Speaking (default): {text}")
-                sentences = self.split_text_for_interruption(text)
-                
-                for sentence in sentences:
-                    if self.speech_interrupted:
-                        logger.info("Speech interrupted by user")
-                        break
-                    
-                    self.sophia_tts.say(sentence)
-                    self.sophia_tts.runAndWait()
-                    
-                    # Brief pause to check for interrupts
-                    time.sleep(0.1)
+                self._speak_with_interrupt_check(self.sophia_tts, text)
             
             # Stop interrupt listener
             self.stop_interrupt_listener()
@@ -458,34 +436,44 @@ class AIAssistant:
             logger.error(f"TTS Error: {e}")
             self.stop_interrupt_listener()
 
+    def _speak_with_interrupt_check(self, tts_engine, text: str):
+        """Speak with smooth delivery but interrupt capability."""
+        # Create a flag to track if TTS is complete
+        speech_complete = threading.Event()
+        
+        def speak_thread():
+            """Background thread for TTS."""
+            try:
+                tts_engine.say(text)
+                tts_engine.runAndWait()
+                speech_complete.set()
+            except Exception as e:
+                logger.error(f"TTS thread error: {e}")
+                speech_complete.set()
+        
+        # Start TTS in background thread
+        tts_thread = threading.Thread(target=speak_thread, daemon=True)
+        tts_thread.start()
+        
+        # Monitor for interrupts while speech is ongoing
+        while not speech_complete.is_set() and not self.speech_interrupted:
+            time.sleep(0.1)  # Check every 100ms for interrupts
+        
+        # If interrupted, stop the TTS engine
+        if self.speech_interrupted:
+            try:
+                tts_engine.stop()
+            except:
+                pass
+            logger.info("Speech interrupted and stopped")
+        
+        # Wait for thread to complete (with timeout)
+        tts_thread.join(timeout=1.0)
+
     def split_text_for_interruption(self, text: str) -> list:
         """Split text into manageable chunks for interrupt checking."""
-        import re
-        
-        # Split by sentences (periods, exclamation marks, question marks)
-        sentences = re.split(r'[.!?]+', text)
-        
-        # Remove empty strings and add punctuation back
-        result = []
-        for i, sentence in enumerate(sentences):
-            sentence = sentence.strip()
-            if sentence:
-                # Add back punctuation except for the last sentence
-                if i < len(sentences) - 1:
-                    # Try to preserve original punctuation
-                    if '!' in text:
-                        sentence += '!'
-                    elif '?' in text:
-                        sentence += '?'
-                    else:
-                        sentence += '.'
-                result.append(sentence)
-        
-        # If no sentences found, return original text
-        if not result:
-            result = [text]
-        
-        return result
+        # This method is now deprecated but kept for compatibility
+        return [text]
 
     def start_interrupt_listener(self):
         """Start background listener for interrupt commands."""
@@ -506,9 +494,9 @@ class AIAssistant:
             while self.interrupt_listener_active and not self.speech_interrupted:
                 try:
                     with sr.Microphone() as source:
-                        # Very quick listen with short timeout
+                        # Quick listen with short timeout for responsiveness
                         self.recognizer.adjust_for_ambient_noise(source, duration=0.1)
-                        audio = self.recognizer.listen(source, timeout=0.5, phrase_time_limit=2)
+                        audio = self.recognizer.listen(source, timeout=0.3, phrase_time_limit=2)
                         
                         # Convert to text
                         user_input = self.recognizer.recognize_google(audio).lower()
@@ -567,8 +555,8 @@ class AIAssistant:
                 
         return False
 
-    def listen_for_speech(self, timeout: int = 5) -> Optional[str]:
-        """Listen for speech input and convert to text."""
+    def listen_for_speech(self, timeout: int = 15) -> Optional[str]:
+        """Listen for speech input and convert to text with longer timeout for children."""
         try:
             with sr.Microphone() as source:
                 logger.info("Listening for speech...")
@@ -576,8 +564,9 @@ class AIAssistant:
                 # Adjust for ambient noise
                 self.recognizer.adjust_for_ambient_noise(source, duration=0.5)
                 
-                # Listen for audio
-                audio = self.recognizer.listen(source, timeout=timeout, phrase_time_limit=10)
+                # Listen for audio with longer timeout and phrase limit for children
+                # Kids need more time to think and formulate their thoughts
+                audio = self.recognizer.listen(source, timeout=timeout, phrase_time_limit=20)
                 
                 # Convert speech to text
                 text = self.recognizer.recognize_google(audio)
@@ -1106,8 +1095,8 @@ Everything looks good for when the children wake up!"""
                 # Reset the interrupt flag
                 self.speech_interrupted = False
             
-            # Listen for their request with a 5-second timeout
-            user_input = self.listen_for_speech(timeout=5)
+            # Listen for their request with a 15-second timeout (longer for children)
+            user_input = self.listen_for_speech(timeout=15)
             
             if user_input:
                 conversation_timeout_count = 0  # Reset timeout counter
