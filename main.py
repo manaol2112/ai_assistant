@@ -425,52 +425,88 @@ class AIAssistant:
             logger.error(f"Error playing ready-to-speak sound: {e}")
 
     def _generate_ready_to_speak_tone(self):
-        """Generate a clear, friendly 'you can speak now' audio cue."""
+        """Generate an exciting, kid-friendly 'your turn to talk!' audio cue."""
         try:
             import pygame
             import numpy as np
             
-            # Create a welcoming, upward musical phrase that clearly signals "your turn"
+            # Create an exciting, magical "your turn!" sound that kids will love
             sample_rate = 22050
-            duration = 0.8  # Slightly longer for clarity
+            duration = 0.6  # Quick and snappy
             
-            # Two-tone ascending sequence: G4 -> C5 (friendly and encouraging)
-            freq1 = 392  # G4 - warm, friendly start
-            freq2 = 523  # C5 - clear, confident "go ahead" signal
+            # Create a playful ascending magical chime sequence
+            # Like a friendly doorbell or game notification that says "your turn!"
             
-            # Split into two distinct notes
-            note_duration = duration / 2
+            # Three ascending notes with sparkle - C5, E5, G5 (major triad going up)
+            freq1 = 523  # C5 - bright start
+            freq2 = 659  # E5 - building excitement  
+            freq3 = 784  # G5 - "go ahead!" peak
+            
+            # Each note duration
+            note_duration = duration / 4
+            sparkle_duration = duration / 4
+            
+            # Time arrays for each part
             t1 = np.linspace(0, note_duration, int(sample_rate * note_duration), False)
             t2 = np.linspace(0, note_duration, int(sample_rate * note_duration), False)
+            t3 = np.linspace(0, note_duration, int(sample_rate * note_duration), False)
+            t_sparkle = np.linspace(0, sparkle_duration, int(sample_rate * sparkle_duration), False)
             
-            # First note (G4) - gentle invitation
-            note1 = np.sin(2 * np.pi * freq1 * t1) * 0.3
+            # Create bell-like tones with harmonics for magical sound
+            def create_bell_note(t, freq, volume=0.4):
+                # Fundamental frequency
+                fundamental = np.sin(2 * np.pi * freq * t)
+                # Add harmonics for bell-like quality
+                harmonic2 = 0.3 * np.sin(2 * np.pi * freq * 2 * t)
+                harmonic3 = 0.1 * np.sin(2 * np.pi * freq * 3 * t)
+                
+                # Bell envelope - quick attack, gentle decay
+                envelope = np.exp(-t * 8) * (1 - np.exp(-t * 30))
+                
+                return (fundamental + harmonic2 + harmonic3) * envelope * volume
             
-            # Second note (C5) - clear "your turn" signal
-            note2 = np.sin(2 * np.pi * freq2 * t2) * 0.35
+            # Create the three ascending notes
+            note1 = create_bell_note(t1, freq1, 0.35)
+            note2 = create_bell_note(t2, freq2, 0.4) 
+            note3 = create_bell_note(t3, freq3, 0.45)
             
-            # Apply gentle envelopes for each note
-            fade_samples = int(sample_rate * 0.05)  # 50ms fade
+            # Create magical sparkle effect for the end
+            sparkle = np.zeros_like(t_sparkle)
+            sparkle_freqs = [1047, 1319, 1568, 2093]  # High magical frequencies
             
-            # Envelope for note 1
-            env1 = np.ones_like(note1)
-            env1[:fade_samples] = np.linspace(0, 1, fade_samples)
-            env1[-fade_samples:] = np.linspace(1, 0.7, fade_samples)  # Don't fade completely
-            note1 *= env1
+            for i, freq in enumerate(sparkle_freqs):
+                delay = i * 0.02  # Quick succession
+                if len(t_sparkle) > int(delay * sample_rate):
+                    delayed_t = t_sparkle[int(delay * sample_rate):]
+                    if len(delayed_t) > 0:
+                        # Create twinkling effect
+                        twinkle = np.sin(2 * np.pi * freq * delayed_t)
+                        twinkle *= np.exp(-delayed_t * 12)  # Quick decay
+                        twinkle *= (1 + 0.3 * np.sin(15 * delayed_t))  # Shimmer
+                        
+                        # Add to sparkle
+                        start_idx = int(delay * sample_rate)
+                        end_idx = start_idx + len(twinkle)
+                        if end_idx <= len(sparkle):
+                            sparkle[start_idx:end_idx] += twinkle * 0.2
             
-            # Envelope for note 2  
-            env2 = np.ones_like(note2)
-            env2[:fade_samples] = np.linspace(0.7, 1, fade_samples)  # Start from previous level
-            env2[-fade_samples:] = np.linspace(1, 0, fade_samples)
-            note2 *= env2
-            
-            # Combine the notes with a tiny gap for clarity
-            gap_samples = int(sample_rate * 0.05)  # 50ms gap
+            # Combine all parts with tiny gaps for clarity
+            gap_samples = int(sample_rate * 0.02)  # 20ms gaps
             gap = np.zeros(gap_samples)
-            combined = np.concatenate([note1, gap, note2])
+            
+            # Assemble the complete sound: note1 -> gap -> note2 -> gap -> note3 -> sparkle
+            combined = np.concatenate([note1, gap, note2, gap, note3, sparkle])
+            
+            # Add a subtle reverb for magical quality
+            reverb_delay = int(0.03 * sample_rate)  # 30ms delay
+            if len(combined) > reverb_delay:
+                reverb = np.zeros_like(combined)
+                reverb[reverb_delay:] = combined[:-reverb_delay] * 0.15
+                combined += reverb
             
             # Convert to 16-bit integers
-            audio_data = (combined * 32767).astype(np.int16)
+            audio_data = np.clip(combined, -1, 1)
+            audio_data = (audio_data * 32767 * 0.8).astype(np.int16)  # Good volume
             
             # Ensure array is C-contiguous for pygame
             audio_data = np.ascontiguousarray(audio_data)
@@ -483,7 +519,7 @@ class AIAssistant:
             sound = pygame.sndarray.make_sound(stereo_data)
             sound.play()
             
-            logger.info("🗣️ Ready-to-speak cue played")
+            logger.info("🎵 Exciting ready-to-speak cue played")
             
         except Exception as e:
             logger.error(f"Error generating ready-to-speak tone: {e}")
