@@ -65,32 +65,16 @@ class AnimalGuessGame:
         
         user_name = user.title()
         
-        welcome_message = f"""🦕🐾 WELCOME TO THE ANIMAL GUESSING GAME! 🐾🦕
+        welcome_message = f"""🦕🐾 ANIMAL GUESSING GAME! 🐾🦕
 
-Hey {user_name}! I'm so excited to play with you! 
+Hey {user_name}! Ready to play? 
 
-🎮 HOW TO PLAY:
-• Show me any animal toy, figure, or picture
-• I'll try to guess what animal it is
-• I'll tell you amazing facts about your animal
-• You can show me as many animals as you want!
+🎮 Just show me any animal toy and I'll tell you cool facts about it!
 
-🏆 WHAT I CAN IDENTIFY:
-• Dinosaur toys and figures 🦕🦖
-• Animal toys and stuffed animals 🐻🐯
-• Pictures of real animals 📸
-• Action figures and collectibles 🎭
-
-🌟 SPECIAL FEATURES:
-• Cool trivia and fun facts
-• Learn about different animal types
-• Discover amazing animal abilities
-• Build your animal knowledge!
-
-Ready to start? Just say "guess the animal" and show me your first creature! 🎉"""
+Show me your first animal! 🎉"""
 
         if self.ai_assistant:
-            self.ai_assistant.speak(f"Welcome to the Animal Guessing Game, {user_name}! Get ready for some amazing animal discoveries!", user)
+            self.ai_assistant.speak(f"Animal guessing game started! Show me your first animal, {user_name}!", user)
         
         return welcome_message
     
@@ -104,14 +88,14 @@ Ready to start? Just say "guess the animal" and show me your first creature! �
             
             # Encourage the user
             encouragement = random.choice([
-                f"Awesome {user_name}! Show me your animal!",
-                f"I can't wait to see what creature you have, {user_name}!",
-                f"This is going to be exciting, {user_name}! Let me see!",
-                f"Ready for another amazing animal, {user_name}!"
+                f"Show me your animal, {user_name}!",
+                f"What animal do you have, {user_name}?",
+                f"Let me see it, {user_name}!",
+                f"Ready to guess, {user_name}!"
             ])
             
             if self.ai_assistant:
-                self.ai_assistant.speak(f"{encouragement} Hold it steady in front of the camera...", user)
+                self.ai_assistant.speak(f"{encouragement} Hold it up to the camera!", user)
             
             # Give user time to position the animal
             time.sleep(3)
@@ -215,59 +199,38 @@ Ready to start? Just say "guess the animal" and show me your first creature! �
         user_lower = user.lower()
         
         if user_lower == "eladriel":
-            return """🦕 DINOSAUR & ANIMAL EXPERT FOR ELADRIEL! 🦕
+            return """🦕 DINOSAUR EXPERT FOR ELADRIEL! 
 
-You're helping Eladriel, who LOVES dinosaurs and animals! Look at this image and provide an exciting identification:
-
-🔍 IDENTIFICATION:
-• What animal/dinosaur is this? (Be specific - T-Rex, Triceratops, Lion, etc.)
-• Is it a toy, figure, stuffed animal, or real animal?
-• What type of creature is it? (Dinosaur, mammal, bird, reptile, etc.)
-
-🦖 DINOSAUR FOCUS (if it's a dinosaur):
-• What period did it live in? (Triassic, Jurassic, Cretaceous)
-• Was it a carnivore, herbivore, or omnivore?
-• How big was it compared to humans?
-
-🌟 AMAZING FACTS:
-• Share 2-3 mind-blowing facts that will make Eladriel say "WOW!"
-• Include cool abilities, behaviors, or discoveries
-• Connect to modern animals if possible
-
-🎯 ADVENTURE CONNECTION:
-• How do scientists study this animal?
-• What makes this creature special or unique?
-• Any recent discoveries or cool research?
-
-Keep it EXCITING and educational - like sharing an amazing discovery with a fellow explorer! Use emojis and make it feel like an adventure!"""
-        
-        else:  # Default for Sophia or other users
-            return """🐾 ANIMAL EXPERT FOR CURIOUS KIDS! 🐾
-
-You're helping a curious child learn about animals! Look at this image and provide a fun identification:
+Look at this image and tell me:
 
 🔍 WHAT IS IT:
-• What animal is this? (Be specific with the name)
-• Is it a toy, stuffed animal, figure, or real animal?
-• What type of animal is it? (Mammal, bird, reptile, fish, etc.)
+• Animal name and type (dinosaur, mammal, bird, etc.)
+• Is it a toy/figure or real?
 
-🌈 DESCRIPTION:
-• What colors and patterns do you see?
-• What's special about how it looks?
-• What size is this animal in real life?
+🦖 QUICK FACTS:
+• What did it eat?
+• How big was it?
+• How were babies born/hatched?
+• ONE cool trivia fact
 
-✨ COOL FACTS:
-• Share 2-3 amazing facts that will make them say "WOW!"
-• What does this animal eat?
-• Where does it live in the wild?
-• What special abilities does it have?
+Keep it SHORT and exciting - just the basics plus one amazing fact! 🌟"""
+        
+        else:  # Default for Sophia or other users
+            return """🐾 ANIMAL EXPERT FOR KIDS! 
 
-🎓 LEARNING FUN:
-• How does this animal help nature?
-• What makes it different from other animals?
-• Any fun sounds it makes or behaviors?
+Look at this image and tell me:
 
-Keep it SHORT, exciting, and educational - like telling a friend something super cool you just learned! Use emojis and make it fun for kids!"""
+🔍 WHAT IS IT:
+• Animal name and type
+• Is it a toy or real?
+
+✨ QUICK FACTS:
+• What does it eat?
+• How big is it?
+• How are babies born?
+• ONE super cool fact
+
+Keep it SHORT and fun - just the basics plus one amazing thing! 🌟"""
     
     def _format_animal_response(self, result: Dict[str, Any], user: str) -> str:
         """Format the animal identification response with game elements."""
