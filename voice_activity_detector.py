@@ -42,6 +42,36 @@ class VoiceActivityDetector:
             "dive into it together",
             "specific topic",
             "explore or learn",
+            "how far is what",
+            "sophia i'm here to help",
+            "what you'd like to know",
+            "distance of",
+            "i'll do my best",
+            "to assist you",
+            "just let me know what",
+            "assist you",
+            "help you",
+            "how far is what soph",
+            "what sophia",
+            "here to help just let me know what you",
+            "brilliant sophia",
+            "love seeing your face",
+            "means adventure time",
+            "look who's here",
+            "it's brilliant sophia",
+            "excellent work sophia",
+            "you spelled",
+            "perfectly",
+            "you're doing amazing",
+            "roar-some job",
+            "correctly",
+            "spelling champion",
+            "great job",
+            "try again",
+            "wonderful",
+            "fantastic",
+            "keep going",
+            "almost there",
         ]
         self.speaker_lock = threading.Lock()
     
@@ -80,23 +110,17 @@ class VoiceActivityDetector:
                                     max_total_time: int = 30,
                                     game_mode: str = None) -> Optional[str]:
         """
-        Advanced listening with speaker differentiation and voice activity detection.
+        Listen for human speech while ignoring AI's own voice.
         
         Args:
-            timeout: Maximum time to wait for initial speech
-            silence_threshold: Seconds of silence to indicate speaker finished
+            timeout: Maximum time to wait for first speech
+            silence_threshold: Seconds of silence to wait after speech ends
             max_total_time: Maximum total listening time
-            game_mode: 'spelling', 'filipino', or None for different sensitivity
+            game_mode: 'spelling', 'filipino', 'interrupt', or None for optimization
+        
+        Returns:
+            Recognized human speech text or None
         """
-        
-        # Wait for AI to finish speaking completely
-        wait_count = 0
-        while self.ai_speaking and wait_count < 10:
-            time.sleep(0.2)
-            wait_count += 1
-        
-        # Additional safety delay after AI stops speaking
-        time.sleep(0.8)
         
         try:
             with sr.Microphone() as source:
@@ -108,19 +132,25 @@ class VoiceActivityDetector:
                 # Configure sensitivity based on game mode
                 if game_mode == 'spelling':
                     self.recognizer.energy_threshold = max(200, self.recognizer.energy_threshold * 0.6)
+                    chunk_duration = 0.3  # Shorter chunks for spelling
                 elif game_mode == 'filipino':
                     self.recognizer.energy_threshold = max(250, self.recognizer.energy_threshold * 0.7)
+                    chunk_duration = 0.4  # Medium chunks for Filipino
+                elif game_mode == 'interrupt':
+                    self.recognizer.energy_threshold = max(400, self.recognizer.energy_threshold * 0.9)
+                    chunk_duration = 0.2  # Very short chunks for quick interrupts
                 else:
                     self.recognizer.energy_threshold = max(300, self.recognizer.energy_threshold * 0.8)
+                    chunk_duration = 0.6  # Longer chunks for regular conversation
                 
                 self.recognizer.dynamic_energy_threshold = True
                 
                 # Voice activity detection with speaker differentiation
                 audio_chunks = []
-                chunk_duration = 0.5
                 total_listening_time = 0
                 consecutive_silence_time = 0
                 human_speech_detected = False
+                recent_ai_speech = False  # Track recent AI speech to avoid confusion
                 
                 logger.info(f"👂 Listening for human speech (max {max_total_time}s)...")
                 
@@ -135,7 +165,7 @@ class VoiceActivityDetector:
                         chunk_audio = self.recognizer.listen(
                             source, 
                             timeout=chunk_duration, 
-                            phrase_time_limit=chunk_duration
+                            phrase_time_limit=chunk_duration * 2  # Allow longer phrases
                         )
                         
                         # Quick speech test for this chunk
@@ -147,12 +177,20 @@ class VoiceActivityDetector:
                                 if self.is_ai_speech(test_text):
                                     logger.info(f"🤖 Ignored AI speech: '{test_text[:30]}...'")
                                     consecutive_silence_time += chunk_duration
+                                    recent_ai_speech = True
                                 else:
                                     # This is human speech!
+                                    # Extra check: if we just heard AI speech, wait a bit longer to be sure
+                                    if recent_ai_speech and not human_speech_detected:
+                                        logger.info(f"👤 Potential human speech after AI: '{test_text[:20]}...' - waiting for confirmation")
+                                        time.sleep(0.3)  # Brief pause to confirm it's really human
+                                        recent_ai_speech = False
+                                    
                                     logger.info(f"👤 Human speech detected: '{test_text[:20]}...'")
                                     audio_chunks.append(chunk_audio)
                                     consecutive_silence_time = 0
                                     human_speech_detected = True
+                                    recent_ai_speech = False
                             else:
                                 consecutive_silence_time += chunk_duration
                                 

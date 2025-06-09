@@ -833,8 +833,14 @@ class AIAssistant:
             logger.info("🎭 Face recognition system stopped")
 
     def speak(self, text: str, user: Optional[str] = None):
-        """Convert text to speech with user-specific voice settings and interrupt capability."""
+        """Speak text to user with interrupt capability and audio feedback prevention."""
+        if self.quiet_mode:
+            return
+        
         try:
+            # CRITICAL: Set AI speaking flag to prevent voice detector from listening to AI
+            self.voice_detector.set_ai_speaking(True)
+            
             # Reset interrupt flag
             self.speech_interrupted = False
             
@@ -873,23 +879,32 @@ class AIAssistant:
             # Add delay even on error to prevent feedback
             import time
             time.sleep(1.5)
+        finally:
+            # CRITICAL: Always reset AI speaking flag when done
+            self.voice_detector.set_ai_speaking(False)
 
     def speak_no_interrupt(self, text: str, user: Optional[str] = None):
-        """Convert text to speech without interrupt capability - for educational content like Filipino game."""
+        """Speak text without interrupt capability (for game instructions, etc.)."""
+        if self.quiet_mode:
+            return
+        
         try:
+            # CRITICAL: Set AI speaking flag to prevent voice detector from listening to AI
+            self.voice_detector.set_ai_speaking(True)
+            
             # Use personalized TTS engine for each user
             if user and user in self.users:
                 tts_engine = self.users[user]['tts_engine']
-                logger.info(f"Speaking to {user} (no interrupt): {text}")
+                logger.info(f"Speaking (no interrupt) to {user}: {text}")
                 tts_engine.say(text)
                 tts_engine.runAndWait()
             else:
                 # Default to Sophia's engine if no user specified
-                logger.info(f"Speaking (default, no interrupt): {text}")
+                logger.info(f"Speaking (no interrupt, default): {text}")
                 self.sophia_tts.say(text)
                 self.sophia_tts.runAndWait()
             
-            # Play completion sound to indicate AI is done speaking and ready to listen
+            # Play completion sound
             self.play_completion_sound()
             
             # CRITICAL: Add delay after speaking to prevent audio feedback loop
@@ -903,6 +918,9 @@ class AIAssistant:
             # Add delay even on error to prevent feedback
             import time
             time.sleep(1.5)
+        finally:
+            # CRITICAL: Always reset AI speaking flag when done
+            self.voice_detector.set_ai_speaking(False)
 
     def _speak_with_interrupt_check(self, tts_engine, text: str):
         """Speak with smooth delivery but interrupt capability."""
@@ -961,22 +979,29 @@ class AIAssistant:
         try:
             while self.interrupt_listener_active and not self.speech_interrupted:
                 try:
-                    with sr.Microphone() as source:
-                        # Quick listen with short timeout for responsiveness
-                        self.recognizer.adjust_for_ambient_noise(source, duration=0.1)
-                        audio = self.recognizer.listen(source, timeout=0.3, phrase_time_limit=2)
-                        
-                        # Convert to text
-                        user_input = self.recognizer.recognize_google(audio).lower()
-                        logger.info(f"Interrupt check detected: {user_input}")
+                    # CRITICAL: Don't listen if AI is currently speaking to prevent feedback
+                    if self.voice_detector.ai_speaking:
+                        time.sleep(0.1)  # Wait while AI is speaking
+                        continue
+                    
+                    # Use voice detector for interrupt detection
+                    text = self.voice_detector.listen_with_speaker_detection(
+                        timeout=1,  # Quick timeout for responsiveness
+                        silence_threshold=0.5,  # Shorter silence for interrupts
+                        max_total_time=3,  # Max 3 seconds for interrupt detection
+                        game_mode='interrupt'  # Special mode for interrupts
+                    )
+                    
+                    if text:
+                        logger.info(f"Interrupt check detected: {text}")
                         
                         # Check for interrupt commands
-                        if self.is_interrupt_command(user_input):
-                            logger.info(f"Interrupt command detected: {user_input}")
+                        if self.is_interrupt_command(text):
+                            logger.info(f"Interrupt command detected: {text}")
                             self.speech_interrupted = True
                             
                             # Store the interrupt input for handling
-                            self.last_interrupt_input = user_input
+                            self.last_interrupt_input = text
                             
                             # Stop TTS engines immediately
                             try:
@@ -987,18 +1012,10 @@ class AIAssistant:
                             
                             break
                             
-                except sr.WaitTimeoutError:
-                    # No speech detected, continue listening
-                    continue
-                except sr.UnknownValueError:
-                    # Could not understand audio, continue
-                    continue
-                except sr.RequestError:
-                    # Speech recognition error, continue
-                    continue
                 except Exception as e:
-                    # Any other error, log and continue
+                    # Any error, log and continue
                     logger.error(f"Interrupt listener error: {e}")
+                    time.sleep(0.1)
                     continue
                     
         except Exception as e:
@@ -1026,6 +1043,9 @@ class AIAssistant:
     def listen_for_speech(self, timeout: int = 15) -> Optional[str]:
         """Listen for speech input using intelligent voice activity detection with speaker differentiation."""
         try:
+            # Set AI speaking flag to false to allow listening
+            self.voice_detector.set_ai_speaking(False)
+            
             # CRITICAL: Additional delay before starting to listen to prevent audio feedback
             # This ensures any residual audio output is completely finished
             import time
@@ -1048,8 +1068,8 @@ class AIAssistant:
             logger.info("🎤 Using Smart Voice Detection with Speaker Differentiation...")
             text = self.voice_detector.listen_with_speaker_detection(
                 timeout=timeout,
-                silence_threshold=1.0,
-                max_total_time=30,
+                silence_threshold=2.0,  # Longer silence threshold for complete thoughts
+                max_total_time=45,  # Longer max time for complex questions
                 game_mode=game_mode
             )
             
