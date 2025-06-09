@@ -1,302 +1,263 @@
-# 🤖 AI Assistant for Sophia and Eladriel
+# 🤖 AI Assistant - Smart Camera & Voice Assistant
 
-A personalized AI assistant designed specifically for Sophia and Eladriel, with custom wake words and OpenAI integration. Optimized for easy deployment on Raspberry Pi.
+A sophisticated AI-powered assistant that combines computer vision, speech recognition, and natural language processing to create an interactive experience for children and families.
 
-## ✨ Features
+## 🌟 Features
 
-- **Personalized Wake Words:**
-  - "Miley" for Sophia - responds with "Hello Sophia, what can I do for you?"
-  - "Dino" for Eladriel - responds with "Hello Eladriel, what can I do for you?"
-- **OpenAI Integration:** Uses GPT-3.5-turbo for intelligent responses
-- **Child-Friendly:** Age-appropriate and educational responses
-- **Raspberry Pi Optimized:** Efficient performance on low-power devices
-- **Easy Deployment:** One-click setup script for Raspberry Pi
-- **Multi-User Support:** Different voice settings for each child
-- **Continuous Listening:** Always ready to respond to wake words
+- **Face Recognition**: Personalized interactions for Sophia and Eladriel
+- **Object Identification**: Advanced object detection with educational information
+- **Dinosaur Recognition**: Specialized dinosaur identification for educational fun
+- **Voice Interaction**: Natural speech recognition and text-to-speech
+- **Smart Camera**: Real-time camera processing and image capture
+- **Wake Word Detection**: Hands-free activation with "Miley" and "Dino"
+- **Educational Content**: Age-appropriate learning materials and fun facts
+- **Raspberry Pi Optimized**: Efficient performance on low-power devices
 
-## 🚀 Quick Start
+## 🚀 Quick Installation (Raspberry Pi)
+
+For Raspberry Pi users, we provide an automated installation script:
+
+```bash
+# Clone the repository
+git clone https://github.com/manaol2112/ai_assistant.git
+cd ai_assistant
+
+# Run the automated installer
+./install_raspberry_pi.sh
+```
+
+The script will:
+- Install all system dependencies
+- Set up Python virtual environment
+- Install all required packages with Pi optimizations
+- Configure camera permissions
+- Test the installation
+
+## 📋 Manual Installation
 
 ### Prerequisites
 
-- Raspberry Pi (3B+ or newer recommended)
-- Microphone (USB or HAT)
-- Speaker or headphones
-- Internet connection
+- Python 3.8 or higher
+- Camera (USB webcam or Raspberry Pi camera)
+- Microphone and speakers
 - OpenAI API key
 
-### Installation
+### System Dependencies
+
+**Ubuntu/Debian/Raspberry Pi OS:**
+```bash
+sudo apt update
+sudo apt install -y python3-pip python3-dev python3-venv build-essential cmake pkg-config
+sudo apt install -y portaudio19-dev libasound2-dev pulseaudio alsa-utils
+sudo apt install -y libatlas-base-dev libopenblas-dev liblapack-dev gfortran
+sudo apt install -y libavcodec-dev libavformat-dev libswscale-dev libgtk2.0-dev
+sudo apt install -y libjpeg-dev libtiff5-dev libpng-dev libv4l-dev v4l-utils
+sudo apt install -y libhdf5-dev libhdf5-serial-dev
+```
+
+**macOS:**
+```bash
+brew install portaudio cmake pkg-config
+```
+
+### Python Setup
 
 1. **Clone the repository:**
-   ```bash
-   git clone <your-repo-url>
-   cd ai_assistant
-   ```
-
-2. **Run the setup script:**
-   ```bash
-   chmod +x setup_raspberry_pi.sh
-   ./setup_raspberry_pi.sh
-   ```
-
-3. **Configure your API key:**
-   ```bash
-   nano .env
-   # Add your OpenAI API key: OPENAI_API_KEY=your_key_here
-   ```
-
-4. **Activate the virtual environment:**
-   ```bash
-   source ai_assistant_env/bin/activate
-   ```
-
-5. **Test the installation:**
-   ```bash
-   python test_assistant.py
-   ```
-
-6. **Start the assistant:**
-   ```bash
-   python main.py
-   ```
-
-## 📖 Usage
-
-### Wake Words
-
-- **For Sophia:** Say "Miley" to activate
-- **For Eladriel:** Say "Dino" to activate
-
-### Example Interaction
-
-1. Say "Miley" (wake word)
-2. Assistant responds: "Hello Sophia, what can I do for you?"
-3. Ask your question: "What's the weather like?"
-4. Assistant provides an answer
-5. Returns to listening for wake words
-
-### Voice Commands
-
-The assistant can help with:
-- Answering questions
-- Educational content
-- Storytelling
-- Math problems
-- General conversation
-- Fun facts
-
-## ⚙️ Configuration
-
-### Environment Variables (.env file)
-
 ```bash
-# Required
+git clone https://github.com/manaol2112/ai_assistant.git
+cd ai_assistant
+```
+
+2. **Create virtual environment:**
+```bash
+python3 -m venv ai_assistant_env
+source ai_assistant_env/bin/activate  # On Windows: ai_assistant_env\Scripts\activate
+```
+
+3. **Install Python dependencies:**
+```bash
+pip install --upgrade pip setuptools wheel
+pip install -r requirements.txt
+```
+
+### Configuration
+
+1. **Create environment file:**
+```bash
+cp env_example.txt .env
+```
+
+2. **Edit `.env` file and add your settings:**
+```env
 OPENAI_API_KEY=your_openai_api_key_here
-
-# Optional Customization
-OPENAI_MODEL=gpt-3.5-turbo
-TTS_RATE=180
-WAKE_WORD_SENSITIVITY=0.5
-PI_OPTIMIZATION=true
+PICOVOICE_ACCESS_KEY=your_picovoice_key_here  # Optional for wake word
 ```
 
-### Audio Settings
+## 🎯 Usage
 
-The assistant automatically detects and configures your microphone. For manual configuration:
+### Basic Usage
 
 ```bash
-# Test microphone
-arecord -l
+# Activate virtual environment
+source ai_assistant_env/bin/activate
 
-# Test speaker
-speaker-test -t sine -f 1000 -l 1
+# Run the main assistant
+python main.py
 ```
 
-## 🔧 Advanced Setup
-
-### Auto-Start on Boot
-
-Enable the systemd service to start automatically:
+### Testing Components
 
 ```bash
-sudo systemctl enable ai-assistant.service
-sudo systemctl start ai-assistant.service
+# Test object identification
+python test_object_identification.py
+
+# Test face recognition
+python test_face_recognition.py
+
+# Test dinosaur identification
+python test_dinosaur_camera.py
+
+# Test camera functionality
+python test_camera.py
+
+# Test conversation mode
+python test_conversation.py
 ```
 
-Check status:
-```bash
-sudo systemctl status ai-assistant.service
-```
+## 🔧 Configuration Options
 
-### Performance Tuning
+The assistant can be configured through the `.env` file:
 
-For better performance on Raspberry Pi:
-
-1. **Increase swap space:**
-   ```bash
-   sudo dphys-swapfile swapoff
-   sudo nano /etc/dphys-swapfile
-   # Set CONF_SWAPSIZE=1024
-   sudo dphys-swapfile setup
-   sudo dphys-swapfile swapon
-   ```
-
-2. **Optimize GPU memory:**
-   ```bash
-   sudo nano /boot/config.txt
-   # Add: gpu_mem=128
-   ```
-
-## 🎵 Audio Configuration
-
-### Microphone Issues
-
-If the microphone isn't working:
-
-```bash
-# Check audio devices
-arecord -l
-alsamixer
-
-# Test recording
-arecord -d 5 test.wav
-aplay test.wav
-```
-
-### Speaker Issues
-
-If text-to-speech isn't working:
-
-```bash
-# Test espeak directly
-espeak "Hello world"
-
-# Check PulseAudio
-pulseaudio --check -v
-```
-
-## 🧪 Testing
-
-### Component Testing
-
-```bash
-python test_assistant.py
-```
-
-### Wake Word Testing
-
-```bash
-python -c "
-from wake_word_detector import WakeWordDetector
-from config import Config
-detector = WakeWordDetector(Config())
-detector.test_wake_words()
-"
-```
-
-### Audio Testing
-
-```bash
-python -c "
-from audio_utils import AudioManager
-manager = AudioManager()
-print(manager.get_microphone_info())
-"
-```
-
-## 🛠️ Troubleshooting
-
-### Common Issues
-
-1. **"ModuleNotFoundError: No module named 'pyaudio'"**
-   ```bash
-   sudo apt install python3-pyaudio portaudio19-dev
-   pip install pyaudio
-   ```
-
-2. **"OpenAI API key not found"**
-   - Check your `.env` file
-   - Ensure `OPENAI_API_KEY` is set correctly
-
-3. **"No microphone detected"**
-   ```bash
-   # Check if microphone is recognized
-   lsusb
-   arecord -l
-   ```
-
-4. **"Permission denied for audio"**
-   ```bash
-   sudo usermod -a -G audio $USER
-   # Logout and login again
-   ```
-
-5. **Wake words not detected**
-   - Ensure microphone is working
-   - Try speaking louder and clearer
-   - Check background noise levels
-
-### Log Files
-
-Check logs for detailed error information:
-```bash
-tail -f ai_assistant.log
-```
-
-### Performance Issues
-
-If the assistant is slow:
-1. Reduce `OPENAI_MAX_TOKENS` in `.env`
-2. Enable `LOW_POWER_MODE=true`
-3. Close unnecessary applications
+- `OPENAI_API_KEY`: Your OpenAI API key (required)
+- `PICOVOICE_ACCESS_KEY`: For wake word detection (optional)
+- `CAMERA_INDEX`: Camera device index (default: 0)
+- `AUDIO_DEVICE_INDEX`: Audio input device index (optional)
 
 ## 📁 Project Structure
 
 ```
 ai_assistant/
-├── main.py                 # Main application
-├── config.py              # Configuration management
-├── audio_utils.py         # Audio processing utilities
-├── wake_word_detector.py  # Wake word detection
-├── requirements.txt       # Python dependencies
-├── setup_raspberry_pi.sh  # Setup script
-├── test_assistant.py      # Test utilities
-├── env_example.txt        # Environment configuration example
-└── README.md             # This file
+├── main.py                     # Main application entry point
+├── object_identifier.py        # Object identification system
+├── dinosaur_identifier.py      # Dinosaur-specific identification
+├── audio_utils.py             # Audio processing utilities
+├── camera_utils.py            # Camera handling utilities
+├── wake_word_detector.py      # Wake word detection
+├── smart_camera_detector.py   # Smart camera processing
+├── config.py                  # Configuration management
+├── requirements.txt           # Python dependencies
+├── install_raspberry_pi.sh    # Automated Pi installer
+├── people/                    # Face recognition data
+│   ├── sophia/               # Sophia's face data
+│   └── eladriel/            # Eladriel's face data
+└── test_*.py                 # Various test scripts
 ```
 
-## 🔒 Security Notes
+## 🎮 Interactive Features
 
-- Keep your OpenAI API key secure
-- Don't share your `.env` file
-- Monitor API usage to avoid unexpected charges
-- The assistant processes audio locally except for OpenAI API calls
+### Wake Words
+- **"Miley"** for Sophia - responds with personalized greeting
+- **"Dino"** for Eladriel - responds with personalized greeting
 
-## 📊 Resource Usage
+### For Sophia (Age-appropriate content):
+- Simple object identification
+- Basic educational facts
+- Encouraging and supportive responses
+- Visual learning emphasis
 
-Typical resource usage on Raspberry Pi 4:
-- **CPU:** 15-25% during active listening
-- **RAM:** ~150MB
-- **Storage:** ~500MB for all dependencies
-- **Network:** Only for OpenAI API calls
+### For Eladriel (Advanced content):
+- Detailed scientific explanations
+- Historical context and trivia
+- Complex vocabulary and concepts
+- Critical thinking questions
 
-## 🤝 Support
+### Dinosaur Mode:
+- Specialized dinosaur identification
+- Paleontological facts
+- Prehistoric timeline information
+- Interactive learning games
 
-If you encounter issues:
+## 🛠️ Troubleshooting
 
-1. Check the logs: `tail -f ai_assistant.log`
-2. Run the test script: `python test_assistant.py`
-3. Verify your configuration: Check `.env` file
-4. Test individual components using the provided test functions
+### Common Issues
 
-## 📝 License
+**Camera not working:**
+```bash
+# Check camera permissions
+ls /dev/video*
+# Add user to video group
+sudo usermod -a -G video $USER
+```
 
-This project is created for personal use. Please respect OpenAI's usage policies and terms of service.
+**Audio issues:**
+```bash
+# Test audio devices
+python -c "import pyaudio; p=pyaudio.PyAudio(); [print(f'{i}: {p.get_device_info_by_index(i)[\"name\"]}') for i in range(p.get_device_count())]"
+```
 
-## 🎉 Enjoy!
+**Memory issues on Raspberry Pi:**
+```bash
+# Increase swap space
+sudo dphys-swapfile swapoff
+sudo nano /etc/dphys-swapfile  # Set CONF_SWAPSIZE=1024
+sudo dphys-swapfile setup
+sudo dphys-swapfile swapon
+```
 
-Your AI assistant is now ready to help Sophia and Eladriel with their questions and provide educational, fun interactions!
+**Package installation failures:**
+```bash
+# For face_recognition on Pi
+sudo apt install -y libopenblas-dev liblapack-dev
+pip install --no-cache-dir dlib
+pip install --no-cache-dir face-recognition
+```
+
+### Performance Optimization
+
+**For Raspberry Pi 4:**
+- Use `opencv-python-headless` instead of `opencv-python`
+- Enable GPU memory split: `sudo raspi-config` → Advanced → Memory Split → 128
+- Use CPU-only PyTorch version
+
+**For older Pi models:**
+- Reduce camera resolution in `camera_utils.py`
+- Increase processing delays
+- Consider using lighter models
+
+## 🔒 Privacy & Security
+
+- All face recognition data is stored locally
+- No personal data is sent to external services except OpenAI API calls
+- Camera images are processed locally and not stored permanently
+- Environment variables keep API keys secure
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test thoroughly
+5. Submit a pull request
+
+## 📄 License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## 🙏 Acknowledgments
+
+- OpenAI for GPT-4 Vision API
+- Ultralytics for YOLO object detection
+- Face Recognition library by Adam Geitgey
+- Raspberry Pi Foundation for amazing hardware
+
+## 📞 Support
+
+For issues and questions:
+1. Check the troubleshooting section above
+2. Review the test scripts for examples
+3. Check the GitHub issues page
+4. Ensure all dependencies are properly installed
 
 ---
 
-*"Miley, what's the capital of France?"* 🗼
-*"Dino, tell me about dinosaurs!"* 🦕 
+**Happy Learning! 🎓🤖** 
