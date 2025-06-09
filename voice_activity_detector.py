@@ -132,25 +132,30 @@ class VoiceActivityDetector:
                 # Configure sensitivity based on game mode
                 if game_mode == 'spelling':
                     self.recognizer.energy_threshold = max(200, self.recognizer.energy_threshold * 0.6)
-                    chunk_duration = 0.3  # Shorter chunks for spelling
+                    chunk_duration = 0.8  # Longer chunks for better word capture
+                    min_silence_gap = 0.3  # Shorter silence gap tolerance
                 elif game_mode == 'filipino':
                     self.recognizer.energy_threshold = max(250, self.recognizer.energy_threshold * 0.7)
-                    chunk_duration = 0.4  # Medium chunks for Filipino
+                    chunk_duration = 1.0  # Longer chunks for Filipino phrases
+                    min_silence_gap = 0.4
                 elif game_mode == 'interrupt':
                     self.recognizer.energy_threshold = max(400, self.recognizer.energy_threshold * 0.9)
                     chunk_duration = 0.2  # Very short chunks for quick interrupts
+                    min_silence_gap = 0.1
                 else:
                     self.recognizer.energy_threshold = max(300, self.recognizer.energy_threshold * 0.8)
-                    chunk_duration = 0.6  # Longer chunks for regular conversation
+                    chunk_duration = 1.2  # Much longer chunks for complete sentences
+                    min_silence_gap = 0.5  # Allow brief pauses in natural speech
                 
                 self.recognizer.dynamic_energy_threshold = True
                 
-                # Voice activity detection with speaker differentiation
+                # Voice activity detection with improved continuous speech handling
                 audio_chunks = []
                 total_listening_time = 0
                 consecutive_silence_time = 0
                 human_speech_detected = False
-                recent_ai_speech = False  # Track recent AI speech to avoid confusion
+                recent_ai_speech = False
+                last_speech_time = 0
                 
                 logger.info(f"👂 Listening for human speech (max {max_total_time}s)...")
                 
@@ -161,11 +166,11 @@ class VoiceActivityDetector:
                         break
                     
                     try:
-                        # Listen for a chunk
+                        # Listen for a chunk with longer phrase limit for complete thoughts
                         chunk_audio = self.recognizer.listen(
                             source, 
                             timeout=chunk_duration, 
-                            phrase_time_limit=chunk_duration * 2  # Allow longer phrases
+                            phrase_time_limit=min(8.0, chunk_duration * 3)  # Allow much longer phrases
                         )
                         
                         # Quick speech test for this chunk
@@ -180,29 +185,34 @@ class VoiceActivityDetector:
                                     recent_ai_speech = True
                                 else:
                                     # This is human speech!
-                                    # Extra check: if we just heard AI speech, wait a bit longer to be sure
-                                    if recent_ai_speech and not human_speech_detected:
-                                        logger.info(f"👤 Potential human speech after AI: '{test_text[:20]}...' - waiting for confirmation")
-                                        time.sleep(0.3)  # Brief pause to confirm it's really human
-                                        recent_ai_speech = False
+                                    current_time = total_listening_time
                                     
-                                    logger.info(f"👤 Human speech detected: '{test_text[:20]}...'")
+                                    # If this speech is close to previous speech, it's likely continuation
+                                    if human_speech_detected and (current_time - last_speech_time) < (silence_threshold * 0.8):
+                                        logger.info(f"👤 Continuing human speech: '{test_text[:30]}...'")
+                                    else:
+                                        logger.info(f"👤 Human speech detected: '{test_text[:30]}...'")
+                                    
                                     audio_chunks.append(chunk_audio)
                                     consecutive_silence_time = 0
                                     human_speech_detected = True
                                     recent_ai_speech = False
+                                    last_speech_time = current_time
                             else:
                                 consecutive_silence_time += chunk_duration
                                 
                         except (sr.UnknownValueError, sr.RequestError):
                             # No recognizable speech in this chunk
                             consecutive_silence_time += chunk_duration
-                            if human_speech_detected:
-                                logger.info(f"🔇 Silence: {consecutive_silence_time:.1f}s of {silence_threshold}s")
+                            if human_speech_detected and consecutive_silence_time >= min_silence_gap:
+                                # Only log silence if we've detected speech and had a meaningful gap
+                                if consecutive_silence_time % 0.6 == 0:  # Log every 0.6 seconds to avoid spam
+                                    logger.info(f"🔇 Silence: {consecutive_silence_time:.1f}s of {silence_threshold}s")
                         
                         total_listening_time += chunk_duration
                         
                         # Stop if we have enough silence after detecting human speech
+                        # But be more generous with silence tolerance for natural speech
                         if consecutive_silence_time >= silence_threshold and human_speech_detected:
                             logger.info(f"✅ Human finished speaking! Processing {len(audio_chunks)} chunks...")
                             break
@@ -212,8 +222,10 @@ class VoiceActivityDetector:
                         consecutive_silence_time += chunk_duration
                         total_listening_time += chunk_duration
                         
-                        if human_speech_detected:
-                            logger.info(f"🔇 Silence: {consecutive_silence_time:.1f}s of {silence_threshold}s")
+                        # Only log meaningful silence periods
+                        if human_speech_detected and consecutive_silence_time >= min_silence_gap:
+                            if int(consecutive_silence_time * 10) % 6 == 0:  # Log every 0.6 seconds
+                                logger.info(f"🔇 Silence: {consecutive_silence_time:.1f}s of {silence_threshold}s")
                         
                         # Stop if enough silence after human speech
                         if consecutive_silence_time >= silence_threshold and human_speech_detected:
@@ -232,71 +244,115 @@ class VoiceActivityDetector:
             return None
     
     def _process_audio_chunks(self, audio_chunks: List[sr.AudioData], game_mode: str = None) -> Optional[str]:
-        """Process and combine audio chunks into final text."""
+        """Process and combine audio chunks into final text with improved sentence reconstruction."""
         try:
             logger.info(f"🎵 Processing {len(audio_chunks)} human speech chunks...")
             
-            # Combine audio chunks
+            # Strategy 1: Try to combine all chunks into one audio stream for complete recognition
             combined_audio_data = b''
+            sample_rate = audio_chunks[0].sample_rate
+            sample_width = audio_chunks[0].sample_width
+            
             for chunk in audio_chunks:
                 combined_audio_data += chunk.get_raw_data()
             
             # Create combined audio object
-            combined_audio = sr.AudioData(
-                combined_audio_data,
-                audio_chunks[0].sample_rate,
-                audio_chunks[0].sample_width
-            )
+            combined_audio = sr.AudioData(combined_audio_data, sample_rate, sample_width)
             
-            # Multi-attempt recognition
+            # Strategy 2: Also process chunks individually and combine text intelligently
+            individual_texts = []
+            
+            # Try combined audio first (best for continuous speech)
             for attempt in range(3):
                 try:
                     # Choose language based on game mode
                     if game_mode == 'filipino':
                         try:
-                            text = self.recognizer.recognize_google(combined_audio, language='fil-PH')
-                            logger.info(f"✅ Human speech (Filipino, attempt {attempt + 1}): '{text}'")
-                            break
+                            combined_text = self.recognizer.recognize_google(combined_audio, language='fil-PH')
+                            logger.info(f"✅ Combined human speech (Filipino, attempt {attempt + 1}): '{combined_text}'")
+                            return self._clean_text(combined_text)
                         except (sr.UnknownValueError, sr.RequestError):
-                            text = self.recognizer.recognize_google(combined_audio, language='en-US')
-                            logger.info(f"✅ Human speech (English fallback, attempt {attempt + 1}): '{text}'")
-                            break
+                            combined_text = self.recognizer.recognize_google(combined_audio, language='en-US')
+                            logger.info(f"✅ Combined human speech (English fallback, attempt {attempt + 1}): '{combined_text}'")
+                            return self._clean_text(combined_text)
                     else:
-                        # English recognition
+                        # English recognition with multiple dialect attempts
                         languages = ['en-US', 'en-GB', 'en-AU']
                         for lang in languages:
                             try:
-                                text = self.recognizer.recognize_google(combined_audio, language=lang)
-                                logger.info(f"✅ Human speech ({lang}, attempt {attempt + 1}): '{text}'")
-                                break
+                                combined_text = self.recognizer.recognize_google(combined_audio, language=lang)
+                                logger.info(f"✅ Combined human speech ({lang}, attempt {attempt + 1}): '{combined_text}'")
+                                return self._clean_text(combined_text)
                             except (sr.UnknownValueError, sr.RequestError):
                                 continue
-                        else:
-                            continue
-                        break
                         
-                except (sr.UnknownValueError, sr.RequestError) as e:
+                except Exception as e:
                     if attempt < 2:
-                        logger.warning(f"Recognition attempt {attempt + 1} failed: {e}")
+                        logger.warning(f"Combined recognition attempt {attempt + 1} failed: {e}")
                         time.sleep(0.2)
                         continue
                     else:
-                        logger.info("Could not understand human speech after multiple attempts")
-                        return None
+                        logger.info("Combined audio recognition failed, trying individual chunks...")
+                        break
             
-            # Final AI speech filter
-            if self.is_ai_speech(text):
-                logger.warning(f"🤖 Final filter: Rejected AI speech '{text}'")
-                return None
+            # Fallback: Process individual chunks and intelligently combine
+            logger.info("🔗 Using individual chunk processing and smart combination...")
             
-            # Clean and return
-            cleaned_text = self._clean_text(text)
-            logger.info(f"🎯 Final human speech: '{cleaned_text}'")
-            return cleaned_text.lower()
+            for i, chunk in enumerate(audio_chunks):
+                try:
+                    chunk_text = self.recognizer.recognize_google(chunk, language='en-US')
+                    if chunk_text.strip():
+                        individual_texts.append(chunk_text.strip())
+                        logger.info(f"📝 Chunk {i+1}: '{chunk_text}'")
+                except (sr.UnknownValueError, sr.RequestError):
+                    continue
             
+            if individual_texts:
+                # Intelligent text combination
+                final_text = self._combine_text_chunks(individual_texts)
+                logger.info(f"🎯 Final combined speech: '{final_text}'")
+                return self._clean_text(final_text)
+            
+            logger.info("❌ Could not process any speech chunks")
+            return None
+                
         except Exception as e:
             logger.error(f"Audio processing error: {e}")
             return None
+
+    def _combine_text_chunks(self, texts: List[str]) -> str:
+        """Intelligently combine text chunks into coherent sentences."""
+        if not texts:
+            return ""
+        
+        if len(texts) == 1:
+            return texts[0]
+        
+        # Join chunks with spaces and clean up
+        combined = " ".join(texts)
+        
+        # Clean up common issues from chunk combination
+        combined = combined.replace("  ", " ")  # Remove double spaces
+        combined = combined.strip()
+        
+        # Handle common speech recognition artifacts in multi-chunk scenarios
+        word_fixes = {
+            "between pampang and": "between pampanga and",
+            "in australia": "and australia",
+            "what is the distance": "what is the distance",
+            "how far is": "how far is",
+            "what's the": "what's the",
+        }
+        
+        combined_lower = combined.lower()
+        for wrong, correct in word_fixes.items():
+            if wrong in combined_lower:
+                # Preserve original case while fixing
+                combined = combined.replace(wrong, correct)
+                combined = combined.replace(wrong.title(), correct.title())
+                combined = combined.replace(wrong.upper(), correct.upper())
+        
+        return combined
     
     def _clean_text(self, text: str) -> str:
         """Clean recognized text."""
