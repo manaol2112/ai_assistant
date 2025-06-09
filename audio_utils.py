@@ -274,42 +274,20 @@ class AudioManager:
         self.cleanup()
 
 
-def setup_premium_tts_engines(openai_client: openai.OpenAI) -> tuple[OpenAITTSEngine, OpenAITTSEngine]:
-    """
-    Setup premium OpenAI TTS engines for Sophia and Eladriel with natural human voices.
+def setup_premium_tts_engines(client):
+    """Setup premium OpenAI TTS engines with natural human voices for each user."""
     
-    Available voices:
-    - alloy: Balanced, natural
-    - echo: Male, clear
-    - fable: British accent, warm
-    - onyx: Deep, authoritative  
-    - nova: Young, energetic (great for kids)
-    - shimmer: Soft, gentle
-    """
+    logger = logging.getLogger(__name__)
     
-    # Sophia's engine - warm, encouraging voice
-    sophia_engine = OpenAITTSEngine(
-        openai_client=openai_client,
-        voice="shimmer",  # Soft, gentle voice perfect for encouragement
-        model="tts-1-hd"  # High quality
-    )
-    sophia_engine.setProperty('rate', 175)  # Slightly slower for clarity
-    sophia_engine.setProperty('volume', 0.95)
+    # Sophia's voice - soft, encouraging, and supportive (feminine)
+    sophia_tts = OpenAITTSEngine(client, voice="shimmer")  # Shimmer: warm and friendly
+    logger.info("✨ Sophia's premium voice (Shimmer) initialized - soft and encouraging")
     
-    logging.info("✨ Sophia's premium voice (Shimmer) initialized - soft and encouraging")
+    # Eladriel's voice - energetic, playful, and adventurous (masculine for a boy)
+    eladriel_tts = OpenAITTSEngine(client, voice="onyx")  # Onyx: deep and masculine, perfect for a boy
+    logger.info("🦕 Eladriel's premium voice (Onyx) initialized - energetic and masculine for a boy")
     
-    # Eladriel's engine - playful, energetic voice
-    eladriel_engine = OpenAITTSEngine(
-        openai_client=openai_client, 
-        voice="nova",  # Young, energetic voice perfect for playful interactions
-        model="tts-1-hd"  # High quality
-    )
-    eladriel_engine.setProperty('rate', 185)  # Slightly faster, more energetic
-    eladriel_engine.setProperty('volume', 0.95)
-    
-    logging.info("🦕 Eladriel's premium voice (Nova) initialized - young and energetic")
-    
-    return sophia_engine, eladriel_engine
+    return sophia_tts, eladriel_tts
 
 
 def setup_tts_engines() -> tuple[pyttsx3.Engine, pyttsx3.Engine]:
