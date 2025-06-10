@@ -1553,7 +1553,7 @@ class AIAssistant:
             time.sleep(3)
             
             # Capture and identify the object
-            result = self.object_identifier.capture_and_identify(user)
+            result = self.object_identifier.capture_and_identify()
             
             if result["success"]:
                 return result["message"]

@@ -13,8 +13,7 @@ import os
 from pathlib import Path
 import cv2
 import time
-from .config import Config
-from .logger import Logger
+from config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +22,6 @@ class ObjectIdentifier:
     
     def __init__(self, shared_camera: Optional[Any] = None):
         """Initialize the Object Identifier with optional shared camera."""
-        self.logger = Logger("ObjectIdentifier")
         self.config = Config()
         
         # Camera configuration
@@ -31,17 +29,20 @@ class ObjectIdentifier:
         self.using_shared_camera = shared_camera is not None
         
         if self.using_shared_camera:
-            self.logger.info("ObjectIdentifier initialized with shared camera")
+            logger.info("ObjectIdentifier initialized with shared camera")
         else:
-            self.logger.info("ObjectIdentifier initialized with standalone camera")
+            logger.info("ObjectIdentifier initialized with standalone camera")
             self.camera_manager = CameraManager()
         
         # Initialize OpenAI client
         try:
             openai.api_key = self.config.openai_api_key
-            self.logger.info("OpenAI API initialized successfully")
+            logger.info("OpenAI API initialized successfully")
         except Exception as e:
-            self.logger.error(f"Failed to initialize OpenAI API: {e}")
+            logger.error(f"Failed to initialize OpenAI API: {e}")
+        
+        # We need the OpenAI client for API calls
+        self.client = openai.OpenAI(api_key=self.config.openai_api_key)
         
         # Object categories for enhanced responses
         self.object_categories = {
@@ -283,13 +284,13 @@ Please be detailed and educational."""
                     "message": "I took a picture but couldn't save it."
                 }
             
-            self.logger.info(f"Image captured and saved: {image_path}")
+            logger.info(f"Image captured and saved: {image_path}")
             
             # Identify the object using GPT-4 Vision
             return self._identify_object_with_vision(image_path)
             
         except Exception as e:
-            self.logger.error(f"Error in capture_and_identify: {e}")
+            logger.error(f"Error in capture_and_identify: {e}")
             return {
                 "success": False,
                 "error": str(e),
