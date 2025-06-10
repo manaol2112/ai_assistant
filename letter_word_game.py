@@ -30,160 +30,160 @@ class LetterWordGame:
         # Elementary-level word database organized by letters with simple hints
         self.word_database = {
             'A': [
-                {'word': 'APPLE', 'hint': 'A red or green fruit that grows on trees'},
-                {'word': 'ANT', 'hint': 'A tiny insect that works hard and carries food'},
-                {'word': 'ARM', 'hint': 'The part of your body between your shoulder and hand'},
-                {'word': 'AXE', 'hint': 'A tool used to chop wood'}
+                {'word': 'APPLE', 'hint': 'A red or green fruit that grows on trees. Teachers like these!'},
+                {'word': 'ANT', 'hint': 'A tiny black insect that works hard and lives in hills'},
+                {'word': 'ARM', 'hint': 'The part of your body between your shoulder and hand. You have two of these!'},
+                {'word': 'AXE', 'hint': 'A tool with a sharp blade that cuts wood. Firefighters use these!'}
             ],
             'B': [
-                {'word': 'BALL', 'hint': 'A round toy that you can throw and catch'},
-                {'word': 'BED', 'hint': 'Where you sleep at night'},
-                {'word': 'BUS', 'hint': 'A big yellow vehicle that takes kids to school'},
-                {'word': 'BAT', 'hint': 'An animal that flies at night'}
+                {'word': 'BALL', 'hint': 'A round toy that bounces. You play catch with this!'},
+                {'word': 'BED', 'hint': 'A soft place where you sleep at night with pillows and blankets'},
+                {'word': 'BUS', 'hint': 'A big yellow vehicle that takes kids to school every day'},
+                {'word': 'BAT', 'hint': 'A small animal that flies at night and sleeps upside down'}
             ],
             'C': [
-                {'word': 'CAT', 'hint': 'A furry pet that says meow'},
-                {'word': 'CAR', 'hint': 'A vehicle with four wheels'},
-                {'word': 'CUP', 'hint': 'Something you drink from'},
-                {'word': 'COW', 'hint': 'A farm animal that gives milk'}
+                {'word': 'CAT', 'hint': 'A furry pet that says meow and likes to chase mice'},
+                {'word': 'CAR', 'hint': 'A vehicle with four wheels that drives on roads'},
+                {'word': 'CUP', 'hint': 'Something you drink milk or juice from. It has a handle!'},
+                {'word': 'COW', 'hint': 'A big farm animal that gives milk and says moo'}
             ],
             'D': [
-                {'word': 'DOG', 'hint': 'A pet that barks and wags its tail'},
-                {'word': 'DUCK', 'hint': 'A bird that swims and says quack'},
-                {'word': 'DOOR', 'hint': 'What you open to go into a room'},
-                {'word': 'DOLL', 'hint': 'A toy that looks like a person'}
+                {'word': 'DOG', 'hint': 'A friendly pet that barks, wags its tail, and loves to play fetch'},
+                {'word': 'DUCK', 'hint': 'A yellow bird that swims in ponds and says quack quack'},
+                {'word': 'DOOR', 'hint': 'What you open to go into a room. You knock on this!'},
+                {'word': 'DOLL', 'hint': 'A toy that looks like a baby or person. Kids love to play with these!'}
             ],
             'E': [
-                {'word': 'EGG', 'hint': 'Something chickens lay that you can eat'},
-                {'word': 'EYE', 'hint': 'The part of your body that you see with'},
-                {'word': 'EAR', 'hint': 'The part of your body that you hear with'},
-                {'word': 'ELF', 'hint': 'A small magical person from stories'}
+                {'word': 'EGG', 'hint': 'Something round and white that chickens lay. You can eat these for breakfast!'},
+                {'word': 'EYE', 'hint': 'The part of your face that you see with. You have two of these!'},
+                {'word': 'EAR', 'hint': 'The part of your head that you hear sounds with'},
+                {'word': 'ELF', 'hint': 'A small magical person who helps Santa make toys'}
             ],
             'F': [
-                {'word': 'FISH', 'hint': 'An animal that swims in water'},
-                {'word': 'FROG', 'hint': 'A green animal that hops and says ribbit'},
-                {'word': 'FAN', 'hint': 'Something that blows air to keep you cool'},
-                {'word': 'FIRE', 'hint': 'Hot orange flames'}
+                {'word': 'FISH', 'hint': 'An animal that swims in water and has fins. Some people keep these as pets!'},
+                {'word': 'FROG', 'hint': 'A green animal that hops and lives near water. It says ribbit!'},
+                {'word': 'FAN', 'hint': 'Something that spins around to blow air and keep you cool on hot days'},
+                {'word': 'FIRE', 'hint': 'Hot orange and red flames that give light and warmth'}
             ],
             'G': [
-                {'word': 'GOAT', 'hint': 'A farm animal with horns'},
-                {'word': 'GAME', 'hint': 'Something fun you play'},
-                {'word': 'GATE', 'hint': 'A door in a fence'},
-                {'word': 'GUM', 'hint': 'Something chewy and sweet'}
+                {'word': 'GOAT', 'hint': 'A farm animal with horns that likes to eat grass and climb rocks'},
+                {'word': 'GAME', 'hint': 'Something fun you play with friends. Like hide and seek!'},
+                {'word': 'GATE', 'hint': 'A door in a fence that opens and closes'},
+                {'word': 'GUM', 'hint': 'Something sweet and chewy that you chew but never swallow'}
             ],
             'H': [
-                {'word': 'HAT', 'hint': 'Something you wear on your head'},
-                {'word': 'HAND', 'hint': 'The part of your body with five fingers'},
-                {'word': 'HORSE', 'hint': 'A big animal that people can ride'},
-                {'word': 'HEN', 'hint': 'A female chicken'}
+                {'word': 'HAT', 'hint': 'Something you wear on your head to stay warm or block the sun'},
+                {'word': 'HAND', 'hint': 'The part of your body with five fingers that you use to pick things up'},
+                {'word': 'HORSE', 'hint': 'A big animal that people can ride. Cowboys ride these!'},
+                {'word': 'HEN', 'hint': 'A female chicken that lays eggs on the farm'}
             ],
             'I': [
-                {'word': 'ICE', 'hint': 'Frozen water that is cold'},
-                {'word': 'INK', 'hint': 'What comes out of a pen when you write'},
-                {'word': 'ILL', 'hint': 'When you feel sick'},
-                {'word': 'IMP', 'hint': 'A small mischievous creature'}
+                {'word': 'ICE', 'hint': 'Frozen water that is very cold and slippery'},
+                {'word': 'INK', 'hint': 'The colored liquid that comes out of pens when you write'},
+                {'word': 'ILL', 'hint': 'When you feel sick and need to rest'},
+                {'word': 'IMP', 'hint': 'A small playful creature from fairy tales'}
             ],
             'J': [
-                {'word': 'JAR', 'hint': 'A glass container with a lid'},
-                {'word': 'JET', 'hint': 'A fast airplane'},
-                {'word': 'JOB', 'hint': 'Work that people do'},
-                {'word': 'JAM', 'hint': 'Sweet fruit spread for bread'}
+                {'word': 'JAR', 'hint': 'A glass container with a lid where you store cookies or jam'},
+                {'word': 'JET', 'hint': 'A very fast airplane that flies high in the sky'},
+                {'word': 'JOB', 'hint': 'Work that grown-ups do to earn money'},
+                {'word': 'JAM', 'hint': 'Sweet fruit spread that you put on bread or toast'}
             ],
             'K': [
-                {'word': 'KEY', 'hint': 'What you use to open locks'},
-                {'word': 'KID', 'hint': 'Another word for child'},
-                {'word': 'KITE', 'hint': 'A colorful toy that flies in the wind'},
-                {'word': 'KING', 'hint': 'A man who rules a kingdom'}
+                {'word': 'KEY', 'hint': 'A small metal thing you use to unlock doors and start cars'},
+                {'word': 'KID', 'hint': 'Another word for child. That\'s you!'},
+                {'word': 'KITE', 'hint': 'A colorful toy that flies high in the sky on windy days'},
+                {'word': 'KING', 'hint': 'A man who rules a kingdom and wears a crown'}
             ],
             'L': [
-                {'word': 'LEG', 'hint': 'The part of your body you walk with'},
-                {'word': 'LAMP', 'hint': 'Something that gives light'},
-                {'word': 'LION', 'hint': 'A big cat that roars'},
-                {'word': 'LEAF', 'hint': 'The green part of trees'}
+                {'word': 'LEG', 'hint': 'The part of your body you use to walk and run. You have two of these!'},
+                {'word': 'LAMP', 'hint': 'Something that gives light when you turn it on in dark rooms'},
+                {'word': 'LION', 'hint': 'A big wild cat with a mane that roars loudly'},
+                {'word': 'LEAF', 'hint': 'The green parts that grow on trees and change colors in fall'}
             ],
             'M': [
-                {'word': 'MOM', 'hint': 'Another word for mother'},
-                {'word': 'MOON', 'hint': 'What you see in the sky at night'},
-                {'word': 'MOUSE', 'hint': 'A tiny animal that cats chase'},
-                {'word': 'MILK', 'hint': 'A white drink that comes from cows'}
+                {'word': 'MOM', 'hint': 'Another word for mother. She takes care of you and loves you!'},
+                {'word': 'MOON', 'hint': 'The bright round thing you see in the sky at night'},
+                {'word': 'MOUSE', 'hint': 'A tiny gray animal with a long tail that cats like to chase'},
+                {'word': 'MILK', 'hint': 'A white drink that comes from cows and makes your bones strong'}
             ],
             'N': [
-                {'word': 'NET', 'hint': 'Something with holes used to catch fish'},
-                {'word': 'NOSE', 'hint': 'The part of your face you smell with'},
-                {'word': 'NUT', 'hint': 'A hard shell with food inside'},
-                {'word': 'NAP', 'hint': 'A short sleep during the day'}
+                {'word': 'NET', 'hint': 'Something with holes used to catch fish or play sports'},
+                {'word': 'NOSE', 'hint': 'The part of your face you smell flowers and food with'},
+                {'word': 'NUT', 'hint': 'A hard shell with yummy food inside. Squirrels love these!'},
+                {'word': 'NAP', 'hint': 'A short sleep you take during the day when you\'re tired'}
             ],
             'O': [
-                {'word': 'OWL', 'hint': 'A bird that hoots at night'},
-                {'word': 'OX', 'hint': 'A strong farm animal'},
-                {'word': 'OIL', 'hint': 'A slippery liquid'},
-                {'word': 'ORB', 'hint': 'A round ball shape'}
+                {'word': 'OWL', 'hint': 'A wise bird with big eyes that flies at night and says hoo'},
+                {'word': 'OX', 'hint': 'A very strong farm animal that helps pull heavy things'},
+                {'word': 'OIL', 'hint': 'A slippery liquid used in cooking and cars'},
+                {'word': 'ORB', 'hint': 'A perfectly round ball shape, like a marble'}
             ],
             'P': [
-                {'word': 'PIG', 'hint': 'A pink farm animal that oinks'},
-                {'word': 'PEN', 'hint': 'What you write with'},
-                {'word': 'POT', 'hint': 'What you cook food in'},
-                {'word': 'PUP', 'hint': 'A baby dog'}
+                {'word': 'PIG', 'hint': 'A pink farm animal that says oink and likes to roll in mud'},
+                {'word': 'PEN', 'hint': 'What you use to write letters and draw pictures with ink'},
+                {'word': 'POT', 'hint': 'What mommy cooks soup and pasta in on the stove'},
+                {'word': 'PUP', 'hint': 'A baby dog that is very cute and playful'}
             ],
             'Q': [
-                {'word': 'QUEEN', 'hint': 'A woman who rules a kingdom'},
-                {'word': 'QUIT', 'hint': 'To stop doing something'},
-                {'word': 'QUIZ', 'hint': 'A short test with questions'},
-                {'word': 'QUAY', 'hint': 'A place where boats dock'}
+                {'word': 'QUEEN', 'hint': 'A woman who rules a kingdom and wears a beautiful crown'},
+                {'word': 'QUIT', 'hint': 'To stop doing something, like when you quit playing a game'},
+                {'word': 'QUIZ', 'hint': 'A short test with questions to see what you know'},
+                {'word': 'QUAY', 'hint': 'A special place where big boats park near the water'}
             ],
             'R': [
-                {'word': 'RAT', 'hint': 'A small animal with a long tail'},
-                {'word': 'RUN', 'hint': 'To move fast with your legs'},
-                {'word': 'RED', 'hint': 'The color of fire trucks'},
-                {'word': 'RUG', 'hint': 'Something soft on the floor'}
+                {'word': 'RAT', 'hint': 'A small gray animal with a long tail, bigger than a mouse'},
+                {'word': 'RUN', 'hint': 'To move very fast with your legs, faster than walking'},
+                {'word': 'RED', 'hint': 'The color of fire trucks, strawberries, and stop signs'},
+                {'word': 'RUG', 'hint': 'A soft carpet that goes on the floor to keep your feet warm'}
             ],
             'S': [
-                {'word': 'SUN', 'hint': 'The bright light in the sky during day'},
-                {'word': 'STAR', 'hint': 'What twinkles in the night sky'},
-                {'word': 'SOCK', 'hint': 'What you wear on your feet inside shoes'},
-                {'word': 'SNAKE', 'hint': 'A long animal with no legs'}
+                {'word': 'SUN', 'hint': 'The bright yellow ball of light in the sky that keeps us warm'},
+                {'word': 'STAR', 'hint': 'The tiny lights that twinkle in the night sky'},
+                {'word': 'SOCK', 'hint': 'What you put on your feet before putting on your shoes'},
+                {'word': 'SNAKE', 'hint': 'A long animal with no legs that slithers on the ground'}
             ],
             'T': [
-                {'word': 'TOP', 'hint': 'A spinning toy'},
-                {'word': 'TOY', 'hint': 'Something fun to play with'},
-                {'word': 'TREE', 'hint': 'A tall plant with leaves and branches'},
-                {'word': 'TEN', 'hint': 'The number after nine'}
+                {'word': 'TOP', 'hint': 'A spinning toy that goes round and round when you twist it'},
+                {'word': 'TOY', 'hint': 'Something fun that kids play with, like dolls or cars'},
+                {'word': 'TREE', 'hint': 'A tall plant with leaves, branches, and a trunk where birds live'},
+                {'word': 'TEN', 'hint': 'The number that comes after nine. Count your fingers!'}
             ],
             'U': [
-                {'word': 'UP', 'hint': 'The opposite of down'},
-                {'word': 'USE', 'hint': 'To do something with an object'},
-                {'word': 'URN', 'hint': 'A special jar or container'},
-                {'word': 'UMP', 'hint': 'Short for umpire in baseball'}
+                {'word': 'UP', 'hint': 'The opposite of down. Birds fly this way in the sky!'},
+                {'word': 'USE', 'hint': 'What you do with tools or toys - you play with them!'},
+                {'word': 'URN', 'hint': 'A special decorative jar or container'},
+                {'word': 'UMP', 'hint': 'Short word for the person who makes calls in baseball games'}
             ],
             'V': [
-                {'word': 'VAN', 'hint': 'A big car that carries many people'},
-                {'word': 'VET', 'hint': 'A doctor who helps animals'},
-                {'word': 'VINE', 'hint': 'A plant that climbs up walls'},
-                {'word': 'VOW', 'hint': 'A special promise'}
+                {'word': 'VAN', 'hint': 'A big car that can carry lots of people and their things'},
+                {'word': 'VET', 'hint': 'A special doctor who takes care of sick animals'},
+                {'word': 'VINE', 'hint': 'A long green plant that climbs up walls and fences'},
+                {'word': 'VOW', 'hint': 'A very important promise that people make'}
             ],
             'W': [
-                {'word': 'WEB', 'hint': 'What a spider makes'},
-                {'word': 'WIG', 'hint': 'Fake hair you can wear'},
-                {'word': 'WIN', 'hint': 'To come first in a game'},
-                {'word': 'WAX', 'hint': 'What candles are made of'}
+                {'word': 'WEB', 'hint': 'The sticky net that spiders make to catch bugs for food'},
+                {'word': 'WIG', 'hint': 'Fake hair that people can wear on their heads'},
+                {'word': 'WIN', 'hint': 'What happens when you come first place in a game or race'},
+                {'word': 'WAX', 'hint': 'The soft material that candles are made from'}
             ],
             'X': [
-                {'word': 'X-RAY', 'hint': 'A picture that shows your bones'},
-                {'word': 'XYZ', 'hint': 'The last three letters of the alphabet'},
-                {'word': 'XBOX', 'hint': 'A video game machine'},
-                {'word': 'XMAS', 'hint': 'A short way to write Christmas'}
+                {'word': 'X-RAY', 'hint': 'A special picture that doctors take to see your bones inside'},
+                {'word': 'XYZ', 'hint': 'The very last three letters of the alphabet'},
+                {'word': 'XBOX', 'hint': 'A popular video game machine that kids love to play'},
+                {'word': 'XMAS', 'hint': 'A short fun way to write the word Christmas'}
             ],
             'Y': [
-                {'word': 'YAK', 'hint': 'A furry animal like a big cow'},
-                {'word': 'YES', 'hint': 'The opposite of no'},
-                {'word': 'YAM', 'hint': 'An orange vegetable like a sweet potato'},
-                {'word': 'YAP', 'hint': 'The sound a small dog makes'}
+                {'word': 'YAK', 'hint': 'A big furry animal that looks like a cow with long hair'},
+                {'word': 'YES', 'hint': 'The happy word you say when you agree - opposite of no'},
+                {'word': 'YAM', 'hint': 'An orange vegetable that tastes sweet, like a sweet potato'},
+                {'word': 'YAP', 'hint': 'The high-pitched sound that small dogs make when they bark'}
             ],
             'Z': [
-                {'word': 'ZOO', 'hint': 'A place where you can see animals'},
-                {'word': 'ZAP', 'hint': 'A quick electric sound'},
-                {'word': 'ZIP', 'hint': 'To close something quickly'},
-                {'word': 'ZEN', 'hint': 'Being very calm and peaceful'}
+                {'word': 'ZOO', 'hint': 'A fun place where you can see lions, elephants, and monkeys'},
+                {'word': 'ZAP', 'hint': 'A quick electric sound, like lightning or a bug zapper'},
+                {'word': 'ZIP', 'hint': 'To close something quickly, like the zipper on your jacket'},
+                {'word': 'ZEN', 'hint': 'A special way of being very calm and peaceful inside'}
             ]
         }
         
@@ -242,9 +242,7 @@ Ready for your first challenge?
 
 What word starts with '{self.current_letter}' and matches this hint?"""
 
-        if self.ai_assistant:
-            self.ai_assistant.speak(f"Letter word game started! Your first letter is {self.current_letter}. {self.current_hint} What word do you think it is?", user)
-            
+        # Let the main handler manage speech - don't duplicate here
         return welcome_message
     
     def check_answer(self, user_answer: str, user: str) -> str:
