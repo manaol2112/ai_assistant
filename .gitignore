@@ -47,17 +47,27 @@ venv.bak/
 logs/
 ai_assistant.log
 
-# Captured Images and Camera Data
+# Captured Images and Camera Data (but NOT people folder)
 captured_images/
-*.jpg
-*.png
-*.jpeg
-*.gif
-*.bmp
-*.tiff
+# Only ignore image files in specific directories, not globally
+captured_images/*.jpg
+captured_images/*.png
+captured_images/*.jpeg
+captured_images/*.gif
+captured_images/*.bmp
+captured_images/*.tiff
 
-# NOTE: people/ directory is INCLUDED for face recognition data
+# Temporary image files in root
+temp_*.jpg
+temp_*.png
+temp_*.jpeg
+temp_*.gif
+temp_*.bmp
+temp_*.tiff
+
+# IMPORTANT: people/ directory is INCLUDED for face recognition data
 # This contains the face encodings for Sophia and Eladriel
+# Face recognition images are essential for the AI Assistant to work
 
 # Model Files (large files that can be downloaded)
 *.pt
