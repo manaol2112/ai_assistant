@@ -44,49 +44,77 @@ class OpenAITTSEngine:
     def say(self, text: str):
         """Convert text to speech and play it."""
         try:
-            # Generate speech using OpenAI TTS
+            self.logger.info(f"OpenAI TTS: Starting to process text: '{text[:50]}...'")
+            
+            # Generate speech using OpenAI TTS with timeout
+            self.logger.info("OpenAI TTS: Calling API...")
             response = self.client.audio.speech.create(
                 model=self.model,
                 voice=self.voice,
                 input=text,
                 speed=self.rate
             )
+            self.logger.info("OpenAI TTS: API call successful, processing audio...")
             
             # Create temporary file for audio
             with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3') as temp_file:
                 temp_file.write(response.content)
                 temp_file_path = temp_file.name
             
+            self.logger.info(f"OpenAI TTS: Audio file created: {temp_file_path}")
+            
             try:
                 # Play the audio using pygame
+                self.logger.info("OpenAI TTS: Loading audio into pygame...")
                 pygame.mixer.music.load(temp_file_path)
                 pygame.mixer.music.set_volume(self.volume)
+                
+                self.logger.info("OpenAI TTS: Starting audio playback...")
                 pygame.mixer.music.play()
                 
-                # Wait for playback to complete
+                # Wait for playback to complete with timeout
+                timeout_counter = 0
+                max_timeout = 30  # 30 seconds max for any speech
+                
                 while pygame.mixer.music.get_busy():
                     pygame.time.wait(100)
+                    timeout_counter += 0.1
+                    if timeout_counter > max_timeout:
+                        self.logger.warning("OpenAI TTS: Playback timeout, stopping...")
+                        pygame.mixer.music.stop()
+                        break
+                
+                self.logger.info("OpenAI TTS: Playback completed successfully")
                     
             finally:
                 # Clean up temporary file
-                os.unlink(temp_file_path)
+                try:
+                    os.unlink(temp_file_path)
+                    self.logger.info("OpenAI TTS: Temporary file cleaned up")
+                except Exception as cleanup_error:
+                    self.logger.warning(f"OpenAI TTS: Could not clean up temp file: {cleanup_error}")
                 
         except Exception as e:
             self.logger.error(f"OpenAI TTS error: {e}")
+            self.logger.info("OpenAI TTS: Falling back to system TTS...")
             # Fallback to system TTS if OpenAI fails
             self._fallback_tts(text)
     
     def _fallback_tts(self, text: str):
         """Fallback to system TTS if OpenAI TTS fails."""
         try:
+            self.logger.info(f"Fallback TTS: Processing text: '{text[:50]}...'")
             engine = pyttsx3.init()
             engine.setProperty('rate', int(self.rate * 200))
             engine.setProperty('volume', self.volume)
             engine.say(text)
             engine.runAndWait()
             engine.stop()
+            self.logger.info("Fallback TTS: Completed successfully")
         except Exception as e:
             self.logger.error(f"Fallback TTS also failed: {e}")
+            # Last resort: print the text at least
+            print(f"TTS FAILED - MESSAGE: {text}")
     
     def runAndWait(self):
         """Compatibility method for pyttsx3 interface."""

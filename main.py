@@ -996,47 +996,66 @@ class AIAssistant:
     def speak(self, text: str, user: Optional[str] = None):
         """Speak text to user with interrupt capability and audio feedback prevention."""
         if self.quiet_mode:
+            logger.info("Speak request ignored - quiet mode active")
             return
+        
+        logger.info(f"🗣️ SPEAK: Starting speech process for text: '{text[:50]}...'")
         
         try:
             # CRITICAL: Set AI speaking flag to prevent voice detector from listening to AI
             self.voice_detector.set_ai_speaking(True)
+            logger.info("🗣️ SPEAK: AI speaking flag set to True")
             
             # Reset interrupt flag
             self.speech_interrupted = False
+            logger.info("🗣️ SPEAK: Interrupt flag reset")
             
             # Start interrupt listener
+            logger.info("🗣️ SPEAK: Starting interrupt listener...")
             self.start_interrupt_listener()
             
             # Use personalized TTS engine for each user
             if user and user in self.users:
                 tts_engine = self.users[user]['tts_engine']
+                logger.info(f"🗣️ SPEAK: Using personalized TTS for {user}")
                 logger.info(f"Speaking to {user}: {text}")
                 
                 # Use threaded TTS for smooth speech with interrupt capability
+                logger.info("🗣️ SPEAK: Starting threaded TTS...")
                 self._speak_with_interrupt_check(tts_engine, text)
+                logger.info("🗣️ SPEAK: Threaded TTS completed")
                     
             else:
                 # Default to Sophia's engine if no user specified
+                logger.info("🗣️ SPEAK: Using default Sophia TTS engine")
                 logger.info(f"Speaking (default): {text}")
                 self._speak_with_interrupt_check(self.sophia_tts, text)
+                logger.info("🗣️ SPEAK: Default TTS completed")
             
             # Stop interrupt listener
+            logger.info("🗣️ SPEAK: Stopping interrupt listener...")
             self.stop_interrupt_listener()
             
             # CRITICAL: Add delay after speaking to prevent audio feedback loop
             # This prevents the microphone from picking up the AI's own voice
             import time
+            logger.info("🗣️ SPEAK: Post-speech delay...")
             time.sleep(0.3)  # Reduced from 1.5 to 0.3 seconds for faster response
             
             # NEW: Play clear "you can speak now" cue instead of confusing completion sound
+            logger.info("🗣️ SPEAK: Playing ready-to-speak sound...")
             self.play_ready_to_speak_sound()
             
             # Brief pause to let the cue finish and be clearly understood
             time.sleep(0.2)  # Reduced from 0.5 to 0.2 seconds for faster response
+            logger.info("🗣️ SPEAK: Speech process completed successfully")
             
         except Exception as e:
-            logger.error(f"TTS Error: {e}")
+            logger.error(f"🗣️ SPEAK ERROR: TTS Error: {e}")
+            logger.error(f"🗣️ SPEAK ERROR: Exception type: {type(e)}")
+            import traceback
+            logger.error(f"🗣️ SPEAK ERROR: Traceback: {traceback.format_exc()}")
+            
             self.stop_interrupt_listener()
             # Still play ready cue even on error
             self.play_ready_to_speak_sound()
@@ -1046,6 +1065,7 @@ class AIAssistant:
             time.sleep(0.3)  # Reduced from 1.5 to 0.3 seconds
         finally:
             # CRITICAL: Always reset AI speaking flag when done
+            logger.info("🗣️ SPEAK: Resetting AI speaking flag to False")
             self.voice_detector.set_ai_speaking(False)
 
     def speak_no_interrupt(self, text: str, user: Optional[str] = None):
@@ -1093,37 +1113,74 @@ class AIAssistant:
 
     def _speak_with_interrupt_check(self, tts_engine, text: str):
         """Speak with smooth delivery but interrupt capability."""
+        logger.info("🎙️ TTS_THREAD: Starting speak with interrupt check")
+        
         # Create a flag to track if TTS is complete
         speech_complete = threading.Event()
+        tts_error = None
         
         def speak_thread():
             """Background thread for TTS."""
+            nonlocal tts_error
             try:
+                logger.info("🎙️ TTS_THREAD: Background thread started")
+                logger.info(f"🎙️ TTS_THREAD: Calling tts_engine.say() with text: '{text[:30]}...'")
                 tts_engine.say(text)
+                logger.info("🎙️ TTS_THREAD: tts_engine.say() completed")
+                
+                logger.info("🎙️ TTS_THREAD: Calling tts_engine.runAndWait()")
                 tts_engine.runAndWait()
+                logger.info("🎙️ TTS_THREAD: tts_engine.runAndWait() completed")
+                
                 speech_complete.set()
+                logger.info("🎙️ TTS_THREAD: Speech complete event set")
             except Exception as e:
-                logger.error(f"TTS thread error: {e}")
+                logger.error(f"🎙️ TTS_THREAD ERROR: TTS thread error: {e}")
+                logger.error(f"🎙️ TTS_THREAD ERROR: Exception type: {type(e)}")
+                import traceback
+                logger.error(f"🎙️ TTS_THREAD ERROR: Traceback: {traceback.format_exc()}")
+                tts_error = e
                 speech_complete.set()
         
         # Start TTS in background thread
+        logger.info("🎙️ TTS_THREAD: Creating and starting background thread")
         tts_thread = threading.Thread(target=speak_thread, daemon=True)
         tts_thread.start()
+        logger.info("🎙️ TTS_THREAD: Background thread started successfully")
         
         # Monitor for interrupts while speech is ongoing
+        logger.info("🎙️ TTS_THREAD: Starting interrupt monitoring loop")
+        interrupt_check_count = 0
         while not speech_complete.is_set() and not self.speech_interrupted:
             time.sleep(0.1)  # Check every 100ms for interrupts
+            interrupt_check_count += 1
+            if interrupt_check_count % 50 == 0:  # Log every 5 seconds
+                logger.info(f"🎙️ TTS_THREAD: Still monitoring... ({interrupt_check_count * 0.1:.1f}s)")
+        
+        logger.info("🎙️ TTS_THREAD: Interrupt monitoring loop ended")
         
         # If interrupted, stop the TTS engine
         if self.speech_interrupted:
+            logger.info("🎙️ TTS_THREAD: Speech was interrupted, stopping TTS engine")
             try:
                 tts_engine.stop()
-            except:
-                pass
+                logger.info("🎙️ TTS_THREAD: TTS engine stopped successfully")
+            except Exception as stop_error:
+                logger.error(f"🎙️ TTS_THREAD: Error stopping TTS engine: {stop_error}")
             logger.info("Speech interrupted and stopped")
         
         # Wait for thread to complete (with timeout)
-        tts_thread.join(timeout=1.0)
+        logger.info("🎙️ TTS_THREAD: Waiting for background thread to complete...")
+        tts_thread.join(timeout=5.0)  # Increased timeout from 1.0 to 5.0
+        
+        if tts_thread.is_alive():
+            logger.warning("🎙️ TTS_THREAD: Background thread did not complete within timeout!")
+        else:
+            logger.info("🎙️ TTS_THREAD: Background thread completed successfully")
+            
+        if tts_error:
+            logger.error(f"🎙️ TTS_THREAD: Propagating TTS error: {tts_error}")
+            raise tts_error
 
     def split_text_for_interruption(self, text: str) -> list:
         """Split text into manageable chunks for interrupt checking."""
@@ -1132,22 +1189,37 @@ class AIAssistant:
 
     def start_interrupt_listener(self):
         """Start background listener for interrupt commands."""
+        logger.info("🎧 INTERRUPT: Starting interrupt listener...")
         if not self.interrupt_listener_active:
             self.interrupt_listener_active = True
             self.interrupt_thread = threading.Thread(target=self.interrupt_listener, daemon=True)
             self.interrupt_thread.start()
+            logger.info("🎧 INTERRUPT: Interrupt listener thread started")
+        else:
+            logger.info("🎧 INTERRUPT: Interrupt listener already active")
 
     def stop_interrupt_listener(self):
         """Stop background interrupt listener."""
+        logger.info("🎧 INTERRUPT: Stopping interrupt listener...")
         self.interrupt_listener_active = False
         if self.interrupt_thread:
-            self.interrupt_thread.join(timeout=1)
+            self.interrupt_thread.join(timeout=2.0)  # 2 second timeout
+            if self.interrupt_thread.is_alive():
+                logger.warning("🎧 INTERRUPT: Interrupt thread did not stop within timeout")
+            else:
+                logger.info("🎧 INTERRUPT: Interrupt listener stopped successfully")
 
     def interrupt_listener(self):
         """Background thread that listens for interrupt commands during speech."""
+        logger.info("🎧 INTERRUPT_THREAD: Interrupt listener thread started")
         try:
+            loop_count = 0
             while self.interrupt_listener_active and not self.speech_interrupted:
                 try:
+                    loop_count += 1
+                    if loop_count % 20 == 0:  # Log every 2 seconds
+                        logger.info(f"🎧 INTERRUPT_THREAD: Loop {loop_count}, checking for interrupts...")
+                    
                     # CRITICAL: Don't listen if AI is currently speaking to prevent feedback
                     if self.voice_detector.ai_speaking:
                         time.sleep(0.1)  # Wait while AI is speaking
@@ -1162,11 +1234,11 @@ class AIAssistant:
                     )
                     
                     if text:
-                        logger.info(f"Interrupt check detected: {text}")
+                        logger.info(f"🎧 INTERRUPT_THREAD: Interrupt check detected: {text}")
                         
                         # Check for interrupt commands
                         if self.is_interrupt_command(text):
-                            logger.info(f"Interrupt command detected: {text}")
+                            logger.info(f"🎧 INTERRUPT_THREAD: Interrupt command detected: {text}")
                             self.speech_interrupted = True
                             
                             # Store the interrupt input for handling
@@ -1176,19 +1248,22 @@ class AIAssistant:
                             try:
                                 self.sophia_tts.stop()
                                 self.eladriel_tts.stop()
-                            except:
-                                pass
+                                logger.info("🎧 INTERRUPT_THREAD: TTS engines stopped")
+                            except Exception as stop_error:
+                                logger.error(f"🎧 INTERRUPT_THREAD: Error stopping TTS: {stop_error}")
                             
                             break
                             
                 except Exception as e:
-                    # Any error, log and continue
-                    logger.error(f"Interrupt listener error: {e}")
+                    # Any error, log and continue (but don't let errors kill the thread)
+                    logger.error(f"🎧 INTERRUPT_THREAD: Interrupt listener error: {e}")
                     time.sleep(0.1)
                     continue
                     
         except Exception as e:
-            logger.error(f"Interrupt listener thread error: {e}")
+            logger.error(f"🎧 INTERRUPT_THREAD: Fatal interrupt listener thread error: {e}")
+        finally:
+            logger.info("🎧 INTERRUPT_THREAD: Interrupt listener thread ended")
 
     def is_interrupt_command(self, user_input: str) -> bool:
         """Check if the user input is an interrupt command."""
