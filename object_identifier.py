@@ -11,16 +11,37 @@ import openai
 from camera_utils import CameraManager
 import os
 from pathlib import Path
+import cv2
+import time
+from .config import Config
+from .logger import Logger
 
 logger = logging.getLogger(__name__)
 
 class ObjectIdentifier:
     """Identifies any object from camera images and provides comprehensive educational content."""
     
-    def __init__(self):
-        """Initialize the Object Identifier with OpenAI API."""
-        self.client = openai.OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
-        self.camera_manager = CameraManager()
+    def __init__(self, shared_camera: Optional[Any] = None):
+        """Initialize the Object Identifier with optional shared camera."""
+        self.logger = Logger("ObjectIdentifier")
+        self.config = Config()
+        
+        # Camera configuration
+        self.shared_camera = shared_camera
+        self.using_shared_camera = shared_camera is not None
+        
+        if self.using_shared_camera:
+            self.logger.info("ObjectIdentifier initialized with shared camera")
+        else:
+            self.logger.info("ObjectIdentifier initialized with standalone camera")
+            self.camera_manager = CameraManager()
+        
+        # Initialize OpenAI client
+        try:
+            openai.api_key = self.config.openai_api_key
+            self.logger.info("OpenAI API initialized successfully")
+        except Exception as e:
+            self.logger.error(f"Failed to initialize OpenAI API: {e}")
         
         # Object categories for enhanced responses
         self.object_categories = {
@@ -217,41 +238,75 @@ Please be detailed and educational."""
                 "object_name": object_name
             }
     
-    def capture_and_identify(self, user: str = "sophia") -> Dict[str, Any]:
-        """Capture image and identify the object with educational information."""
+    def capture_and_identify(self) -> Dict[str, Any]:
+        """Capture an image and identify the object."""
         try:
-            # Capture image
-            logger.info("📸 Capturing object image...")
-            image_path = self.camera_manager.capture_image()
-            
-            if not image_path:
+            # Check camera availability
+            if self.using_shared_camera and not self.shared_camera:
                 return {
                     "success": False,
-                    "error": "Failed to capture image",
-                    "message": "Hmm, I couldn't take a picture. Is the camera working?"
+                    "error": "Shared camera not available",
+                    "message": "The camera is not available for object identification."
                 }
             
-            # Identify object using GPT-4 Vision
-            identification = self._identify_object_with_vision(image_path, user)
-            
-            if identification["success"]:
-                return identification
+            # Capture image
+            if self.using_shared_camera:
+                ret, frame = self.shared_camera.read()
+                if not ret:
+                    return {
+                        "success": False,
+                        "error": "Failed to capture image from shared camera",
+                        "message": "I couldn't take a picture. The camera might be busy."
+                    }
             else:
-                return identification
-                
+                frame = self.camera_manager.capture_frame()
+                if frame is None:
+                    return {
+                        "success": False,
+                        "error": "Failed to capture frame",
+                        "message": "I couldn't take a picture. Please check the camera connection."
+                    }
+            
+            # Create directory for captured images
+            capture_dir = "captured_images"
+            os.makedirs(capture_dir, exist_ok=True)
+            
+            # Save the captured image
+            timestamp = int(time.time())
+            image_path = os.path.join(capture_dir, f"object_{timestamp}.jpg")
+            
+            success = cv2.imwrite(image_path, frame)
+            if not success:
+                return {
+                    "success": False,
+                    "error": "Failed to save image",
+                    "message": "I took a picture but couldn't save it."
+                }
+            
+            self.logger.info(f"Image captured and saved: {image_path}")
+            
+            # Identify the object using GPT-4 Vision
+            return self._identify_object_with_vision(image_path)
+            
         except Exception as e:
-            logger.error(f"Error in capture_and_identify: {e}")
+            self.logger.error(f"Error in capture_and_identify: {e}")
             return {
                 "success": False,
                 "error": str(e),
-                "message": "Oops! Something went wrong while trying to identify your object."
+                "message": "An error occurred while trying to identify the object."
             }
     
-    def _identify_object_with_vision(self, image_path: str, user: str) -> Dict[str, Any]:
+    def _identify_object_with_vision(self, image_path: str) -> Dict[str, Any]:
         """Use OpenAI GPT-4 Vision to identify the object and provide educational information."""
         try:
             # Encode image to base64
-            base64_image = self.camera_manager.encode_image_to_base64(image_path)
+            if self.using_shared_camera:
+                # For shared camera, encode the image file directly
+                with open(image_path, "rb") as image_file:
+                    base64_image = base64.b64encode(image_file.read()).decode('utf-8')
+            else:
+                # For standalone camera manager, use its method
+                base64_image = self.camera_manager.encode_image_to_base64(image_path)
             
             if not base64_image:
                 return {
@@ -259,12 +314,12 @@ Please be detailed and educational."""
                     "error": "Failed to encode image",
                     "message": "I couldn't process the image properly."
                 }
-            
+
             # Create personalized vision prompt based on user
-            if user.lower() == "eladriel":
-                prompt = self._get_eladriel_prompt()
-            else:  # Default to Sophia
-                prompt = self._get_sophia_prompt()
+            if self.using_shared_camera:
+                prompt = self._get_shared_camera_prompt()
+            else:
+                prompt = self._get_standalone_camera_prompt()
             
             messages = [
                 {
@@ -300,7 +355,7 @@ Please be detailed and educational."""
                 "ai_response": ai_response,
                 "image_path": image_path,
                 "message": ai_response,
-                "user": user
+                "model_used": "gpt-4o"
             }
             
         except Exception as e:
@@ -311,8 +366,8 @@ Please be detailed and educational."""
                 "message": "I had trouble looking at the picture. Maybe try again?"
             }
     
-    def _get_sophia_prompt(self) -> str:
-        """Get identification prompt tailored for Sophia."""
+    def _get_shared_camera_prompt(self) -> str:
+        """Get identification prompt tailored for shared camera."""
         return """You are helping a curious child named Sophia who loves to learn! 
 
 Look at this image and give a SHORT, fun response about the object:
@@ -324,8 +379,8 @@ Look at this image and give a SHORT, fun response about the object:
 
 Keep it SHORT and exciting - like telling a friend something super cool you just learned! Use emojis and make it fun!"""
     
-    def _get_eladriel_prompt(self) -> str:
-        """Get identification prompt tailored for Eladriel (with dinosaur connections when possible)."""
+    def _get_standalone_camera_prompt(self) -> str:
+        """Get identification prompt tailored for standalone camera."""
         return """You are helping an adventurous child named Eladriel who LOVES dinosaurs and exploring! 
 
 Look at this image and give a SHORT, exciting response:
@@ -414,7 +469,12 @@ I love helping you learn about the world around you! Show me anything you're cur
         """Show camera preview to help users position objects."""
         try:
             logger.info(f"Showing camera preview for {duration} seconds...")
-            return self.camera_manager.show_preview(duration)
+            if self.using_shared_camera:
+                # For shared camera, we can't show preview as it would conflict
+                logger.info("Using shared camera - preview not available in shared mode")
+                return True  # Return success but don't actually show preview
+            else:
+                return self.camera_manager.show_preview(duration)
         except Exception as e:
             logger.error(f"Error showing camera preview: {e}")
             return False
@@ -422,7 +482,10 @@ I love helping you learn about the world around you! Show me anything you're cur
     def test_camera(self) -> bool:
         """Test if camera is working properly."""
         try:
-            return self.camera_manager.test_camera()
+            if self.using_shared_camera:
+                return self.shared_camera.is_camera_available()
+            else:
+                return self.camera_manager.test_camera()
         except Exception as e:
             logger.error(f"Camera test failed: {e}")
             return False
@@ -430,8 +493,11 @@ I love helping you learn about the world around you! Show me anything you're cur
     def cleanup(self):
         """Clean up camera resources."""
         try:
-            self.camera_manager.cleanup()
-            logger.info("ObjectIdentifier cleaned up successfully")
+            if self.using_shared_camera:
+                logger.info("ObjectIdentifier cleanup - shared camera remains active")
+            else:
+                self.camera_manager.cleanup()
+                logger.info("ObjectIdentifier cleaned up successfully")
         except Exception as e:
             logger.error(f"Error during cleanup: {e}")
     
@@ -463,20 +529,58 @@ I love helping you learn about the world around you! Show me anything you're cur
         try:
             logger.info(f"Capturing image for text identification - Expected: '{expected_word}'")
             
-            # Capture image
-            image_path = self.camera_manager.capture_image()
-            if not image_path:
-                return {
-                    "success": False,
-                    "message": "Failed to capture image. Please check the camera.",
-                    "detected_text": "",
-                    "image_path": None
-                }
+            # Capture image using appropriate camera handler
+            if self.using_shared_camera:
+                # Use shared camera handler
+                if not self.shared_camera:
+                    return {
+                        "success": False,
+                        "message": "Shared camera not available for text capture.",
+                        "detected_text": "",
+                        "image_path": None
+                    }
+                
+                # Capture frame and save as image
+                ret, frame = self.shared_camera.read()
+                if not ret:
+                    return {
+                        "success": False,
+                        "message": "Failed to capture image for text reading.",
+                        "detected_text": "",
+                        "image_path": None
+                    }
+                
+                # Save frame as image file
+                timestamp = int(time.time())
+                image_path = f"captured_images/text_capture_{timestamp}.jpg"
+                
+                # Create directory if it doesn't exist
+                os.makedirs("captured_images", exist_ok=True)
+                
+                # Save the captured frame
+                success = cv2.imwrite(image_path, frame)
+                if not success:
+                    return {
+                        "success": False,
+                        "message": "Failed to save captured image for text reading.",
+                        "detected_text": "",
+                        "image_path": None
+                    }
+            else:
+                # Use standalone camera manager
+                image_path = self.camera_manager.capture_image()
+                if not image_path:
+                    return {
+                        "success": False,
+                        "message": "Failed to capture image. Please check the camera.",
+                        "detected_text": "",
+                        "image_path": None
+                    }
             
             # Identify text with enhanced prompts for handwriting
             result = self._identify_text_with_vision(image_path, user, expected_word)
             
-            # Cleanup
+            # Cleanup - remove temporary image file
             try:
                 os.remove(image_path)
             except:

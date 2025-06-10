@@ -86,15 +86,15 @@ class AIAssistant:
         
         # Initialize Animal Guessing Game (after camera setup)
         logger.info("🦕 Setting up Animal Guessing Game...")
-        self.animal_game = AnimalGuessGame(self)
+        self.animal_game = AnimalGuessGame(self, shared_camera=self.camera_handler)
         
         # Setup dinosaur identifier for Eladriel (specialized for dinosaurs)
         logger.info("Setting up dinosaur identification for Eladriel...")
-        self.dinosaur_identifier = DinosaurIdentifier(self.client, self.config)
+        self.dinosaur_identifier = DinosaurIdentifier(self.client, self.config, shared_camera=self.camera_handler)
         
-        # Setup universal object identifier for both users
+        # Setup universal object identifier for both users - SHARE camera instead of creating new one
         logger.info("🔍 Setting up universal object identification system...")
-        self.object_identifier = ObjectIdentifier()
+        self.object_identifier = ObjectIdentifier(shared_camera=self.camera_handler)
         
         # Setup face recognition system - SHARE camera instead of creating new one
         logger.info("🎭 Setting up face recognition system...")

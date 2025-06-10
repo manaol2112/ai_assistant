@@ -16,10 +16,10 @@ logger = logging.getLogger(__name__)
 class AnimalGuessGame:
     """Interactive animal and dinosaur identification game for kids."""
     
-    def __init__(self, ai_assistant=None):
+    def __init__(self, ai_assistant=None, shared_camera=None):
         """Initialize the Animal Guess Game."""
         self.ai_assistant = ai_assistant
-        self.object_identifier = ObjectIdentifier()
+        self.object_identifier = ObjectIdentifier(shared_camera=shared_camera)
         self.game_active = False
         self.score = 0
         self.animals_identified = []
@@ -164,17 +164,34 @@ Show me your first animal! 🎉"""
     def _identify_animal_with_vision(self, user: str) -> Dict[str, Any]:
         """Use the existing ObjectIdentifier with specialized animal prompts."""
         try:
-            # Capture image using existing camera functionality
-            image_path = self.object_identifier.camera_manager.capture_image()
+            # Use the object identifier's capture_and_identify method
+            # but we'll need to customize the prompt for animals
             
+            # First, let's capture using the object identifier
+            result = self.object_identifier.capture_and_identify()
+            
+            if not result["success"]:
+                return result
+            
+            # Get the image path from the result
+            image_path = result.get("image_path")
             if not image_path:
                 return {
                     "success": False,
-                    "message": "Failed to capture image. Please check the camera."
+                    "message": "Failed to get captured image path."
                 }
             
-            # Encode image to base64
-            base64_image = self.object_identifier.camera_manager.encode_image_to_base64(image_path)
+            # Now use custom animal identification logic
+            import base64
+            
+            # Handle image encoding based on camera type
+            if hasattr(self.object_identifier, 'using_shared_camera') and self.object_identifier.using_shared_camera:
+                # For shared camera, encode the image file directly
+                with open(image_path, "rb") as image_file:
+                    base64_image = base64.b64encode(image_file.read()).decode('utf-8')
+            else:
+                # For standalone camera manager, use its method
+                base64_image = self.object_identifier.camera_manager.encode_image_to_base64(image_path)
             
             if not base64_image:
                 return {

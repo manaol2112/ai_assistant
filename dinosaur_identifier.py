@@ -9,17 +9,29 @@ import logging
 from typing import Optional, Dict, Any
 import openai
 from camera_utils import CameraManager
+import cv2
+import time
+import os
 
 logger = logging.getLogger(__name__)
 
 class DinosaurIdentifier:
     """Identifies dinosaurs from camera images and provides educational content."""
     
-    def __init__(self, openai_client, config):
-        """Initialize dinosaur identifier."""
+    def __init__(self, openai_client, config, shared_camera=None):
+        """Initialize dinosaur identifier with optional shared camera."""
         self.client = openai_client
         self.config = config
-        self.camera_manager = CameraManager()
+        
+        # Use shared camera if provided, otherwise create own CameraManager
+        if shared_camera:
+            self.camera_handler = shared_camera
+            self.using_shared_camera = True
+            logger.info("🦕 DinosaurIdentifier using shared camera")
+        else:
+            self.camera_manager = CameraManager()
+            self.using_shared_camera = False
+            logger.info("🦕 DinosaurIdentifier using standalone camera")
         
         # Dinosaur knowledge base for enhanced responses
         self.dinosaur_facts = {
@@ -58,16 +70,52 @@ class DinosaurIdentifier:
     def capture_and_identify(self) -> Dict[str, Any]:
         """Capture image and identify the dinosaur."""
         try:
-            # Capture image
+            # Capture image using appropriate camera handler
             logger.info("📸 Capturing dinosaur image...")
-            image_path = self.camera_manager.capture_image()
             
-            if not image_path:
-                return {
-                    "success": False,
-                    "error": "Failed to capture image",
-                    "message": "Hmm, I couldn't take a picture. Is your camera working?"
-                }
+            if self.using_shared_camera:
+                # Use shared camera handler
+                if not self.camera_handler.is_camera_available():
+                    return {
+                        "success": False,
+                        "error": "Shared camera not available",
+                        "message": "Hmm, I couldn't take a picture. Is your camera working?"
+                    }
+                
+                # Capture frame and save as image
+                ret, frame = self.camera_handler.read()
+                if not ret:
+                    return {
+                        "success": False,
+                        "error": "Failed to read from shared camera",
+                        "message": "I had trouble capturing the dinosaur picture. Try again!"
+                    }
+                
+                # Save frame as image file
+                timestamp = int(time.time())
+                image_path = f"captured_images/dinosaur_capture_{timestamp}.jpg"
+                
+                # Create directory if it doesn't exist
+                os.makedirs("captured_images", exist_ok=True)
+                
+                # Save the captured frame
+                success = cv2.imwrite(image_path, frame)
+                if not success:
+                    return {
+                        "success": False,
+                        "error": "Failed to save captured image",
+                        "message": "I had trouble saving the dinosaur picture. Try again!"
+                    }
+            else:
+                # Use standalone camera manager
+                image_path = self.camera_manager.capture_image()
+                
+                if not image_path:
+                    return {
+                        "success": False,
+                        "error": "Failed to capture image",
+                        "message": "Hmm, I couldn't take a picture. Is your camera working?"
+                    }
             
             # Identify dinosaur using GPT-4 Vision
             identification = self._identify_dinosaur_with_vision(image_path)
@@ -91,7 +139,13 @@ class DinosaurIdentifier:
         """Use OpenAI GPT-4 Vision to identify the dinosaur."""
         try:
             # Encode image to base64
-            base64_image = self.camera_manager.encode_image_to_base64(image_path)
+            if self.using_shared_camera:
+                # For shared camera, encode the image file directly
+                with open(image_path, "rb") as image_file:
+                    base64_image = base64.b64encode(image_file.read()).decode('utf-8')
+            else:
+                # For standalone camera manager, use its method
+                base64_image = self.camera_manager.encode_image_to_base64(image_path)
             
             if not base64_image:
                 return {

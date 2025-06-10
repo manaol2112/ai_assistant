@@ -55,8 +55,8 @@ print_progress() {
 # System information and validation
 check_system() {
     print_header "🔍 SYSTEM VALIDATION"
-    
-    # Check if running on Raspberry Pi
+
+# Check if running on Raspberry Pi
     print_status "Detecting Raspberry Pi model..."
     if [[ -f /proc/device-tree/model ]] && grep -q "Raspberry Pi" /proc/device-tree/model; then
         PI_MODEL=$(cat /proc/device-tree/model)
@@ -570,7 +570,7 @@ for module, name in modules_to_test:
         __import__(module)
         print(f"✅ {name}")
         passed += 1
-    except ImportError as e:
+except ImportError as e:
         print(f"❌ {name}: {e}")
 
 print(f"\n📊 Test Results: {passed}/{total} modules imported successfully")
