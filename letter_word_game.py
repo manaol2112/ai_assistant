@@ -252,11 +252,11 @@ What word starts with '{self.current_letter}' and matches this hint?"""
         if not self.game_active:
             return "The game isn't active. Say 'Letter Game' to start playing!"
         
-        # Clean up the answer
-        clean_answer = user_answer.strip().upper()
+        # Extract the actual word from common phrases
+        extracted_word = self._extract_word_from_answer(user_answer)
         
         # Check if the answer is correct
-        if clean_answer == self.current_word:
+        if extracted_word == self.current_word:
             self.score += 1
             self.words_completed.append(self.current_word)
             
@@ -283,31 +283,71 @@ Yes! You got it right!
             self.attempts += 1
             
             if self.attempts >= self.max_attempts:
+                # Store the correct answer before preparing next word
+                correct_answer = self.current_word
+                
                 # Reveal the answer and move to next word
                 encouragement = random.choice(self.encouragement_messages)
                 next_word_message = self._prepare_next_word()
                 
-                response = f"""{encouragement} '{self.current_word}'
+                response = f"""{encouragement} '{correct_answer}'
 
 {next_word_message}"""
 
                 if self.ai_assistant:
-                    self.ai_assistant.speak(f"{encouragement} {self.current_word}. {self._get_next_word_speech()}", user)
+                    self.ai_assistant.speak(f"{encouragement} {correct_answer}. {self._get_next_word_speech()}", user)
                 
                 return response
             
             else:
                 remaining_attempts = self.max_attempts - self.attempts
-                hint_response = f"""🤔 That's not quite right! You guessed '{clean_answer}'
+                hint_response = f"""🤔 That's not quite right! You guessed '{extracted_word}'
 
 The word I'm thinking of starts with '{self.current_letter}' and: {self.current_hint}
 
 You have {remaining_attempts} more attempt{'s' if remaining_attempts > 1 else ''}. Try again!"""
 
                 if self.ai_assistant:
-                    self.ai_assistant.speak(f"Not quite right! Try again. {self.current_hint}. You have {remaining_attempts} more tries.", user)
+                    self.ai_assistant.speak(f"Not quite right! Try again. You have {remaining_attempts} more tries.", user)
                 
                 return hint_response
+    
+    def _extract_word_from_answer(self, user_answer: str) -> str:
+        """Extract the actual word from phrases like 'the answer is fan' or 'it's a fan'."""
+        clean_answer = user_answer.strip().upper()
+        
+        # Common phrases that indicate an answer
+        answer_phrases = [
+            "THE ANSWER IS ",
+            "ANSWER IS ",
+            "I THINK IT'S ",
+            "I THINK IT IS ",
+            "MY GUESS IS ",
+            "GUESS IS ",
+            "I SAY ",
+            "IT'S A ",
+            "IT IS A ",
+            "IT'S AN ",
+            "IT IS AN ",
+            "IT'S ",
+            "IT IS "
+        ]
+        
+        # Check if the answer contains any of these phrases
+        for phrase in answer_phrases:
+            if phrase in clean_answer:
+                # Extract the word after the phrase
+                word_part = clean_answer.split(phrase, 1)[1].strip()
+                # Take only the first word (in case there are multiple words)
+                if word_part:
+                    first_word = word_part.split()[0]
+                    # Skip common articles and take the next word if needed
+                    if first_word in ['A', 'AN', 'THE'] and len(word_part.split()) > 1:
+                        return word_part.split()[1]
+                    return first_word
+        
+        # If no phrase found, return the cleaned answer as is
+        return clean_answer
     
     def _get_next_word_speech(self) -> str:
         """Get speech-friendly version of next word challenge without revealing previous answer."""
