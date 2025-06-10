@@ -761,7 +761,7 @@ class PremiumRobotFace:
         self.stop_speaking()
 
     def _create_modern_robot(self):
-        """Create sleek modern robot matching the reference design - white with blue glowing eyes."""
+        """Create sleek modern robot matching the reference design - wider proportions, not egg-like."""
         colors = self.color_schemes.get('standby', {
             'body_primary': '#f5f5f5',
             'body_secondary': '#ffffff', 
@@ -771,23 +771,23 @@ class PremiumRobotFace:
             'shadow': '#c0c0c0'
         })
         
-        # Premium glow effect background
+        # Premium glow effect background - wider proportions
         self.elements['outer_glow'] = self.canvas.create_oval(
-            self.center_x - self.size//2 - 30, self.center_y - int(self.size * 0.7) - 30,
-            self.center_x + self.size//2 + 30, self.center_y + int(self.size * 0.7) + 30,
+            self.center_x - int(self.size * 0.8) - 30, self.center_y - int(self.size * 0.6) - 30,
+            self.center_x + int(self.size * 0.8) + 30, self.center_y + int(self.size * 0.6) + 30,
             fill='#e6f7ff', outline='', stipple='gray12'
         )
         
-        # Robot body shadow
-        body_width = int(self.size * 1.1)
-        body_height = int(self.size * 1.3)
+        # Robot body shadow - WIDER and less tall (fixed proportions)
+        body_width = int(self.size * 1.5)   # Much wider: 150% of size
+        body_height = int(self.size * 1.0)  # Normal height: 100% of size
         self.elements['body_shadow'] = self.canvas.create_oval(
             self.center_x - body_width//2 + 4, self.center_y - body_height//2 + 4,
             self.center_x + body_width//2 + 4, self.center_y + body_height//2 + 4,
             fill='#d0d0d0', outline='', stipple='gray25'
         )
         
-        # Main robot body - sleek oval shape
+        # Main robot body - sleek WIDE oval shape (not egg!)
         self.elements['body'] = self.canvas.create_oval(
             self.center_x - body_width//2, self.center_y - body_height//2,
             self.center_x + body_width//2, self.center_y + body_height//2,
@@ -801,10 +801,10 @@ class PremiumRobotFace:
             fill=colors['body_secondary'], outline='', stipple='gray12'
         )
         
-        # Large prominent blue glowing eyes
+        # Large prominent blue glowing eyes - positioned better for wider body
         eye_size = self.size // 3  # Much larger eyes
-        eye_offset_x = self.size // 4
-        eye_offset_y = self.size // 6
+        eye_offset_x = self.size // 2.5  # Spread eyes wider for the wider body
+        eye_offset_y = self.size // 8
         
         # Eye outer glow rings
         glow_size = eye_size + 12
@@ -889,26 +889,26 @@ class PremiumRobotFace:
             fill='#ffffff', outline=''
         )
         
-        # Body panel lines for modern tech look
-        panel_y1 = self.center_y + self.size // 3
-        panel_y2 = self.center_y + self.size // 2
+        # Body panel lines for modern tech look - adjusted for wider body
+        panel_y1 = self.center_y + self.size // 4
+        panel_y2 = self.center_y + self.size // 2.5
         
         self.elements['panel_line_1'] = self.canvas.create_line(
-            self.center_x - 25, panel_y1,
-            self.center_x + 25, panel_y1,
+            self.center_x - 35, panel_y1,  # Wider panel lines
+            self.center_x + 35, panel_y1,
             fill=colors['accent'], width=2
         )
         
         self.elements['panel_line_2'] = self.canvas.create_line(
-            self.center_x - 20, panel_y2,
-            self.center_x + 20, panel_y2,
+            self.center_x - 30, panel_y2,  # Wider panel lines
+            self.center_x + 30, panel_y2,
             fill=colors['accent'], width=2
         )
         
-        # Small status LED
+        # Small status LED - positioned for wider body
         self.elements['status_led'] = self.canvas.create_oval(
-            self.center_x - 3, self.center_y - self.size // 2 + 15,
-            self.center_x + 3, self.center_y - self.size // 2 + 21,
+            self.center_x - 3, self.center_y - body_height // 2 + 12,
+            self.center_x + 3, self.center_y - body_height // 2 + 18,
             fill='#00ff00', outline='#00cc00', width=1
         )
         
