@@ -10,6 +10,8 @@ import threading
 import time
 import math
 import logging
+import platform
+import os
 from typing import Optional, Tuple, Dict, Any
 from enum import Enum
 import queue
@@ -42,6 +44,11 @@ class DisplayManager:
         self.running = False
         self.display_thread = None
         self.state_queue = queue.Queue()
+        
+        # Platform detection
+        self.is_macos = platform.system() == "Darwin"
+        self.is_raspberry_pi = self._detect_raspberry_pi()
+        self.headless_mode = self._detect_headless_mode()
         
         # Colors (RGB)
         self.colors = {
@@ -117,7 +124,31 @@ class DisplayManager:
         self.font_medium = None
         self.font_small = None
         
-        logger.info("DisplayManager initialized")
+        # Log platform info
+        logger.info(f"DisplayManager initialized - Platform: {platform.system()}, "
+                   f"RPi: {self.is_raspberry_pi}, Headless: {self.headless_mode}")
+    
+    def _detect_raspberry_pi(self) -> bool:
+        """Detect if running on Raspberry Pi."""
+        try:
+            with open('/proc/device-tree/model', 'r') as f:
+                return 'raspberry pi' in f.read().lower()
+        except:
+            return False
+    
+    def _detect_headless_mode(self) -> bool:
+        """Detect if running in headless mode."""
+        # Check for SSH connection or no display
+        # On macOS, DISPLAY might not be set even in GUI mode
+        if self.is_macos:
+            # On macOS, if we're not in SSH, we're likely in GUI mode
+            return (os.environ.get('SSH_CLIENT') is not None or 
+                    os.environ.get('SSH_TTY') is not None)
+        else:
+            # On Linux/Pi, check for DISPLAY environment variable
+            return (os.environ.get('SSH_CLIENT') is not None or 
+                    os.environ.get('SSH_TTY') is not None or
+                    os.environ.get('DISPLAY') is None)
     
     def start_display(self):
         """Start the display in a separate thread."""
@@ -125,10 +156,58 @@ class DisplayManager:
             logger.warning("Display is already running")
             return
         
-        self.running = True
-        self.display_thread = threading.Thread(target=self._display_loop, daemon=True)
-        self.display_thread.start()
-        logger.info("Display thread started")
+        # Handle different platforms
+        if self.headless_mode:
+            logger.info("Headless mode detected - Display manager running in simulation mode")
+            self.running = True
+            return
+        
+        if self.is_macos:
+            logger.info("macOS detected - Display will run in compatibility mode")
+            # On macOS, we'll use a simpler approach to avoid threading issues
+            self._setup_macos_display()
+        else:
+            logger.info("Linux/Pi detected - Starting threaded display")
+            self.running = True
+            self.display_thread = threading.Thread(target=self._display_loop, daemon=True)
+            self.display_thread.start()
+        
+        logger.info("Display system started")
+    
+    def _setup_macos_display(self):
+        """Setup display for macOS with main thread compatibility."""
+        try:
+            # Set SDL to use a compatible video driver on macOS
+            if 'SDL_VIDEODRIVER' not in os.environ:
+                os.environ['SDL_VIDEODRIVER'] = 'cocoa'
+            
+            # Initialize pygame on main thread
+            pygame.init()
+            
+            # Create a smaller window for testing on macOS
+            test_width = min(self.screen_width, 800)
+            test_height = min(self.screen_height, 600)
+            
+            self.screen = pygame.display.set_mode((test_width, test_height))
+            pygame.display.set_caption("AI Assistant Display (macOS Test Mode)")
+            
+            # Initialize fonts
+            try:
+                self.font_large = pygame.font.Font(None, 36)
+                self.font_medium = pygame.font.Font(None, 24)
+                self.font_small = pygame.font.Font(None, 18)
+            except:
+                self.font_large = pygame.font.Font(None, 36)
+                self.font_medium = pygame.font.Font(None, 24)
+                self.font_small = pygame.font.Font(None, 18)
+            
+            self.running = True
+            logger.info(f"macOS display initialized: {test_width}x{test_height}")
+            
+        except Exception as e:
+            logger.warning(f"Could not initialize display on macOS: {e}")
+            logger.info("Running in headless simulation mode")
+            self.running = True
     
     def stop_display(self):
         """Stop the display."""
@@ -136,25 +215,50 @@ class DisplayManager:
         if self.display_thread:
             self.display_thread.join(timeout=2)
         
-        if self.screen:
-            pygame.quit()
+        try:
+            if self.screen:
+                pygame.quit()
+        except:
+            pass  # Ignore cleanup errors
         
         logger.info("Display stopped")
     
     def set_state(self, state: AIState, user: Optional[str] = None, message: str = ""):
         """Set the current AI state for display."""
         try:
-            self.state_queue.put({
-                'state': state,
-                'user': user,
-                'message': message,
-                'timestamp': time.time()
-            }, block=False)
-        except queue.Full:
-            logger.warning("State queue is full, dropping state update")
+            # Always update internal state
+            self.current_state = state
+            self.current_user = user
+            self.current_message = message
+            
+            # Queue state for display thread if running
+            if self.running and not self.headless_mode:
+                try:
+                    self.state_queue.put({
+                        'state': state,
+                        'user': user,
+                        'message': message,
+                        'timestamp': time.time()
+                    }, block=False)
+                except queue.Full:
+                    logger.warning("State queue is full, dropping state update")
+            
+            # Log state changes for debugging
+            logger.debug(f"Display state: {state.value} | User: {user} | Message: {message}")
+            
+            # On macOS, try to update display if screen exists
+            if self.is_macos and self.screen and not self.headless_mode:
+                try:
+                    self._render_state()
+                    pygame.display.flip()
+                except Exception as e:
+                    logger.debug(f"macOS display update failed: {e}")
+        
+        except Exception as e:
+            logger.warning(f"Error setting display state: {e}")
     
     def _display_loop(self):
-        """Main display loop running in separate thread."""
+        """Main display loop running in separate thread (Linux/Pi only)."""
         try:
             # Initialize pygame
             pygame.init()
@@ -215,8 +319,11 @@ class DisplayManager:
         except Exception as e:
             logger.error(f"Error in display loop: {e}")
         finally:
-            if self.screen:
-                pygame.quit()
+            try:
+                if self.screen:
+                    pygame.quit()
+            except:
+                pass  # Ignore cleanup errors
     
     def _render_state(self):
         """Render the current AI state on screen."""
