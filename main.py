@@ -74,6 +74,7 @@ class AIAssistant:
         
         # Setup camera and microphone
         logger.info("Setting up camera for visual identification...")
+        # Initialize shared camera handler - this will be the ONLY camera instance
         self.camera_handler = CameraHandler()
         
         # Initialize Math Quiz Game (after camera setup)
@@ -95,9 +96,11 @@ class AIAssistant:
         logger.info("🔍 Setting up universal object identification system...")
         self.object_identifier = ObjectIdentifier()
         
-        # Setup face recognition system
+        # Setup face recognition system - SHARE camera instead of creating new one
         logger.info("🎭 Setting up face recognition system...")
         self.face_detector = SmartCameraDetector(model_size='n', confidence_threshold=0.4)
+        # IMPORTANT: Pass the shared camera handler to prevent conflicts
+        self.face_detector.shared_camera = self.camera_handler
         self.face_recognition_thread = None
         self.face_recognition_active = False
         self.last_face_greeting = {}  # Track when we last greeted each person
@@ -746,19 +749,21 @@ class AIAssistant:
         logger.info("👁️ Face recognition thread started")
         
         try:
-            # Start camera
-            if not self.face_detector.start_camera():
-                logger.error("Failed to start camera for face recognition")
+            # Use shared camera instead of starting a new one
+            if not self.camera_handler.is_camera_available():
+                logger.error("Shared camera is not available for face recognition")
                 return
+            
+            logger.info("✅ Using shared camera for face recognition")
             
             while self.face_recognition_active and self.running:
                 try:
-                    # Capture frame
-                    ret, frame = self.face_detector.cap.read()
+                    # Use shared camera handler instead of face_detector.cap
+                    ret, frame = self.camera_handler.read()
                     if not ret:
                         continue
                     
-                    # Detect faces
+                    # Detect faces using the shared frame
                     face_detections = self.face_detector.detect_faces(frame)
                     
                     # Process detected faces
@@ -799,8 +804,7 @@ class AIAssistant:
         except Exception as e:
             logger.error(f"Face recognition thread error: {e}")
         finally:
-            if self.face_detector.cap:
-                self.face_detector.cap.release()
+            # Don't release shared camera - it's managed by camera_handler
             logger.info("👁️ Face recognition thread stopped")
 
     def handle_automatic_conversation(self, user: str):

@@ -50,7 +50,7 @@ class SmartCameraDetector:
         # Greeting system
         self.last_greeting_time = {}
         self.greeting_cooldown = 10  # seconds between greetings for same person
-        self.face_detection_threshold = 0.6  # Face recognition confidence threshold
+        self.face_detection_threshold = 0.6
         
         # Enhanced target classes for better detection
         self.target_classes = {
@@ -63,8 +63,9 @@ class SmartCameraDetector:
             'person': 0
         }
         
-        # Initialize camera
+        # Camera management - support both standalone and shared modes
         self.cap = None
+        self.shared_camera = None  # NEW: for shared camera mode
         self.is_running = False
         
     def load_known_faces(self):
@@ -194,7 +195,13 @@ class SmartCameraDetector:
         return np.random.choice(person_greetings)
 
     def start_camera(self, camera_index=0):
-        """Start camera capture"""
+        """Start camera capture - use shared camera if available"""
+        # Check if we have a shared camera first
+        if self.shared_camera and self.shared_camera.is_camera_available():
+            print("✅ Using shared camera for SmartCameraDetector")
+            return True
+        
+        # Fallback to standalone camera mode
         self.cap = cv2.VideoCapture(camera_index)
         
         if not self.cap.isOpened():
@@ -205,7 +212,7 @@ class SmartCameraDetector:
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
         self.cap.set(cv2.CAP_PROP_FPS, 30)
         
-        print("✅ Camera started successfully")
+        print("✅ Camera started successfully in standalone mode")
         return True
 
     def detect_objects(self, frame):
@@ -297,7 +304,17 @@ class SmartCameraDetector:
 
     def run_detection(self, show_fps=True, save_video=False, output_path='smart_detection_output.mp4'):
         """Run real-time detection with face recognition"""
-        if not self.start_camera():
+        # Check camera availability - prefer shared camera
+        camera_available = False
+        if self.shared_camera and self.shared_camera.is_camera_available():
+            print("🎥 Using shared camera for detection")
+            camera_available = True
+        elif self.start_camera():
+            print("🎥 Using standalone camera for detection")
+            camera_available = True
+        
+        if not camera_available:
+            print("❌ No camera available for detection")
             return False
         
         self.is_running = True
@@ -323,7 +340,12 @@ class SmartCameraDetector:
         
         try:
             while self.is_running:
-                ret, frame = self.cap.read()
+                # Read from shared camera or standalone camera
+                if self.shared_camera and self.shared_camera.is_camera_available():
+                    ret, frame = self.shared_camera.read()
+                else:
+                    ret, frame = self.cap.read()
+                
                 if not ret:
                     print("Failed to grab frame")
                     break
@@ -404,8 +426,12 @@ class SmartCameraDetector:
     def cleanup(self):
         """Clean up resources"""
         self.is_running = False
-        if self.cap:
+        # Only release camera if we're using standalone mode
+        if self.cap and not self.shared_camera:
             self.cap.release()
+            print("📷 Standalone camera released")
+        elif self.shared_camera:
+            print("📷 Shared camera remains active")
         cv2.destroyAllWindows()
 
 def main():
