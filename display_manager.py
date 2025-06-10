@@ -170,8 +170,8 @@ class DisplayManager:
         
         if self.is_macos:
             logger.info("macOS detected - Attempting display initialization...")
-            # Try to setup macOS display, but don't fail if it doesn't work
-            success = self._setup_macos_display()
+            # Use the proven approach that works on macOS
+            success = self._setup_macos_display_simple()
             if not success:
                 logger.info("macOS display failed - Running in console simulation mode")
                 self._setup_console_simulation()
@@ -183,79 +183,64 @@ class DisplayManager:
         
         logger.info("Display system started")
     
-    def _setup_macos_display(self) -> bool:
-        """Setup display for macOS with main thread compatibility. Returns True if successful."""
+    def _setup_macos_display_simple(self) -> bool:
+        """Simple macOS display setup using the proven working approach."""
         try:
-            # Test if pygame display is available
+            # Clean start
+            try:
+                pygame.quit()
+            except:
+                pass
+            
+            # Set environment exactly like the working test
+            os.environ['SDL_VIDEODRIVER'] = 'cocoa'
+            os.environ['SDL_VIDEO_WINDOW_POS'] = '100,100'
+            
+            logger.info("Initializing pygame...")
             pygame.init()
             
-            # Try to get display info first
-            try:
-                info = pygame.display.Info()
-                if info.w == 0 or info.h == 0:
-                    logger.warning("Display info shows 0x0 dimensions - display not available")
-                    return False
-            except Exception as display_info_error:
-                logger.warning(f"Cannot get display info: {display_info_error}")
-                return False
+            # Use fixed, proven dimensions
+            width, height = max(self.screen_width, 600), max(self.screen_height, 400)
+            logger.info(f"Creating macOS window: {width}x{height}")
             
-            # Set SDL to use a compatible video driver on macOS
-            os.environ['SDL_VIDEODRIVER'] = 'cocoa'
+            # Use the exact same approach as the working test
+            self.screen = pygame.display.set_mode((width, height), pygame.SHOWN)
+            pygame.display.set_caption("🤖 AI Assistant Display")
             
-            # Set window position to center
-            os.environ['SDL_WINDOWID'] = ''
-            os.environ['SDL_VIDEO_WINDOW_POS'] = 'centered'
-            
-            # Ensure minimum dimensions for macOS
-            test_width = max(min(self.screen_width, 800), 320)  # Minimum 320px
-            test_height = max(min(self.screen_height, 600), 240)  # Minimum 240px
-            
-            logger.info(f"Creating macOS display with dimensions: {test_width}x{test_height}")
-            
-            # Create window with proper flags for visibility
-            self.screen = pygame.display.set_mode((test_width, test_height), pygame.SHOWN | pygame.RESIZABLE)
-            pygame.display.set_caption("AI Assistant Display (macOS Test Mode)")
-            
-            # Initialize fonts with error checking
-            try:
-                self.font_large = pygame.font.Font(None, max(36, test_height // 15))
-                self.font_medium = pygame.font.Font(None, max(24, test_height // 20))
-                self.font_small = pygame.font.Font(None, max(18, test_height // 25))
-            except Exception as font_error:
-                logger.warning(f"Font initialization error: {font_error}")
-                # Use system default
-                self.font_large = pygame.font.Font(None, 36)
-                self.font_medium = pygame.font.Font(None, 24)
-                self.font_small = pygame.font.Font(None, 18)
-            
-            # Verify screen was created successfully
-            if self.screen is None:
-                raise Exception("Failed to create pygame screen")
-            
-            # Check actual screen dimensions
+            # Verify it worked
             actual_size = self.screen.get_size()
-            if actual_size[0] == 0 or actual_size[1] == 0:
+            if actual_size[0] <= 0 or actual_size[1] <= 0:
                 raise Exception(f"Invalid screen dimensions: {actual_size}")
             
-            self.running = True
+            logger.info(f"✅ macOS window created successfully: {actual_size}")
             
-            # Initial render to make window visible with a bright test pattern
-            self.screen.fill((50, 50, 200))  # Blue background for visibility
+            # Initialize fonts
+            try:
+                self.font_large = pygame.font.Font(None, 48)
+                self.font_medium = pygame.font.Font(None, 32)
+                self.font_small = pygame.font.Font(None, 24)
+            except Exception as font_error:
+                logger.warning(f"Font initialization error: {font_error}")
+                self.font_large = pygame.font.Font(None, 48)
+                self.font_medium = pygame.font.Font(None, 32)
+                self.font_small = pygame.font.Font(None, 24)
             
-            # Draw a test pattern to ensure visibility
-            pygame.draw.circle(self.screen, (255, 255, 0), (test_width//2, test_height//2), 50)  # Yellow circle
-            pygame.draw.rect(self.screen, (255, 0, 0), (10, 10, 100, 50))  # Red rectangle
+            # Initial bright render to make window visible
+            self.screen.fill((0, 150, 255))  # Bright blue
             
-            # Add text to confirm it's working
+            # Draw initial content
             if self.font_large:
-                text = self.font_large.render("AI Assistant Display", True, (255, 255, 255))
-                text_rect = text.get_rect(center=(test_width//2, test_height//2 + 80))
+                text = self.font_large.render("AI Assistant Ready", True, (255, 255, 255))
+                text_rect = text.get_rect(center=(width//2, height//2))
                 self.screen.blit(text, text_rect)
             
-            # Force display update
             pygame.display.flip()
             
-            logger.info(f"macOS display initialized successfully: {actual_size[0]}x{actual_size[1]}")
+            # Update dimensions to actual size
+            self.screen_width, self.screen_height = actual_size
+            self.running = True
+            
+            logger.info("macOS display ready and visible!")
             return True
             
         except Exception as e:
@@ -264,7 +249,6 @@ class DisplayManager:
                 pygame.quit()
             except:
                 pass
-            self.screen = None
             return False
     
     def _setup_console_simulation(self):
