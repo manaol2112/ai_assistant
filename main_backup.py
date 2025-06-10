@@ -52,11 +52,17 @@ logger = logging.getLogger(__name__)
 
 class AIAssistant:
     def __init__(self):
-        """Initialize the AI Assistant with Face Recognition and Universal Object Identification"""
+        """Initialize the AI Assistant with all components."""
+        # Initialize configuration first
         self.config = Config()
-        self.visual_config = VisualConfig()  # Add visual config
+        self.visual_config = VisualConfig()
         self.running = False
-        self.current_user = None
+        
+        # Initialize face recognition first 
+        self.face_recognition_active = False
+        self.face_recognition_thread = None
+        self.last_face_greeting_time = {}  # Track per-person greetings
+        self.current_user = None  # Track currently active user
         
         # Setup OpenAI client
         self.client = openai.OpenAI(api_key=self.config.openai_api_key)
@@ -65,71 +71,39 @@ class AIAssistant:
         logger.info("🎙️ Setting up premium OpenAI text-to-speech voices...")
         self.sophia_tts, self.eladriel_tts = setup_premium_tts_engines(self.client)
         
-        # Setup audio components
-        self.audio_manager = AudioManager()
+        # Create voice activity detector
+        try:
+            self.voice_detector = VoiceActivityDetector()
+            logger.info("Voice activity detector initialized")
+        except Exception as e:
+            logger.error(f"Voice activity detector initialization failed: {e}")
+            raise
+        
+        # Create speech recognizer
         self.recognizer = sr.Recognizer()
+        self.recognizer.dynamic_energy_threshold = True
+        self.recognizer.energy_threshold = 300
+        self.recognizer.pause_threshold = 0.8
+        self.recognizer.phrase_threshold = 0.3
         
-        # Initialize Voice Activity Detector with speaker differentiation
-        self.voice_detector = VoiceActivityDetector(self.recognizer)
+        # Create wake word detector
+        self.wake_word_detector = WakeWordDetector()
         
-        # Setup wake word detector
-        self.wake_word_detector = WakeWordDetector(self.config)
-        
-        # Initialize Filipino translator (after OpenAI client is set up)
-        self.filipino_translator = FilipinoTranslator(self.client, self)
-        
-        # Setup camera and microphone
-        logger.info("Setting up camera for visual identification...")
-        # Initialize shared camera handler - this will be the ONLY camera instance
-        self.camera_handler = CameraHandler()
-        
-        # Initialize Math Quiz Game (after camera setup)
-        logger.info("🧮 Setting up Math Quiz Game...")
-        self.math_quiz = MathQuizGame(self.camera_handler)
-        
-        # Set AI assistant reference for audio feedback
-        self.math_quiz.ai_assistant = self
-        
-        # Initialize Animal Guessing Game (after camera setup)
-        logger.info("🦕 Setting up Animal Guessing Game...")
-        self.animal_game = AnimalGuessGame(self, shared_camera=self.camera_handler)
-        
-        # Initialize Letter Word Game
-        logger.info("🔤 Setting up Letter Word Game...")
-        self.letter_word_game = LetterWordGame(self)
-        
-        # Setup dinosaur identifier for Eladriel (specialized for dinosaurs)
-        logger.info("Setting up dinosaur identification for Eladriel...")
-        self.dinosaur_identifier = DinosaurIdentifier(self.client, self.config, shared_camera=self.camera_handler)
-        
-        # Setup universal object identifier for both users - SHARE camera instead of creating new one
-        logger.info("🔍 Setting up universal object identification system...")
-        self.object_identifier = ObjectIdentifier(shared_camera=self.camera_handler)
-        
-        # Setup face recognition system - SHARE camera instead of creating new one
-        logger.info("🎭 Setting up face recognition system...")
-        self.face_detector = SmartCameraDetector(model_size='n', confidence_threshold=0.4)
-        # IMPORTANT: Pass the shared camera handler to prevent conflicts
-        self.face_detector.shared_camera = self.camera_handler
-        self.face_recognition_thread = None
-        self.face_recognition_active = False
-        self.last_face_greeting = {}  # Track when we last greeted each person
-        self.face_greeting_cooldown = 30  # seconds between face greetings
-        
-        # Parent mode settings
+        # Set to False when GUI is not running (e.g., fallback mode)
         self.quiet_mode = False
-        
-        # Interrupt system for speech control - REMOVED: No longer using interrupts
-        # These variables are kept as stubs to prevent breaking external references
-        self.speech_interrupted = False
-        self.interrupt_listener_active = False
-        self.interrupt_thread = None
         
         # Conversation memory and context tracking
         self.conversation_history = {}  # Store conversation history per user
         self.last_ai_response = {}  # Store last response per user for repeat functionality
         self.conversation_context = {}  # Store ongoing context per user
         self.max_history_length = 10  # Keep last 10 exchanges per user
+        
+        # Initialize audio systems
+        try:
+            self.setup_audio_systems()
+        except Exception as e:
+            logger.error(f"Audio system setup failed: {e}")
+            raise
         
         # Audio feedback system
         self.audio_feedback_enabled = True
@@ -182,54 +156,156 @@ class AIAssistant:
             {'word': 'playground', 'hint': 'A fun place with swings and slides'}
         ]
         
+        # Setup camera and microphone
+        logger.info("Setting up camera for visual identification...")
+        # Initialize shared camera handler - this will be the ONLY camera instance
+        self.camera_handler = CameraHandler()
+        
+        # Initialize Math Quiz Game (after camera setup)
+        logger.info("🧮 Setting up Math Quiz Game...")
+        self.math_quiz = MathQuizGame(self.camera_handler)
+        
+        # Set AI assistant reference for audio feedback
+        self.math_quiz.ai_assistant = self
+        
+        # Initialize Animal Guessing Game (after camera setup)
+        logger.info("🦕 Setting up Animal Guessing Game...")
+        self.animal_game = AnimalGuessGame(self, shared_camera=self.camera_handler)
+        
+        # Initialize Letter Word Game
+        logger.info("🔤 Setting up Letter Word Game...")
+        self.letter_word_game = LetterWordGame(self)
+        
+        # Setup dinosaur identifier for Eladriel (specialized for dinosaurs)
+        logger.info("Setting up dinosaur identification for Eladriel...")
+        self.dinosaur_identifier = DinosaurIdentifier(self.client, self.config, shared_camera=self.camera_handler)
+        
+        # Setup universal object identifier for both users - SHARE camera instead of creating new one
+        logger.info("🔍 Setting up universal object identification system...")
+        self.object_identifier = ObjectIdentifier(shared_camera=self.camera_handler)
+        
+        # Setup face recognition system - SHARE camera instead of creating new one
+        logger.info("🎭 Setting up face recognition system...")
+        self.face_detector = SmartCameraDetector(model_size='n', confidence_threshold=0.4)
+        # IMPORTANT: Pass the shared camera handler to prevent conflicts
+        self.face_detector.shared_camera = self.camera_handler
+        
+        # Parent mode settings
+        self.quiet_mode = False
+        
         # User profiles with personalized settings
         self.users = {
             'sophia': {
-                'name': 'Sophia',
-                'wake_word': 'miley',
-                'personality': 'friendly, encouraging, and supportive',
-                'greeting': self.get_dynamic_greeting('sophia'),
-                'face_greeting': self.get_dynamic_face_greeting('sophia'),
                 'tts_engine': self.sophia_tts,
-                'special_commands': ['help', 'what can you do', 'identify this', 'what is this', 'tell me about this', 'spelling game', 'play spelling', 'ready', 'end game', 'teach me filipino', 'filipino game', 'math game', 'math quiz', 'word problems', 'animal game', 'guess the animal', 'animal guessing', 'letter game', 'letter word game', 'word guessing', 'guess the word']
+                'wake_words': ['sophia', 'sophie', 'sofia'],
+                'greeting': 'Hi Sophia! I am your AI assistant! What can I help you with today?',
+                'special_commands': ['spell cat', 'spell dog', 'learn to spell', 'spelling game', 'spell word', 'practice spelling'],
+                'system_prompt': """You are a helpful, patient, and encouraging AI assistant designed specifically for children, particularly 8-year-old Sophia. Your personality should be:
+
+- Warm, friendly, and age-appropriate
+- Educational but fun - always look for learning opportunities
+- Patient and encouraging, especially with mistakes
+- Use simple, clear language appropriate for elementary school
+- Show enthusiasm for learning and discovery
+- Gentle guidance rather than direct correction
+- Incorporate praise and positive reinforcement
+- Keep responses concise but engaging
+
+When helping with learning:
+- Break complex topics into simple steps
+- Use analogies and examples kids can relate to
+- Encourage questions and curiosity
+- Celebrate progress and effort, not just correct answers
+- Make learning feel like an adventure
+
+Remember that Sophia is developing her reading, writing, and critical thinking skills, so tailor your explanations to her level while still being informative and helpful."""
             },
             'eladriel': {
-                'name': 'Eladriel',
-                'wake_word': 'dino',
-                'personality': 'playful, curious, and energetic',
-                'greeting': self.get_dynamic_greeting('eladriel'),
-                'face_greeting': self.get_dynamic_face_greeting('eladriel'),
                 'tts_engine': self.eladriel_tts,
-                'special_commands': ['identify dinosaur', 'identify this', 'what is this', 'tell me about this', 'show me camera', 'dinosaur tips', 'help', 'spelling game', 'play spelling', 'ready', 'end game', 'teach me filipino', 'filipino game', 'math game', 'math quiz', 'word problems', 'animal game', 'guess the animal', 'animal guessing', 'letter game', 'letter word game', 'word guessing', 'guess the word']
+                'wake_words': ['eladriel', 'ella', 'ellie'],
+                'greeting': 'Hey there, Eladriel! I am your AI assistant! Ready for some amazing discoveries today?',
+                'special_commands': ['spell cat', 'spell dog', 'learn to spell', 'spelling game', 'spell word', 'practice spelling'],
+                'system_prompt': """You are a helpful, enthusiastic, and inspiring AI assistant designed specifically for children, particularly 6-year-old Eladriel. Your personality should be:
+
+- Energetic, curious, and wonder-filled
+- Very patient with early learners
+- Use simple vocabulary appropriate for kindergarten/first grade
+- Show excitement for discovery and exploration
+- Encourage hands-on learning and observation
+- Celebrate every small achievement
+- Ask engaging questions to spark curiosity
+- Keep explanations very short and visual
+
+Special focus areas for Eladriel:
+- Nature and animals (especially dinosaurs - his favorite!)
+- Colors, shapes, and patterns
+- Basic counting and simple math
+- Story-telling and imagination
+- Physical activities and movement
+
+Make everything feel like an exciting adventure! Use exclamation points and positive energy. Remember that Eladriel is just beginning his learning journey, so keep things simple, visual, and hands-on."""
             },
             'parent': {
-                'name': 'Parent',
-                'wake_word': 'assistant',
-                'personality': 'professional, intelligent, and efficient',
-                'greeting': self.get_parent_greeting(),
-                'face_greeting': self.get_parent_face_greeting(),
-                'tts_engine': self.sophia_tts,  # Use calm voice for parent mode
-                'special_commands': [
-                    'help', 'status report', 'system check', 'quiet mode on', 'quiet mode off',
-                    'identify this', 'what is this', 'tell me about this', 'show me camera',
-                    'check on kids', 'home automation', 'schedule reminder', 'weather',
-                    'news update', 'shopping list', 'calendar', 'notes', 'spelling game', 'play spelling', 'ready', 'end game', 'teach me filipino', 'filipino game', 'math game', 'math quiz', 'word problems', 'animal game', 'guess the animal', 'animal guessing', 'letter game', 'letter word game', 'word guessing', 'guess the word'
-                ]
+                'tts_engine': self.sophia_tts,  # Use Sophia's engine as default for parents
+                'wake_words': ['assistant', 'computer', 'ai', 'system'],
+                'greeting': 'Parent mode activated. How can I assist you today?',
+                'special_commands': ['system status', 'child safety', 'parental controls', 'usage report', 'learning progress'],
+                'system_prompt': """You are a professional, efficient AI assistant for parents. Your personality should be:
+
+- Professional and informative
+- Focused on practical solutions
+- Child safety and development conscious
+- Respectful of parenting decisions
+- Concise but thorough in explanations
+- Educational resource-aware
+
+Provide information about:
+- Child development and learning strategies
+- Educational activities and resources
+- Technology safety for children
+- Balancing screen time and physical activities
+- Supporting children's curiosity and interests
+
+Always prioritize child safety and well-being in your recommendations."""
             }
         }
         
-        # Initialize visual feedback system with user detection
+        # Initialize visual feedback system
+        logger.info("Initializing visual feedback system...")
         try:
-            from visual_feedback import create_visual_feedback
-            # Start with no specific user, will be updated when user is detected
-            self.visual = create_visual_feedback(use_gui=True)
-            if hasattr(self.visual, '__class__') and 'VisualFeedbackSystem' in str(self.visual.__class__):
-                print(f"✅ Visual feedback system initialized: {type(self.visual)}")
-            else:
-                print(f"✅ Minimal visual feedback initialized: {type(self.visual)}")
+            self.visual = VisualFeedbackSystem()
+            logger.info("Visual feedback system initialized successfully")
         except Exception as e:
-            print(f"⚠️ Could not initialize visual feedback: {e}")
+            logger.error(f"Failed to initialize visual feedback: {e}")
             self.visual = None
+
+        # Initialize camera and face detection
+        try:
+            self.camera_handler = CameraHandler()
+            self.face_detector = SmartCameraDetector()
+            # IMPORTANT: Pass the shared camera handler to prevent conflicts
+            self.face_detector.shared_camera = self.camera_handler
+            
+            # Parent mode settings
+            self.parent_mode_active = False
+            self.parent_mode_start_time = None
+            self.parent_mode_duration = 900  # 15 minutes default
+            
+            logger.info("Face detection system initialized")
+        except Exception as e:
+            logger.error(f"Face detection initialization failed: {e}")
+            self.camera_handler = None
+            self.face_detector = None
+
+        # Initialize AI components
+        try:
+            # Initialize Filipino translator (after OpenAI client is set up)
+            self.filipino_translator = FilipinoTranslator(self.client, self)
+            
+            logger.info("All AI Assistant components initialized successfully")
+        except Exception as e:
+            logger.error(f"AI component initialization failed: {e}")
+            raise
         
         logger.info("🚀 AI Assistant initialized with premium natural voices, face recognition, and universal object identification!")
 
@@ -790,10 +866,10 @@ class AIAssistant:
     def should_greet_face(self, person_name: str) -> bool:
         """Check if we should greet this person based on face detection cooldown."""
         current_time = time.time()
-        last_time = self.last_face_greeting.get(person_name.lower(), 0)
+        last_time = self.last_face_greeting_time.get(person_name.lower(), 0)
         
         if current_time - last_time > self.face_greeting_cooldown:
-            self.last_face_greeting[person_name.lower()] = current_time
+            self.last_face_greeting_time[person_name.lower()] = current_time
             return True
         
         return False
@@ -812,7 +888,7 @@ class AIAssistant:
         if not self.camera_handler or not self.face_detector:
             print("⚠️ Face detection: Camera or detector not available")
             return
-        
+            
         print("🎭 Face detection loop started - monitoring for faces...")
         last_greeting_times = {}
         greeting_cooldown = 30  # Reduced from 300 to 30 seconds (30 seconds between greetings)
@@ -824,7 +900,7 @@ class AIAssistant:
                 if not ret or frame is None:
                     time.sleep(1)
                     continue
-                
+                    
                 # Use the face_detector's detect_faces method with the captured frame
                 face_data = self.face_detector.detect_faces(frame)
                 current_time = time.time()
@@ -848,12 +924,6 @@ class AIAssistant:
                         last_greeting = last_greeting_times.get(person_name, 0)
                         
                         if current_time - last_greeting > greeting_cooldown:
-                            # NEW: Check if any conversation is currently active
-                            if self.current_user is not None:
-                                print(f"🎭 Skipping face greeting for {person_name} - conversation already active with {self.current_user}")
-                                time.sleep(2)
-                                continue
-                            
                             print(f"🎉 Greeting {person_name} - last greeting was {current_time - last_greeting:.1f} seconds ago")
                             
                             if self.visual:
@@ -867,8 +937,8 @@ class AIAssistant:
                             
                             # Start automatic conversation
                             conversation_thread = threading.Thread(
-                                target=self.handle_automatic_conversation,
-                                args=(person_name,),
+                                        target=self.handle_automatic_conversation, 
+                                        args=(person_name,), 
                                 daemon=False  # Keep conversation alive
                             )
                             conversation_thread.start()
@@ -880,12 +950,12 @@ class AIAssistant:
                         time.sleep(5)  # Brief pause after greeting
                 
                 time.sleep(1)  # Check every second
-                    
+        
             except Exception as e:
-                print(f"⚠️ Error in face detection: {e}")
-                import traceback
-                traceback.print_exc()
-                time.sleep(2)
+                    print(f"⚠️ Error in face detection: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    time.sleep(2)
         
         print("🎭 Face detection loop ended")
 
@@ -908,122 +978,94 @@ class AIAssistant:
         max_timeouts = 6 if self.spelling_game_active else 2  # Allow 6 timeouts for spelling game, 2 for normal conversation
         
         while conversation_active and self.running and self.current_user == user:
-            try:
-                # Listen for their request with a 15-second timeout (longer for children)
-                user_input = self.listen_for_speech(timeout=15)
-
-                if user_input:
-                    conversation_timeout_count = 0  # Reset timeout counter
+            # Listen for their request with a 15-second timeout (longer for children)
+            user_input = self.listen_for_speech(timeout=15)
+            
+            if user_input:
+                conversation_timeout_count = 0  # Reset timeout counter
+                
+                # Check if user wants to end conversation
+                if self.is_conversation_ending(user_input):
+                    farewell_messages = {
+                        'sophia': "Goodbye Sophia! I'm always here when you need me. Have a wonderful day!",
+                        'eladriel': "See you later Eladriel! Keep exploring and learning about dinosaurs! Roar!",
+                        'parent': "Goodbye! Parent mode deactivated. All systems remain operational for the children. Call 'Assistant' anytime you need me."
+                    }
+                    farewell_response = farewell_messages.get(user, "Goodbye! Talk to you soon!")
                     
-                    # Check if user wants to end conversation
-                    if self.is_conversation_ending(user_input):
-                        farewell_messages = {
-                            'sophia': "Goodbye Sophia! I'm always here when you need me. Have a wonderful day!",
-                            'eladriel': "See you later Eladriel! Keep exploring and learning about dinosaurs! Roar!",
-                            'parent': "Goodbye! Parent mode deactivated. All systems remain operational for the children. Call 'Assistant' anytime you need me."
-                        }
-                        farewell_response = farewell_messages.get(user, "Goodbye! Talk to you soon!")
-                        
-                        # Add farewell to history and then clear it
-                        self.add_to_conversation_history(user, user_input, farewell_response)
-                        self.speak(farewell_response, user)
-                        
-                        # Clear conversation history for fresh start next time
-                        self.clear_conversation_history(user)
-                        
-                        conversation_active = False
-                        break
+                    # Add farewell to history and then clear it
+                    self.add_to_conversation_history(user, user_input, farewell_response)
+                    self.speak(farewell_response, user)
                     
-                    # Check for special commands first
-                    special_response = self.handle_special_commands(user_input, user)
+                    # Clear conversation history for fresh start next time
+                    self.clear_conversation_history(user)
                     
-                    if special_response:
-                        # Add special command to conversation history too
-                        self.add_to_conversation_history(user, user_input, special_response)
-                        
-                        # Use no-interrupt speak for Filipino game responses to prevent recording during explanations
-                        if self.filipino_translator.is_filipino_game_command(user_input) or self.filipino_translator.game_active:
-                            self.speak_no_interrupt(special_response, user)
-                        else:
-                            self.speak(special_response, user)
-                    else:
-                        # Process with OpenAI for regular conversation
-                        import asyncio
-                        try:
-                            response = asyncio.run(self.process_with_openai(user_input, user))
-                            
-                            # Use no-interrupt speak if Filipino game is active to prevent recording during explanations
-                            if self.filipino_translator.game_active:
-                                self.speak_no_interrupt(response, user)
-                            else:
-                                self.speak(response, user)
-                        except Exception as e:
-                            logger.error(f"Error processing request: {e}")
-                            self.speak("I'm sorry, something went wrong. Let me try again.", user)
-                    
-                    # After responding, give a subtle cue that we're still listening
-                    time.sleep(0.5)  # Brief pause
-                    print(f"💬 Still listening to {user.title()}... (say 'goodbye' to end)")
-                    
+                    conversation_active = False
+                    break
+                
+                # Check for special commands first
+                special_response = self.handle_special_commands(user_input, user)
+                
+                if special_response:
+                    # Add special command to conversation history too
+                    self.add_to_conversation_history(user, user_input, special_response)
+                    self.speak(special_response, user)
                 else:
-                    # No speech detected
-                    conversation_timeout_count += 1
-                    
-                    # Update max timeouts dynamically based on current spelling game state
-                    current_max_timeouts = 6 if self.spelling_game_active else 2
-                    
-                    if conversation_timeout_count == 1:
-                        # First timeout - gentle prompt
-                        if self.spelling_game_active:
-                            prompts = {
-                                'sophia': "Take your time writing, Sophia! I'm waiting for you to say 'Ready'.",
-                                'eladriel': "No rush Eladriel! Let me know when you're ready to show me your spelling!",
-                                'parent': "Spelling game active. Say 'Ready' when you want me to check your answer."
-                            }
-                        else:
-                            prompts = {
-                                'sophia': "I'm still here if you have more questions, Sophia!",
-                                'eladriel': "Still here for more dinosaur fun, Eladriel! What's next?",
-                                'parent': "I'm still here and ready to assist. Any additional requests?"
-                            }
-                        self.speak(prompts.get(user, "I'm still listening if you have more to say!"), user)
-                        print(f"⏰ Waiting for {user.title()} to continue...")
-                        
-                    elif conversation_timeout_count >= current_max_timeouts:
-                        # Multiple timeouts - end conversation gracefully
-                        if self.spelling_game_active:
-                            # Special handling for spelling game timeout
-                            timeout_messages = {
-                                'sophia': "I'll pause the spelling game for now, Sophia. Say 'Spelling Game' to continue practicing anytime!",
-                                'eladriel': "Let's pause our spelling adventure, Eladriel! Say 'Spelling Game' when you want to play again!",
-                                'parent': "Spelling game test paused due to timeout. Game state preserved for continuation."
-                            }
-                            # Don't reset spelling game state on timeout - just pause it
-                        else:
-                            timeout_messages = {
-                                'sophia': "I'll be here whenever you need me, Sophia. Just say 'Miley' to chat again!",
-                                'eladriel': "I'll be waiting for more dinosaur adventures, Eladriel! Just say 'Dino' when you're ready!",
-                                'parent': "Returning to standby mode. Say 'Assistant' anytime for immediate assistance."
-                            }
-                        self.speak(timeout_messages.get(user, "I'll be here when you need me. Just call my name!"), user)
-                        conversation_active = False
-                        
-            except Exception as conversation_error:
-                logger.error(f"💬 Conversation error: {conversation_error}")
-                logger.error(f"💬 Conversation error type: {type(conversation_error)}")
-                import traceback
-                logger.error(f"💬 Conversation traceback: {traceback.format_exc()}")
+                    # Process with OpenAI for regular conversation
+                    import asyncio
+                    try:
+                        response = asyncio.run(self.process_with_openai(user_input, user))
+                        self.speak(response, user)
+                    except Exception as e:
+                        logger.error(f"Error processing request: {e}")
+                        self.speak("I'm sorry, something went wrong. Let me try again.", user)
                 
-                # Try to inform user of error and end conversation gracefully
-                try:
-                    error_message = f"I'm sorry {user.title()}, I'm having some technical difficulties. Let me restart our conversation."
-                    self.speak(error_message, user)
-                except:
-                    logger.error("💬 Could not even speak error message - ending conversation")
+                # After responding, give a subtle cue that we're still listening
+                time.sleep(0.5)  # Brief pause
+                print(f"💬 Still chatting with {user.title()}... (say 'goodbye' to end)")
                 
-                # End conversation to prevent infinite error loop
-                conversation_active = False
-                break
+            else:
+                # No speech detected
+                conversation_timeout_count += 1
+                
+                # Update max timeouts dynamically based on current spelling game state
+                current_max_timeouts = 6 if self.spelling_game_active else 2
+                
+                if conversation_timeout_count == 1:
+                    # First timeout - gentle prompt
+                    if self.spelling_game_active:
+                        prompts = {
+                            'sophia': "Take your time writing, Sophia! I'm waiting for you to say 'Ready'.",
+                            'eladriel': "No rush Eladriel! Let me know when you're ready to show me your spelling!",
+                            'parent': "Spelling game active. Say 'Ready' when you want me to check your answer."
+                        }
+                    else:
+                        prompts = {
+                            'sophia': "I'm still here if you have more questions, Sophia!",
+                            'eladriel': "Still here for more dinosaur fun, Eladriel! What's next?",
+                            'parent': "I'm still here and ready to assist. Any additional requests?"
+                        }
+                    self.speak(prompts.get(user, "I'm still listening if you have more to say!"), user)
+                    print(f"⏰ Waiting for {user.title()} to continue...")
+                    
+                elif conversation_timeout_count >= current_max_timeouts:
+                    # Multiple timeouts - end conversation gracefully
+                    if self.spelling_game_active:
+                        # Special handling for spelling game timeout
+                        timeout_messages = {
+                            'sophia': "I'll pause the spelling game for now, Sophia. Say 'Spelling Game' to continue practicing anytime!",
+                            'eladriel': "Let's pause our spelling adventure, Eladriel! Say 'Spelling Game' when you want to play again!",
+                            'parent': "Spelling game test paused due to timeout. Game state preserved for continuation."
+                        }
+                        # Don't reset spelling game state on timeout - just pause it
+                    else:
+                        timeout_messages = {
+                            'sophia': "I'll be here whenever you need me, Sophia. Just say 'Miley' to chat again!",
+                            'eladriel': "I'll be waiting for more dinosaur adventures, Eladriel! Just say 'Dino' when you're ready!",
+                            'parent': "Returning to standby mode. Say 'Assistant' anytime for immediate assistance."
+                        }
+                    self.speak(timeout_messages.get(user, "I'll be here when you need me. Just call my name!"), user)
+                    conversation_active = False
         
         # Show goodbye state in visual feedback
         if self.visual:
@@ -1050,7 +1092,7 @@ class AIAssistant:
             logger.info("🎭 Face recognition system stopped")
 
     def speak(self, text: str, user: Optional[str] = None):
-        """Speak text to user without interrupt capability for stable speech delivery."""
+        """Speak text to user and wait for completion."""
         if self.quiet_mode:
             logger.info("Speak request ignored - quiet mode active")
             return
@@ -1071,27 +1113,32 @@ class AIAssistant:
                 tts_engine = self.users[user]['tts_engine']
                 logger.info(f"🗣️ SPEAK: Using personalized TTS for {user}")
                 logger.info(f"Speaking to {user}: {text}")
+                
+                # Simple direct TTS without interrupts
                 tts_engine.say(text)
                 tts_engine.runAndWait()
+                logger.info("🗣️ SPEAK: TTS completed")
+                    
             else:
                 # Default to Sophia's engine if no user specified
                 logger.info("🗣️ SPEAK: Using default Sophia TTS engine")
                 logger.info(f"Speaking (default): {text}")
                 self.sophia_tts.say(text)
                 self.sophia_tts.runAndWait()
+                logger.info("🗣️ SPEAK: Default TTS completed")
             
             # CRITICAL: Add delay after speaking to prevent audio feedback loop
             # This prevents the microphone from picking up the AI's own voice
             import time
             logger.info("🗣️ SPEAK: Post-speech delay...")
-            time.sleep(0.3)  # Reduced from 1.5 to 0.3 seconds for faster response
+            time.sleep(0.3)  # Brief delay for audio to clear
             
-            # NEW: Play clear "you can speak now" cue instead of confusing completion sound
+            # Play clear "you can speak now" cue
             logger.info("🗣️ SPEAK: Playing ready-to-speak sound...")
             self.play_ready_to_speak_sound()
             
             # Brief pause to let the cue finish and be clearly understood
-            time.sleep(0.2)  # Reduced from 0.5 to 0.2 seconds for faster response
+            time.sleep(0.2)
             logger.info("🗣️ SPEAK: Speech process completed successfully")
             
         except Exception as e:
@@ -1106,88 +1153,23 @@ class AIAssistant:
             
             # Still play ready cue even on error
             self.play_ready_to_speak_sound()
-            time.sleep(0.2)  # Reduced from 0.5 to 0.2 seconds
+            time.sleep(0.2)
             # Add delay even on error to prevent feedback
             import time
-            time.sleep(0.3)  # Reduced from 1.5 to 0.3 seconds
+            time.sleep(0.3)
         finally:
             # CRITICAL: Always reset AI speaking flag when done
             logger.info("🗣️ SPEAK: Resetting AI speaking flag to False")
             self.voice_detector.set_ai_speaking(False)
-            
+
             # Return to standby state in visual feedback
             if self.visual:
                 self.visual.show_standby("Ready to listen...")
 
     def speak_no_interrupt(self, text: str, user: Optional[str] = None):
         """Speak text without interrupt capability (for game instructions, etc.)."""
-        if self.quiet_mode:
-            return
-        
-        try:
-            # CRITICAL: Set AI speaking flag to prevent voice detector from listening to AI
-            self.voice_detector.set_ai_speaking(True)
-            
-            # Use personalized TTS engine for each user
-            if user and user in self.users:
-                tts_engine = self.users[user]['tts_engine']
-                logger.info(f"Speaking (no interrupt) to {user}: {text}")
-                tts_engine.say(text)
-                tts_engine.runAndWait()
-            else:
-                # Default to Sophia's engine if no user specified
-                logger.info(f"Speaking (no interrupt, default): {text}")
-                self.sophia_tts.say(text)
-                self.sophia_tts.runAndWait()
-            
-            # CRITICAL: Add delay after speaking to prevent audio feedback loop
-            import time
-            time.sleep(0.3)  # Reduced from 1.5 to 0.3 seconds for faster response
-            
-            # NEW: Play clear "you can speak now" cue for educational content too
-            self.play_ready_to_speak_sound()
-            
-            # Brief pause to let the cue finish and be clearly understood
-            time.sleep(0.2)  # Reduced from 0.5 to 0.2 seconds for faster response
-            
-        except Exception as e:
-            logger.error(f"TTS Error (no interrupt): {e}")
-            # Still play ready cue even on error
-            self.play_ready_to_speak_sound()
-            time.sleep(0.2)  # Reduced from 0.5 to 0.2 seconds
-            # Add delay even on error to prevent feedback
-            import time
-            time.sleep(0.3)  # Reduced from 1.5 to 0.3 seconds
-        finally:
-            # CRITICAL: Always reset AI speaking flag when done
-            self.voice_detector.set_ai_speaking(False)
-
-    def _speak_with_interrupt_check(self, tts_engine, text: str):
-        """DEPRECATED: Interrupt functionality removed. This method is kept for compatibility."""
-        logger.warning("_speak_with_interrupt_check is deprecated - interrupt functionality removed")
-        # Fallback to simple speech without interrupts
-        tts_engine.say(text)
-        tts_engine.runAndWait()
-
-    def split_text_for_interruption(self, text: str) -> list:
-        """DEPRECATED: Interrupt functionality removed. Returns text as single item."""
-        return [text]
-
-    def start_interrupt_listener(self):
-        """DEPRECATED: Interrupt functionality removed. This method does nothing."""
-        logger.info("🎧 INTERRUPT: Interrupt functionality disabled - method does nothing")
-
-    def stop_interrupt_listener(self):
-        """DEPRECATED: Interrupt functionality removed. This method does nothing."""
-        logger.info("🎧 INTERRUPT: Interrupt functionality disabled - method does nothing")
-
-    def interrupt_listener(self):
-        """DEPRECATED: Interrupt functionality removed. This method does nothing."""
-        logger.info("🎧 INTERRUPT_THREAD: Interrupt functionality disabled - thread not started")
-
-    def is_interrupt_command(self, user_input: str) -> bool:
-        """DEPRECATED: Interrupt functionality removed. Always returns False."""
-        return False
+        # This is now the same as regular speak since we removed interrupts
+        self.speak(text, user)
 
     def listen_for_speech(self, timeout: int = 15) -> Optional[str]:
         """Listen for speech input using intelligent voice activity detection with speaker differentiation."""
@@ -1219,27 +1201,12 @@ class AIAssistant:
             
             # Use the new voice activity detector with speaker differentiation
             logger.info("🎤 Using Smart Voice Detection with Speaker Differentiation...")
-            
-            try:
-                text = self.voice_detector.listen_with_speaker_detection(
-                    timeout=timeout,
-                    silence_threshold=2.5,  # More generous silence threshold for complete thoughts
-                    max_total_time=45,  # Longer max time for complex questions
-                    game_mode=game_mode
-                )
-            except Exception as voice_error:
-                logger.error(f"🎤 Voice detector error: {voice_error}")
-                logger.error(f"🎤 Voice detector error type: {type(voice_error)}")
-                import traceback
-                logger.error(f"🎤 Voice detector traceback: {traceback.format_exc()}")
-                
-                # Show error state in visual feedback
-                if self.visual:
-                    self.visual.show_error("Voice Detection Error")
-                
-                # Fallback to basic recognition if smart detection fails
-                logger.info("🎤 Falling back to basic speech recognition...")
-                return self._fallback_listen_for_speech(timeout)
+            text = self.voice_detector.listen_with_speaker_detection(
+                timeout=timeout,
+                silence_threshold=2.0,  # Longer silence threshold for complete thoughts
+                max_total_time=45,  # Longer max time for complex questions
+                game_mode=game_mode
+            )
             
             if text is None:
                 # Show timeout state in visual feedback
@@ -1261,57 +1228,32 @@ class AIAssistant:
             return text
                 
         except Exception as e:
-            logger.error(f"🎤 Listen for speech error: {e}")
-            logger.error(f"🎤 Listen for speech error type: {type(e)}")
-            import traceback
-            logger.error(f"🎤 Listen for speech traceback: {traceback.format_exc()}")
-            
+            logger.error(f"Smart voice detection error: {e}")
             # Show error state in visual feedback
             if self.visual:
                 self.visual.show_error("Listening Error")
-            
             # Fallback to basic recognition if smart detection fails
-            try:
-                logger.info("🎤 Attempting fallback speech recognition...")
-                return self._fallback_listen_for_speech(timeout)
-            except Exception as fallback_error:
-                logger.error(f"🎤 Fallback speech recognition also failed: {fallback_error}")
-                # If both methods fail, return None instead of crashing
-                return None
+            return self._fallback_listen_for_speech(timeout)
     
     def _fallback_listen_for_speech(self, timeout: int = 15) -> Optional[str]:
         """Fallback speech recognition method."""
         try:
-            import speech_recognition as sr
             with sr.Microphone() as source:
                 logger.info("🎤 Using fallback speech recognition...")
-                self.recognizer.adjust_for_ambient_noise(source, duration=0.3)  # Faster ambient noise adjustment
+                self.recognizer.adjust_for_ambient_noise(source, duration=0.8)
                 
                 if self.spelling_game_active:
                     self.recognizer.energy_threshold = max(200, self.recognizer.energy_threshold * 0.6)
-                    audio = self.recognizer.listen(source, timeout=timeout, phrase_time_limit=5)  # Faster phrase detection
+                    audio = self.recognizer.listen(source, timeout=timeout, phrase_time_limit=10)
                 else:
                     self.recognizer.energy_threshold = max(300, self.recognizer.energy_threshold * 0.8)
-                    audio = self.recognizer.listen(source, timeout=timeout, phrase_time_limit=10)  # Faster phrase detection
+                audio = self.recognizer.listen(source, timeout=timeout, phrase_time_limit=20)
                 
                 text = self.recognizer.recognize_google(audio, language='en-US')
                 logger.info(f"Fallback recognized: {text}")
                 return text.lower()
                 
-        except sr.WaitTimeoutError:
-            logger.info("🎤 Fallback speech recognition timeout")
-            return None
-        except sr.UnknownValueError:
-            logger.info("🎤 Fallback speech recognition could not understand audio")
-            return None
-        except sr.RequestError as e:
-            logger.error(f"🎤 Fallback speech recognition request error: {e}")
-            return None
-        except Exception as e:
-            logger.error(f"🎤 Fallback speech recognition unexpected error: {e}")
-            logger.error(f"🎤 Fallback error type: {type(e)}")
-            import traceback
-            logger.error(f"🎤 Fallback traceback: {traceback.format_exc()}")
+        except (sr.WaitTimeoutError, sr.UnknownValueError, sr.RequestError):
             return None
 
     def _clean_recognized_text(self, text: str) -> str:
@@ -2076,8 +2018,8 @@ Overall Status: {'✅ All systems operational' if all(['✅' in result for resul
             # Check if kids are currently detected
             kids_present = []
             for user in ['sophia', 'eladriel']:
-                if user in self.last_face_greeting:
-                    last_seen_time = self.last_face_greeting[user]
+                if user in self.last_face_greeting_time:
+                    last_seen_time = self.last_face_greeting_time[user]
                     time_since = time.time() - last_seen_time
                     if time_since < 300:  # Within last 5 minutes
                         kids_present.append(f"{user.title()} (seen {int(time_since//60)} min ago)")
@@ -2165,122 +2107,94 @@ Everything looks good for when the children wake up!"""
         max_timeouts = 6 if self.spelling_game_active else 2  # Allow 6 timeouts for spelling game, 2 for normal conversation
         
         while conversation_active and self.running and self.current_user == user:
-            try:
-                # Listen for their request with a 15-second timeout (longer for children)
-                user_input = self.listen_for_speech(timeout=15)
-
-                if user_input:
-                    conversation_timeout_count = 0  # Reset timeout counter
+            # Listen for their request with a 15-second timeout (longer for children)
+            user_input = self.listen_for_speech(timeout=15)
+            
+            if user_input:
+                conversation_timeout_count = 0  # Reset timeout counter
+                
+                # Check if user wants to end conversation
+                if self.is_conversation_ending(user_input):
+                    farewell_messages = {
+                        'sophia': "Goodbye Sophia! I'm always here when you need me. Have a wonderful day!",
+                        'eladriel': "See you later Eladriel! Keep exploring and learning about dinosaurs! Roar!",
+                        'parent': "Goodbye! Parent mode deactivated. All systems remain operational for the children. Call 'Assistant' anytime you need me."
+                    }
+                    farewell_response = farewell_messages.get(user, "Goodbye! Talk to you soon!")
                     
-                    # Check if user wants to end conversation
-                    if self.is_conversation_ending(user_input):
-                        farewell_messages = {
-                            'sophia': "Goodbye Sophia! I'm always here when you need me. Have a wonderful day!",
-                            'eladriel': "See you later Eladriel! Keep exploring and learning about dinosaurs! Roar!",
-                            'parent': "Goodbye! Parent mode deactivated. All systems remain operational for the children. Call 'Assistant' anytime you need me."
-                        }
-                        farewell_response = farewell_messages.get(user, "Goodbye! Talk to you soon!")
-                        
-                        # Add farewell to history and then clear it
-                        self.add_to_conversation_history(user, user_input, farewell_response)
-                        self.speak(farewell_response, user)
-                        
-                        # Clear conversation history for fresh start next time
-                        self.clear_conversation_history(user)
-                        
-                        conversation_active = False
-                        break
+                    # Add farewell to history and then clear it
+                    self.add_to_conversation_history(user, user_input, farewell_response)
+                    self.speak(farewell_response, user)
                     
-                    # Check for special commands first
-                    special_response = self.handle_special_commands(user_input, user)
+                    # Clear conversation history for fresh start next time
+                    self.clear_conversation_history(user)
                     
-                    if special_response:
-                        # Add special command to conversation history too
-                        self.add_to_conversation_history(user, user_input, special_response)
-                        
-                        # Use no-interrupt speak for Filipino game responses to prevent recording during explanations
-                        if self.filipino_translator.is_filipino_game_command(user_input) or self.filipino_translator.game_active:
-                            self.speak_no_interrupt(special_response, user)
-                        else:
-                            self.speak(special_response, user)
-                    else:
-                        # Process with OpenAI for regular conversation
-                        import asyncio
-                        try:
-                            response = asyncio.run(self.process_with_openai(user_input, user))
-                            
-                            # Use no-interrupt speak if Filipino game is active to prevent recording during explanations
-                            if self.filipino_translator.game_active:
-                                self.speak_no_interrupt(response, user)
-                            else:
-                                self.speak(response, user)
-                        except Exception as e:
-                            logger.error(f"Error processing request: {e}")
-                            self.speak("I'm sorry, something went wrong. Let me try again.", user)
-                    
-                    # After responding, give a subtle cue that we're still listening
-                    time.sleep(0.5)  # Brief pause
-                    print(f"💬 Still chatting with {user.title()}... (say 'goodbye' to end)")
-                    
+                    conversation_active = False
+                    break
+                
+                # Check for special commands first
+                special_response = self.handle_special_commands(user_input, user)
+                
+                if special_response:
+                    # Add special command to conversation history too
+                    self.add_to_conversation_history(user, user_input, special_response)
+                    self.speak(special_response, user)
                 else:
-                    # No speech detected
-                    conversation_timeout_count += 1
-                    
-                    # Update max timeouts dynamically based on current spelling game state
-                    current_max_timeouts = 6 if self.spelling_game_active else 2
-                    
-                    if conversation_timeout_count == 1:
-                        # First timeout - gentle prompt
-                        if self.spelling_game_active:
-                            prompts = {
-                                'sophia': "Take your time writing, Sophia! I'm waiting for you to say 'Ready'.",
-                                'eladriel': "No rush Eladriel! Let me know when you're ready to show me your spelling!",
-                                'parent': "Spelling game active. Say 'Ready' when you want me to check your answer."
-                            }
-                        else:
-                            prompts = {
-                                'sophia': "I'm still here if you have more questions, Sophia!",
-                                'eladriel': "Still here for more dinosaur fun, Eladriel! What's next?",
-                                'parent': "I'm still here and ready to assist. Any additional requests?"
-                            }
-                        self.speak(prompts.get(user, "I'm still listening if you have more to say!"), user)
-                        print(f"⏰ Waiting for {user.title()} to continue...")
-                        
-                    elif conversation_timeout_count >= current_max_timeouts:
-                        # Multiple timeouts - end conversation gracefully
-                        if self.spelling_game_active:
-                            # Special handling for spelling game timeout
-                            timeout_messages = {
-                                'sophia': "I'll pause the spelling game for now, Sophia. Say 'Spelling Game' to continue practicing anytime!",
-                                'eladriel': "Let's pause our spelling adventure, Eladriel! Say 'Spelling Game' when you want to play again!",
-                                'parent': "Spelling game test paused due to timeout. Game state preserved for continuation."
-                            }
-                            # Don't reset spelling game state on timeout - just pause it
-                        else:
-                            timeout_messages = {
-                                'sophia': "I'll be here whenever you need me, Sophia. Just say 'Miley' to chat again!",
-                                'eladriel': "I'll be waiting for more dinosaur adventures, Eladriel! Just say 'Dino' when you're ready!",
-                                'parent': "Returning to standby mode. Say 'Assistant' anytime for immediate assistance."
-                            }
-                        self.speak(timeout_messages.get(user, "I'll be here when you need me. Just call my name!"), user)
-                        conversation_active = False
-                        
-            except Exception as conversation_error:
-                logger.error(f"💬 Conversation error: {conversation_error}")
-                logger.error(f"💬 Conversation error type: {type(conversation_error)}")
-                import traceback
-                logger.error(f"💬 Conversation traceback: {traceback.format_exc()}")
+                    # Process with OpenAI for regular conversation
+                    import asyncio
+                    try:
+                        response = asyncio.run(self.process_with_openai(user_input, user))
+                        self.speak(response, user)
+                    except Exception as e:
+                        logger.error(f"Error processing request: {e}")
+                        self.speak("I'm sorry, something went wrong. Let me try again.", user)
                 
-                # Try to inform user of error and end conversation gracefully
-                try:
-                    error_message = f"I'm sorry {user.title()}, I'm having some technical difficulties. Let me restart our conversation."
-                    self.speak(error_message, user)
-                except:
-                    logger.error("💬 Could not even speak error message - ending conversation")
+                # After responding, give a subtle cue that we're still listening
+                time.sleep(0.5)  # Brief pause
+                print(f"💬 Still chatting with {user.title()}... (say 'goodbye' to end)")
                 
-                # End conversation to prevent infinite error loop
-                conversation_active = False
-                break
+            else:
+                # No speech detected
+                conversation_timeout_count += 1
+                
+                # Update max timeouts dynamically based on current spelling game state
+                current_max_timeouts = 6 if self.spelling_game_active else 2
+                
+                if conversation_timeout_count == 1:
+                    # First timeout - gentle prompt
+                    if self.spelling_game_active:
+                        prompts = {
+                            'sophia': "Take your time writing, Sophia! I'm waiting for you to say 'Ready'.",
+                            'eladriel': "No rush Eladriel! Let me know when you're ready to show me your spelling!",
+                            'parent': "Spelling game active. Say 'Ready' when you want me to check your answer."
+                        }
+                    else:
+                        prompts = {
+                            'sophia': "I'm still here if you have more questions, Sophia!",
+                            'eladriel': "Still here for more dinosaur fun, Eladriel! What's next?",
+                            'parent': "I'm still here and ready to assist. Any additional requests?"
+                        }
+                    self.speak(prompts.get(user, "I'm still listening if you have more to say!"), user)
+                    print(f"⏰ Waiting for {user.title()} to continue...")
+                    
+                elif conversation_timeout_count >= current_max_timeouts:
+                    # Multiple timeouts - end conversation gracefully
+                    if self.spelling_game_active:
+                        # Special handling for spelling game timeout
+                        timeout_messages = {
+                            'sophia': "I'll pause the spelling game for now, Sophia. Say 'Spelling Game' to continue practicing anytime!",
+                            'eladriel': "Let's pause our spelling adventure, Eladriel! Say 'Spelling Game' when you want to play again!",
+                            'parent': "Spelling game test paused due to timeout. Game state preserved for continuation."
+                        }
+                        # Don't reset spelling game state on timeout - just pause it
+                    else:
+                        timeout_messages = {
+                            'sophia': "I'll be here whenever you need me, Sophia. Just say 'Miley' to chat again!",
+                            'eladriel': "I'll be waiting for more dinosaur adventures, Eladriel! Just say 'Dino' when you're ready!",
+                            'parent': "Returning to standby mode. Say 'Assistant' anytime for immediate assistance."
+                        }
+                    self.speak(timeout_messages.get(user, "I'll be here when you need me. Just call my name!"), user)
+                    conversation_active = False
         
         # Show goodbye state in visual feedback
         if self.visual:
@@ -2407,37 +2321,31 @@ Everything looks good for when the children wake up!"""
             self.stop()
 
     def stop(self):
-        """Gracefully shutdown the assistant."""
+        """Stop the AI Assistant gracefully."""
+        logger.info("🛑 Stopping AI Assistant...")
         self.running = False
         
-        # Show shutdown state in visual feedback
-        if self.visual:
-            self.visual.show_standby("👋 Shutting down...")
+        # Stop face recognition first
+        if hasattr(self, 'face_recognition_active') and self.face_recognition_active:
+            self.stop_face_recognition()
         
-        # Stop interrupt system
-        self.stop_interrupt_listener()
-        
-        # Stop other components
-        self.wake_word_detector.stop()
-        self.stop_face_recognition()
-        
-        # Cleanup object identification resources
-        try:
-            self.object_identifier.cleanup()
-            self.dinosaur_identifier.cleanup()
-        except Exception as e:
-            logger.error(f"Error during cleanup: {e}")
-        
-        # Stop visual feedback system
+        # Close visual feedback
         if self.visual:
             try:
-                self.visual.stop()
-                logger.info("🎨 Visual feedback system stopped")
+                    self.visual.close()
+                    logger.info("Visual feedback closed")
             except Exception as e:
-                logger.error(f"Error stopping visual feedback: {e}")
+                    logger.error(f"Error closing visual feedback: {e}")
         
-        logger.info("AI Assistant stopped")
-        print("👋 AI Assistant stopped. Goodbye!")
+        # Cleanup camera resources
+        if self.camera_handler:
+            try:
+                self.camera_handler.cleanup()
+                logger.info("Camera resources cleaned up")
+            except Exception as e:
+                logger.error(f"Error cleaning up camera: {e}")
+        
+        logger.info("🛑 AI Assistant stopped")
 
     def start_spelling_game(self, user: str) -> str:
         """Start an interactive spelling game for kids with streamlined, exciting instructions."""

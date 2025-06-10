@@ -44,57 +44,97 @@ class OpenAITTSEngine:
         self.logger.info(f"OpenAI TTS Engine initialized with voice: {voice}")
     
     def say(self, text: str):
-        """Convert text to speech and play it."""
-        try:
-            self.logger.info(f"OpenAI TTS: Starting to process text: '{text[:50]}...'")
-            
-            # Generate speech using OpenAI TTS with timeout
-            self.logger.info("OpenAI TTS: Calling API...")
-            
-            # Add timeout to the OpenAI API call
-            response = None
-            api_error = None
-            
-            def api_call():
-                nonlocal response, api_error
-                try:
-                    response = self.client.audio.speech.create(
-                        model=self.model,
-                        voice=self.voice,
-                        input=text,
-                        speed=self.rate
-                    )
-                except Exception as e:
-                    api_error = e
-            
-            # Start API call in separate thread with timeout
-            api_thread = threading.Thread(target=api_call)
-            api_thread.daemon = True
-            api_thread.start()
-            
-            # Wait for API call to complete with 10-second timeout
-            api_thread.join(timeout=10.0)
-            
-            if api_thread.is_alive():
-                self.logger.error("OpenAI TTS: API call timed out after 10 seconds")
-                self.logger.info("OpenAI TTS: Falling back to system TTS due to timeout...")
-                self._fallback_tts(text)
-                return
-            
-            if api_error:
-                self.logger.error(f"OpenAI TTS: API call failed: {api_error}")
-                self.logger.info("OpenAI TTS: Falling back to system TTS due to API error...")
-                self._fallback_tts(text)
-                return
-            
-            if not response:
-                self.logger.error("OpenAI TTS: API call returned no response")
-                self.logger.info("OpenAI TTS: Falling back to system TTS due to no response...")
-                self._fallback_tts(text)
-                return
+        """Convert text to speech and play it with retry logic."""
+        max_retries = 2
+        base_timeout = 15.0
+        
+        for attempt in range(max_retries):
+            try:
+                if attempt > 0:
+                    self.logger.info(f"OpenAI TTS: Retry attempt {attempt + 1}/{max_retries}")
                 
-            self.logger.info("OpenAI TTS: API call successful, processing audio...")
-            
+                self.logger.info(f"OpenAI TTS: Starting to process text: '{text[:50]}...'")
+                
+                # Generate speech using OpenAI TTS with progressive timeout
+                self.logger.info("OpenAI TTS: Calling API...")
+                
+                # Progressive timeout: 15s, then 25s
+                current_timeout = base_timeout + (attempt * 10)
+                
+                # Add timeout to the OpenAI API call
+                response = None
+                api_error = None
+                
+                def api_call():
+                    nonlocal response, api_error
+                    try:
+                        response = self.client.audio.speech.create(
+                            model=self.model,
+                            voice=self.voice,
+                            input=text,
+                            speed=self.rate
+                        )
+                    except Exception as e:
+                        api_error = e
+                
+                # Start API call in separate thread with timeout
+                api_thread = threading.Thread(target=api_call)
+                api_thread.daemon = True
+                api_thread.start()
+                
+                # Wait for API call to complete with progressive timeout
+                api_thread.join(timeout=current_timeout)
+                
+                if api_thread.is_alive():
+                    self.logger.error(f"OpenAI TTS: API call timed out after {current_timeout} seconds (attempt {attempt + 1})")
+                    if attempt < max_retries - 1:
+                        self.logger.info("OpenAI TTS: Retrying with longer timeout...")
+                        time.sleep(1)  # Brief pause before retry
+                        continue
+                    else:
+                        self.logger.error(f"OpenAI TTS: All retry attempts failed for text: '{text[:50]}...'")
+                        print(f"🔇 TTS TIMEOUT - Message was: {text}")
+                        return
+                
+                if api_error:
+                    self.logger.error(f"OpenAI TTS: API call failed: {api_error} (attempt {attempt + 1})")
+                    if attempt < max_retries - 1:
+                        self.logger.info("OpenAI TTS: Retrying after API error...")
+                        time.sleep(2)  # Longer pause after API error
+                        continue
+                    else:
+                        self.logger.error(f"OpenAI TTS: All retry attempts failed for text: '{text[:50]}...'")
+                        print(f"🔇 TTS FAILED - Message was: {text}")
+                        return
+                
+                if not response:
+                    self.logger.error(f"OpenAI TTS: API call returned no response (attempt {attempt + 1})")
+                    if attempt < max_retries - 1:
+                        self.logger.info("OpenAI TTS: Retrying after no response...")
+                        time.sleep(1)
+                        continue
+                    else:
+                        self.logger.error(f"OpenAI TTS: All retry attempts failed for text: '{text[:50]}...'")
+                        print(f"🔇 TTS NO RESPONSE - Message was: {text}")
+                        return
+                    
+                # Success! Process the audio
+                self.logger.info(f"OpenAI TTS: API call successful on attempt {attempt + 1}, processing audio...")
+                break  # Exit retry loop on success
+                
+            except Exception as e:
+                self.logger.error(f"OpenAI TTS error on attempt {attempt + 1}: {e}")
+                if attempt < max_retries - 1:
+                    self.logger.info("OpenAI TTS: Retrying after exception...")
+                    time.sleep(1)
+                    continue
+                else:
+                    self.logger.error(f"OpenAI TTS: All retry attempts failed for text: '{text[:50]}...'")
+                    print(f"🔇 TTS ERROR - Message was: {text}")
+                    return
+        
+        # Process the successful audio response
+        try:
             # Create temporary file for audio
             with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3') as temp_file:
                 temp_file.write(response.content)
@@ -113,7 +153,7 @@ class OpenAITTSEngine:
                 
                 # Wait for playback to complete with timeout
                 timeout_counter = 0
-                max_timeout = 30  # 30 seconds max for any speech
+                max_timeout = 45  # Increased max timeout for longer messages
                 
                 while pygame.mixer.music.get_busy():
                     pygame.time.wait(100)
@@ -132,28 +172,10 @@ class OpenAITTSEngine:
                     self.logger.info("OpenAI TTS: Temporary file cleaned up")
                 except Exception as cleanup_error:
                     self.logger.warning(f"OpenAI TTS: Could not clean up temp file: {cleanup_error}")
-                
-        except Exception as e:
-            self.logger.error(f"OpenAI TTS error: {e}")
-            self.logger.info("OpenAI TTS: Falling back to system TTS...")
-            # Fallback to system TTS if OpenAI fails
-            self._fallback_tts(text)
-    
-    def _fallback_tts(self, text: str):
-        """Fallback to system TTS if OpenAI TTS fails."""
-        try:
-            self.logger.info(f"Fallback TTS: Processing text: '{text[:50]}...'")
-            engine = pyttsx3.init()
-            engine.setProperty('rate', int(self.rate * 200))
-            engine.setProperty('volume', self.volume)
-            engine.say(text)
-            engine.runAndWait()
-            engine.stop()
-            self.logger.info("Fallback TTS: Completed successfully")
-        except Exception as e:
-            self.logger.error(f"Fallback TTS also failed: {e}")
-            # Last resort: print the text at least
-            print(f"TTS FAILED - MESSAGE: {text}")
+                    
+        except Exception as audio_error:
+            self.logger.error(f"OpenAI TTS: Audio processing error: {audio_error}")
+            print(f"🔇 TTS AUDIO ERROR - Message was: {text}")
     
     def runAndWait(self):
         """Compatibility method for pyttsx3 interface."""
@@ -347,12 +369,12 @@ def setup_premium_tts_engines(client):
     logger = logging.getLogger(__name__)
     
     # Sophia's voice - soft, encouraging, and supportive (feminine)
-    sophia_tts = OpenAITTSEngine(client, voice="shimmer")  # Shimmer: warm and friendly
-    logger.info("✨ Sophia's premium voice (Shimmer) initialized - soft and encouraging")
+    sophia_tts = OpenAITTSEngine(client, voice="nova")  # Nova: reliable and friendly
+    logger.info("✨ Sophia's premium voice (Nova) initialized - soft and encouraging")
     
     # Eladriel's voice - energetic, playful, and adventurous (masculine for a boy)
-    eladriel_tts = OpenAITTSEngine(client, voice="onyx")  # Onyx: deep and masculine, perfect for a boy
-    logger.info("🦕 Eladriel's premium voice (Onyx) initialized - energetic and masculine for a boy")
+    eladriel_tts = OpenAITTSEngine(client, voice="alloy")  # Alloy: reliable and energetic
+    logger.info("🦕 Eladriel's premium voice (Alloy) initialized - energetic and reliable")
     
     return sophia_tts, eladriel_tts
 

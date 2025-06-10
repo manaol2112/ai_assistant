@@ -127,25 +127,26 @@ class VoiceActivityDetector:
                 logger.info("🎤 Smart Voice Detection: Listening for human speech only...")
                 
                 # Enhanced microphone calibration
-                self.recognizer.adjust_for_ambient_noise(source, duration=1.0)
+                self.recognizer.adjust_for_ambient_noise(source, duration=0.1)  # Ultra-fast ambient noise setup
                 
-                # Configure sensitivity based on game mode
+                # Configure sensitivity based on game mode - OPTIMIZED FOR SPEED
                 if game_mode == 'spelling':
-                    self.recognizer.energy_threshold = max(200, self.recognizer.energy_threshold * 0.6)
-                    chunk_duration = 0.8  # Longer chunks for better word capture
-                    min_silence_gap = 0.3  # Shorter silence gap tolerance
+                    self.recognizer.energy_threshold = max(100, self.recognizer.energy_threshold * 0.3)  # Much more sensitive
+                    chunk_duration = 0.3  # Much faster chunks for real-time detection
+                    min_silence_gap = 0.2  # Shorter silence gap
                 elif game_mode == 'filipino':
-                    self.recognizer.energy_threshold = max(250, self.recognizer.energy_threshold * 0.7)
-                    chunk_duration = 1.0  # Longer chunks for Filipino phrases
-                    min_silence_gap = 0.4
+                    self.recognizer.energy_threshold = max(120, self.recognizer.energy_threshold * 0.4)
+                    chunk_duration = 0.4  # Faster chunks
+                    min_silence_gap = 0.3
                 elif game_mode == 'interrupt':
-                    self.recognizer.energy_threshold = max(400, self.recognizer.energy_threshold * 0.9)
-                    chunk_duration = 0.2  # Very short chunks for quick interrupts
+                    self.recognizer.energy_threshold = max(80, self.recognizer.energy_threshold * 0.2)  # Very sensitive for interrupts
+                    chunk_duration = 0.1  # Ultra-fast chunks for interrupts
                     min_silence_gap = 0.1
                 else:
-                    self.recognizer.energy_threshold = max(300, self.recognizer.energy_threshold * 0.8)
-                    chunk_duration = 1.2  # Much longer chunks for complete sentences
-                    min_silence_gap = 0.5  # Allow brief pauses in natural speech
+                    # NORMAL MODE - OPTIMIZED FOR COMPLETE SPEECH CAPTURE
+                    self.recognizer.energy_threshold = max(200, self.recognizer.energy_threshold * 0.5)  # Balanced sensitivity
+                    chunk_duration = 0.5  # Longer chunks for better sentence capture
+                    min_silence_gap = 0.4  # More forgiving silence tolerance
                 
                 self.recognizer.dynamic_energy_threshold = True
                 
@@ -170,7 +171,7 @@ class VoiceActivityDetector:
                         chunk_audio = self.recognizer.listen(
                             source, 
                             timeout=chunk_duration, 
-                            phrase_time_limit=min(8.0, chunk_duration * 3)  # Allow much longer phrases
+                            phrase_time_limit=min(4.0, chunk_duration * 8)  # Allow longer phrases for complete thoughts
                         )
                         
                         # Quick speech test for this chunk
@@ -214,6 +215,32 @@ class VoiceActivityDetector:
                         # Stop if we have enough silence after detecting human speech
                         # But be more generous with silence tolerance for natural speech
                         if consecutive_silence_time >= silence_threshold and human_speech_detected:
+                            # Check if the last detected speech seems incomplete
+                            if audio_chunks:
+                                try:
+                                    # Quick check of the last chunk to see if sentence seems incomplete
+                                    last_chunk = audio_chunks[-1]
+                                    test_text = self.recognizer.recognize_google(last_chunk, language='en-US')
+                                    
+                                    # Common incomplete patterns
+                                    incomplete_patterns = [
+                                        "what is the", "how do you", "where is the", "when did the",
+                                        "why do", "who is", "which one", "how far is", "what are the",
+                                        "tell me about", "what about", "how about", "what if",
+                                        "can you", "could you", "would you", "will you"
+                                    ]
+                                    
+                                    test_lower = test_text.lower().strip()
+                                    is_incomplete = any(test_lower.endswith(pattern) for pattern in incomplete_patterns)
+                                    
+                                    if is_incomplete and consecutive_silence_time < (silence_threshold * 2):
+                                        logger.info(f"🔄 Detected incomplete sentence: '{test_text}' - waiting for completion...")
+                                        consecutive_silence_time = 0  # Reset to wait for more speech
+                                        continue
+                                        
+                                except (sr.UnknownValueError, sr.RequestError):
+                                    pass  # Continue with normal processing
+                            
                             logger.info(f"✅ Human finished speaking! Processing {len(audio_chunks)} chunks...")
                             break
                             
