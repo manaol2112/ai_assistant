@@ -34,6 +34,9 @@ try:
     from math_quiz_game import MathQuizGame
     from animal_guess_game import AnimalGuessGame
     from camera_handler import CameraHandler
+    # Visual feedback system imports
+    from visual_feedback import create_visual_feedback
+    from visual_config import get_config_for_environment
 except ImportError as e:
     print(f"❌ Import error: {e}")
     print("Please install required packages: pip install -r requirements.txt")
@@ -211,6 +214,16 @@ class AIAssistant:
                 ]
             }
         }
+        
+        # Initialize visual feedback system
+        try:
+            logger.info("🎨 Setting up visual feedback system...")
+            self.visual_config = get_config_for_environment()
+            self.visual = create_visual_feedback(self.visual_config)
+            logger.info("✨ Visual feedback system initialized successfully")
+        except Exception as e:
+            logger.warning(f"Visual feedback system not available: {e}")
+            self.visual = None
         
         logger.info("🚀 AI Assistant initialized with premium natural voices, face recognition, and universal object identification!")
 
@@ -685,32 +698,62 @@ class AIAssistant:
             return None
 
     def play_spelling_correct_sound(self):
-        """Play celebration sound for correct spelling or math answers."""
+        """Play celebration sound for correct spelling."""
         if not self.audio_feedback_enabled:
             return
+            
+        # Show happy state in visual feedback
+        if self.visual:
+            self.visual.show_happy("Correct! 🎉")
+            
         try:
-            if self.pygame_available and hasattr(self, 'spelling_correct_sound'):
-                import pygame
-                pygame.mixer.Sound(self.spelling_correct_sound).play()
+            if self.pygame_available and self.spelling_correct_sound:
+                sound_array, sample_rate = self.spelling_correct_sound
+                self._play_sound_array(sound_array, sample_rate)
             else:
+                # Fallback celebration
                 import os
-                os.system('afplay /System/Library/Sounds/Hero.aiff 2>/dev/null &')
+                os.system('afplay /System/Library/Sounds/Glass.aiff 2>/dev/null &')
         except Exception as e:
-            logger.error(f"Error playing correct sound: {e}")
+            logger.error(f"Error playing spelling correct sound: {e}")
 
     def play_spelling_wrong_sound(self):
-        """Play buzzer sound for incorrect spelling or math answers."""
+        """Play buzzer sound for wrong spelling."""
         if not self.audio_feedback_enabled:
             return
+            
+        # Show thinking state in visual feedback (encouraging, not error)
+        if self.visual:
+            self.visual.show_thinking("Try again! 🤔")
+            
         try:
-            if self.pygame_available and hasattr(self, 'spelling_wrong_sound'):
-                import pygame
-                pygame.mixer.Sound(self.spelling_wrong_sound).play()
+            if self.pygame_available and self.spelling_wrong_sound:
+                sound_array, sample_rate = self.spelling_wrong_sound
+                self._play_sound_array(sound_array, sample_rate)
             else:
+                # Fallback buzzer
                 import os
-                os.system('afplay /System/Library/Sounds/Basso.aiff 2>/dev/null &')
+                os.system('afplay /System/Library/Sounds/Funk.aiff 2>/dev/null &')
         except Exception as e:
-            logger.error(f"Error playing wrong sound: {e}")
+            logger.error(f"Error playing spelling wrong sound: {e}")
+
+    def _play_sound_array(self, sound_array, sample_rate):
+        """Helper method to play sound arrays using pygame."""
+        try:
+            if self.pygame_available:
+                import pygame
+                import numpy as np
+                
+                # Convert numpy array to pygame sound
+                # Ensure the array is in the right format for pygame
+                if sound_array.dtype != np.int16:
+                    sound_array = (sound_array * 32767).astype(np.int16)
+                
+                # Create and play the sound
+                sound = pygame.sndarray.make_sound(sound_array)
+                sound.play()
+        except Exception as e:
+            logger.error(f"Error playing sound array: {e}")
 
     def play_math_correct_sound(self):
         """Play celebration sound for correct math answers (uses same sound as spelling)."""
@@ -969,9 +1012,9 @@ class AIAssistant:
                     self.speak(timeout_messages.get(user, "I'll be here when you need me. Just call my name!"), user)
                     conversation_active = False
         
-        self.current_user = None
-        logger.info(f"🎤 Automatic conversation with {user.title()} ended")
-        print("🎤 Returning to face detection and wake word listening mode...")
+        # Show goodbye state in visual feedback
+        if self.visual:
+            self.visual.show_standby("👋 Goodbye! Say wake word to chat again")
         
         self.current_user = None
         print("🎤 Conversation ended. Listening for wake words again...")
@@ -1000,6 +1043,10 @@ class AIAssistant:
             return
         
         logger.info(f"🗣️ SPEAK: Starting speech process for text: '{text[:50]}...'")
+        
+        # Show speaking state in visual feedback
+        if self.visual:
+            self.visual.show_speaking(text[:50] + "..." if len(text) > 50 else text)
         
         try:
             # CRITICAL: Set AI speaking flag to prevent voice detector from listening to AI
@@ -1056,6 +1103,10 @@ class AIAssistant:
             import traceback
             logger.error(f"🗣️ SPEAK ERROR: Traceback: {traceback.format_exc()}")
             
+            # Show error state in visual feedback
+            if self.visual:
+                self.visual.show_error("Speech Error")
+            
             self.stop_interrupt_listener()
             # Still play ready cue even on error
             self.play_ready_to_speak_sound()
@@ -1067,6 +1118,10 @@ class AIAssistant:
             # CRITICAL: Always reset AI speaking flag when done
             logger.info("🗣️ SPEAK: Resetting AI speaking flag to False")
             self.voice_detector.set_ai_speaking(False)
+            
+            # Return to standby state in visual feedback
+            if self.visual:
+                self.visual.show_standby("Ready to listen...")
 
     def speak_no_interrupt(self, text: str, user: Optional[str] = None):
         """Speak text without interrupt capability (for game instructions, etc.)."""
@@ -1287,6 +1342,10 @@ class AIAssistant:
     def listen_for_speech(self, timeout: int = 15) -> Optional[str]:
         """Listen for speech input using intelligent voice activity detection with speaker differentiation."""
         try:
+            # Show listening state in visual feedback
+            if self.visual:
+                self.visual.show_listening("🎤 Listening...")
+            
             # Set AI speaking flag to false to allow listening
             self.voice_detector.set_ai_speaking(False)
             
@@ -1318,7 +1377,14 @@ class AIAssistant:
             )
             
             if text is None:
+                # Show timeout state in visual feedback
+                if self.visual:
+                    self.visual.show_standby("No speech detected")
                 return None
+            
+            # Show thinking state while processing
+            if self.visual:
+                self.visual.show_thinking("Processing...")
             
             # Special handling for "ready" detection in spelling game
             if self.spelling_game_active:
@@ -1331,6 +1397,9 @@ class AIAssistant:
                 
         except Exception as e:
             logger.error(f"Smart voice detection error: {e}")
+            # Show error state in visual feedback
+            if self.visual:
+                self.visual.show_error("Listening Error")
             # Fallback to basic recognition if smart detection fails
             return self._fallback_listen_for_speech(timeout)
     
@@ -2174,6 +2243,11 @@ Everything looks good for when the children wake up!"""
         self.current_user = user
         user_info = self.users[user]
         
+        # Show active user in visual feedback
+        if self.visual:
+            user_display_name = user_info.get('name', user.title())
+            self.visual.show_happy(f"Hello {user_display_name}! 👋")
+        
         # Get greeting (fresh for parent mode to check current time)
         if user == 'parent':
             greeting = self.get_parent_greeting()
@@ -2339,6 +2413,10 @@ Everything looks good for when the children wake up!"""
                     self.speak(timeout_messages.get(user, "I'll be here when you need me. Just call my name!"), user)
                     conversation_active = False
         
+        # Show goodbye state in visual feedback
+        if self.visual:
+            self.visual.show_standby("👋 Goodbye! Say wake word to chat again")
+        
         self.current_user = None
         print("🎤 Conversation ended. Listening for wake words again...")
         # Note: Spelling game state persists between conversations - only reset when user explicitly ends game
@@ -2347,6 +2425,11 @@ Everything looks good for when the children wake up!"""
         """Main loop - listen for wake words and handle natural conversations with face recognition."""
         self.running = True
         logger.info("AI Assistant started - Listening for wake words...")
+        
+        # Start visual feedback if available
+        if self.visual:
+            self.visual.show_standby("🤖 AI Assistant Starting Up...")
+            logger.info("🎨 Visual feedback system active")
         
         # Start face recognition system
         self.start_face_recognition()
@@ -2366,37 +2449,89 @@ Everything looks good for when the children wake up!"""
         print("👨‍💼 Parent Mode: Say 'Assistant' for admin features and quiet mode!")
         print("🎤 Listening for faces and wake words...")
         
-        try:
-            while self.running:
-                # Listen for wake words (only when no one is in conversation)
-                if not self.current_user:
-                    detected_user = self.wake_word_detector.listen_for_wake_word()
+        # Show ready state in visual feedback
+        if self.visual:
+            self.visual.show_standby("👋 Ready! Say 'Miley', 'Dino', or 'Assistant'")
+        
+        # Handle GUI vs non-GUI modes
+        if hasattr(self.visual, 'run_gui') and self.visual.run_gui:
+            # GUI mode - run main loop in background thread
+            def main_loop():
+                try:
+                    while self.running:
+                        # Listen for wake words (only when no one is in conversation)
+                        if not self.current_user:
+                            detected_user = self.wake_word_detector.listen_for_wake_word()
+                            
+                            if detected_user:
+                                logger.info(f"Wake word detected for: {detected_user}")
+                                print(f"👋 Hello {detected_user.title()}! Starting voice-activated conversation...")
+                                
+                                # Play wake word confirmation sound
+                                self.play_wake_word_sound()
+                                
+                                # Show listening state
+                                if self.visual:
+                                    self.visual.show_listening(f"Hello {detected_user.title()}!")
+                                
+                                # Handle the user interaction with conversation mode
+                                self.handle_user_interaction(detected_user)
+                        else:
+                            # Someone is in conversation, just wait
+                            time.sleep(0.5)
+                        
+                        time.sleep(0.1)  # Small delay to prevent excessive CPU usage
+                        
+                except KeyboardInterrupt:
+                    logger.info("Shutting down AI Assistant...")
+                    self.stop()
+                except Exception as e:
+                    logger.error(f"Unexpected error in main loop: {e}")
+                    self.stop()
+            
+            # Start main loop in background thread
+            main_thread = threading.Thread(target=main_loop, daemon=True)
+            main_thread.start()
+            
+            # Run GUI on main thread
+            self.visual.start_gui()
+        else:
+            # Non-GUI mode - run normally
+            try:
+                while self.running:
+                    # Listen for wake words (only when no one is in conversation)
+                    if not self.current_user:
+                        detected_user = self.wake_word_detector.listen_for_wake_word()
+                        
+                        if detected_user:
+                            logger.info(f"Wake word detected for: {detected_user}")
+                            print(f"👋 Hello {detected_user.title()}! Starting voice-activated conversation...")
+                            
+                            # Play wake word confirmation sound
+                            self.play_wake_word_sound()
+                            
+                            # Handle the user interaction with conversation mode
+                            self.handle_user_interaction(detected_user)
+                    else:
+                        # Someone is in conversation, just wait
+                        time.sleep(0.5)
                     
-                    if detected_user:
-                        logger.info(f"Wake word detected for: {detected_user}")
-                        print(f"👋 Hello {detected_user.title()}! Starting voice-activated conversation...")
-                        
-                        # Play wake word confirmation sound
-                        self.play_wake_word_sound()
-                        
-                        # Handle the user interaction with conversation mode
-                        self.handle_user_interaction(detected_user)
-                else:
-                    # Someone is in conversation, just wait
-                    time.sleep(0.5)
-                
-                time.sleep(0.1)  # Small delay to prevent excessive CPU usage
-                
-        except KeyboardInterrupt:
-            logger.info("Shutting down AI Assistant...")
-            self.stop()
-        except Exception as e:
-            logger.error(f"Unexpected error in main loop: {e}")
-            self.stop()
+                    time.sleep(0.1)  # Small delay to prevent excessive CPU usage
+                    
+            except KeyboardInterrupt:
+                logger.info("Shutting down AI Assistant...")
+                self.stop()
+            except Exception as e:
+                logger.error(f"Unexpected error in main loop: {e}")
+                self.stop()
 
     def stop(self):
         """Gracefully shutdown the assistant."""
         self.running = False
+        
+        # Show shutdown state in visual feedback
+        if self.visual:
+            self.visual.show_standby("👋 Shutting down...")
         
         # Stop interrupt system
         self.stop_interrupt_listener()
@@ -2411,6 +2546,14 @@ Everything looks good for when the children wake up!"""
             self.dinosaur_identifier.cleanup()
         except Exception as e:
             logger.error(f"Error during cleanup: {e}")
+        
+        # Stop visual feedback system
+        if self.visual:
+            try:
+                self.visual.stop()
+                logger.info("🎨 Visual feedback system stopped")
+            except Exception as e:
+                logger.error(f"Error stopping visual feedback: {e}")
         
         logger.info("AI Assistant stopped")
         print("👋 AI Assistant stopped. Goodbye!")
