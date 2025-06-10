@@ -137,6 +137,73 @@ class PremiumRobotFace:
                     'bow_primary': '#87CEEB', 'bow_secondary': '#6495ED'
                 }
             }
+        elif face_type == "modern_robot":
+            self.color_schemes = {
+                'standby': {
+                    'body_primary': '#f5f5f5', 'body_secondary': '#ffffff',
+                    'eye_glow': '#00ccff', 'eye_inner': '#004080',
+                    'accent': '#e0e0e0', 'shadow': '#c0c0c0',
+                    'mouth_primary': '#666666', 'mouth_secondary': '#888888'
+                },
+                'listening': {
+                    'body_primary': '#f0f8ff', 'body_secondary': '#ffffff',
+                    'eye_glow': '#00ff7f', 'eye_inner': '#006040',
+                    'accent': '#d0e8d0', 'shadow': '#b0c0b0',
+                    'mouth_primary': '#4caf50', 'mouth_secondary': '#66bb6a'
+                },
+                'speaking': {
+                    'body_primary': '#fff8f0', 'body_secondary': '#ffffff',
+                    'eye_glow': '#ff8c00', 'eye_inner': '#cc6600',
+                    'accent': '#ffd080', 'shadow': '#e0b060',
+                    'mouth_primary': '#ff7043', 'mouth_secondary': '#ff8a65'
+                },
+                'happy': {
+                    'body_primary': '#fffaf0', 'body_secondary': '#ffffff',
+                    'eye_glow': '#ffeb3b', 'eye_inner': '#f57f17',
+                    'accent': '#fff176', 'shadow': '#e0d050',
+                    'mouth_primary': '#ffeb3b', 'mouth_secondary': '#fff176'
+                },
+                'thinking': {
+                    'body_primary': '#f8f0ff', 'body_secondary': '#ffffff',
+                    'eye_glow': '#9c27b0', 'eye_inner': '#6a1b7b',
+                    'accent': '#e1bee7', 'shadow': '#c090c0',
+                    'mouth_primary': '#ab47bc', 'mouth_secondary': '#ba68c8'
+                }
+            }
+        else:
+            # Default robot design
+            self.color_schemes = {
+                'standby': {
+                    'body_primary': '#f0f0f0', 'body_secondary': '#ffffff',
+                    'eye_glow': '#4fc3f7', 'eye_inner': '#0277bd',
+                    'accent': '#e0e0e0', 'shadow': '#c0c0c0',
+                    'mouth_primary': '#666666', 'mouth_secondary': '#888888'
+                },
+                'listening': {
+                    'body_primary': '#f0f8f0', 'body_secondary': '#ffffff',
+                    'eye_glow': '#66bb6a', 'eye_inner': '#388e3c',
+                    'accent': '#c8e6c9', 'shadow': '#a5d6a7',
+                    'mouth_primary': '#4caf50', 'mouth_secondary': '#66bb6a'
+                },
+                'speaking': {
+                    'body_primary': '#fff8f0', 'body_secondary': '#ffffff',
+                    'eye_glow': '#ff7043', 'eye_inner': '#d84315',
+                    'accent': '#ffccbc', 'shadow': '#ffab91',
+                    'mouth_primary': '#ff7043', 'mouth_secondary': '#ff8a65'
+                },
+                'happy': {
+                    'body_primary': '#fffde7', 'body_secondary': '#ffffff',
+                    'eye_glow': '#ffeb3b', 'eye_inner': '#f57f17',
+                    'accent': '#fff176', 'shadow': '#ffcc02',
+                    'mouth_primary': '#ffeb3b', 'mouth_secondary': '#fff176'
+                },
+                'thinking': {
+                    'body_primary': '#fce4ec', 'body_secondary': '#ffffff',
+                    'eye_glow': '#ab47bc', 'eye_inner': '#7b1fa2',
+                    'accent': '#f8bbd9', 'shadow': '#f48fb1',
+                    'mouth_primary': '#ab47bc', 'mouth_secondary': '#ba68c8'
+                }
+            }
         
         self.create_premium_face()
     
@@ -146,6 +213,8 @@ class PremiumRobotFace:
             self._create_premium_dinosaur()
         elif self.face_type == "girl_robot":
             self._create_premium_girl_robot()
+        elif self.face_type == "modern_robot":
+            self._create_modern_robot()
         else:
             self._create_premium_default_robot()
     
@@ -447,9 +516,13 @@ class PremiumRobotFace:
         """Create advanced mouth system with multiple shapes for different emotions and speech."""
         mouth_y = self.center_y + self.size // 3
         
+        # Adjust mouth position for modern robot
+        if self.face_type == "modern_robot":
+            mouth_y = self.center_y + self.size // 2.5
+        
         # Multiple mouth shapes for different states
         self.mouth_shapes = {
-            'neutral': self._create_mouth_shape('arc', mouth_y, 30, 15, 0, 180),
+            'neutral': self._create_mouth_shape('line', mouth_y, 20, 3),
             'happy': self._create_mouth_shape('arc', mouth_y - 5, 35, 20, 0, 180),
             'speaking_o': self._create_mouth_shape('oval', mouth_y, 12, 18),
             'speaking_a': self._create_mouth_shape('arc', mouth_y, 25, 12, 20, 140),
@@ -461,6 +534,9 @@ class PremiumRobotFace:
         
         # Start with neutral mouth
         self.current_mouth = 'neutral'
+        # Remove existing mouth if present
+        if 'mouth' in self.elements:
+            self.canvas.delete(self.elements['mouth'])
         self.elements['mouth'] = self.mouth_shapes['neutral']
     
     def _create_mouth_shape(self, shape_type: str, y: int, width: int, height: int, start: int = 0, extent: int = 180):
@@ -540,25 +616,56 @@ class PremiumRobotFace:
         """Smoothly transition colors to create premium visual effects."""
         # Update major face elements with new colors
         if 'face' in self.elements:
-            self.canvas.itemconfig(self.elements['face'], fill=target_colors['face_primary'])
+            self.canvas.itemconfig(self.elements['face'], fill=target_colors.get('face_primary', target_colors.get('body_primary', '#f0f0f0')))
+        
+        if 'body' in self.elements:
+            self.canvas.itemconfig(self.elements['body'], fill=target_colors.get('body_primary', '#f0f0f0'))
+        
+        if 'body_highlight' in self.elements:
+            self.canvas.itemconfig(self.elements['body_highlight'], fill=target_colors.get('body_secondary', '#ffffff'))
         
         if 'glow' in self.elements:
-            self.canvas.itemconfig(self.elements['glow'], fill=target_colors['glow'])
+            self.canvas.itemconfig(self.elements['glow'], fill=target_colors.get('glow', target_colors.get('eye_glow', '#4fc3f7')))
+        
+        if 'outer_glow' in self.elements:
+            self.canvas.itemconfig(self.elements['outer_glow'], fill=target_colors.get('glow', target_colors.get('eye_glow', '#4fc3f7')))
         
         # Update eyes with intensity-based brightness
+        for eye_glow in ['left_eye_glow', 'right_eye_glow']:
+            if eye_glow in self.elements:
+                self.canvas.itemconfig(self.elements[eye_glow], outline=target_colors.get('eye_glow', '#4fc3f7'))
+        
+        for eye in ['left_eye', 'right_eye']:
+            if eye in self.elements:
+                self.canvas.itemconfig(self.elements[eye], fill=target_colors.get('eye_glow', '#4fc3f7'))
+        
+        for eye_inner in ['left_eye_inner', 'right_eye_inner']:
+            if eye_inner in self.elements:
+                self.canvas.itemconfig(self.elements[eye_inner], fill=target_colors.get('eye_inner', '#0277bd'))
+        
         for iris in ['left_iris', 'right_iris']:
             if iris in self.elements:
-                self.canvas.itemconfig(self.elements[iris], fill=target_colors['eyes_primary'])
+                self.canvas.itemconfig(self.elements[iris], fill=target_colors.get('eyes_primary', target_colors.get('eye_glow', '#4fc3f7')))
         
         # Update face-specific elements
         if self.face_type == "dinosaur":
             for horn in ['left_horn', 'right_horn']:
                 if horn in self.elements:
-                    self.canvas.itemconfig(self.elements[horn], fill=target_colors['horn_primary'])
+                    self.canvas.itemconfig(self.elements[horn], fill=target_colors.get('horn_primary', '#8FBC8F'))
         elif self.face_type == "girl_robot":
             for bow_part in ['bow', 'bow_center']:
                 if bow_part in self.elements:
-                    self.canvas.itemconfig(self.elements[bow_part], fill=target_colors['bow_primary'])
+                    self.canvas.itemconfig(self.elements[bow_part], fill=target_colors.get('bow_primary', '#FF69B4'))
+        elif self.face_type == "modern_robot":
+            # Update modern robot accent elements
+            for panel_line in ['panel_line_1', 'panel_line_2']:
+                if panel_line in self.elements:
+                    self.canvas.itemconfig(self.elements[panel_line], fill=target_colors.get('accent', '#e0e0e0'))
+                    
+        # Update mouth for modern robot
+        if 'mouth' in self.elements and self.face_type == "modern_robot":
+            mouth_color = target_colors.get('mouth_primary', target_colors.get('accent', '#666666'))
+            self.canvas.itemconfig(self.elements['mouth'], fill=mouth_color)
     
     def start_speaking(self):
         """Start advanced speaking animation."""
@@ -653,6 +760,165 @@ class PremiumRobotFace:
         self.animation_active = False
         self.stop_speaking()
 
+    def _create_modern_robot(self):
+        """Create sleek modern robot matching the reference design - white with blue glowing eyes."""
+        colors = self.color_schemes.get('standby', {
+            'body_primary': '#f5f5f5',
+            'body_secondary': '#ffffff', 
+            'eye_glow': '#00ccff',
+            'eye_inner': '#004080',
+            'accent': '#e0e0e0',
+            'shadow': '#c0c0c0'
+        })
+        
+        # Premium glow effect background
+        self.elements['outer_glow'] = self.canvas.create_oval(
+            self.center_x - self.size//2 - 30, self.center_y - int(self.size * 0.7) - 30,
+            self.center_x + self.size//2 + 30, self.center_y + int(self.size * 0.7) + 30,
+            fill='#e6f7ff', outline='', stipple='gray12'
+        )
+        
+        # Robot body shadow
+        body_width = int(self.size * 1.1)
+        body_height = int(self.size * 1.3)
+        self.elements['body_shadow'] = self.canvas.create_oval(
+            self.center_x - body_width//2 + 4, self.center_y - body_height//2 + 4,
+            self.center_x + body_width//2 + 4, self.center_y + body_height//2 + 4,
+            fill='#d0d0d0', outline='', stipple='gray25'
+        )
+        
+        # Main robot body - sleek oval shape
+        self.elements['body'] = self.canvas.create_oval(
+            self.center_x - body_width//2, self.center_y - body_height//2,
+            self.center_x + body_width//2, self.center_y + body_height//2,
+            fill=colors['body_primary'], outline=colors['accent'], width=3
+        )
+        
+        # Inner body highlight for premium look
+        self.elements['body_highlight'] = self.canvas.create_oval(
+            self.center_x - body_width//2 + 8, self.center_y - body_height//2 + 8,
+            self.center_x + body_width//2 - 8, self.center_y + body_height//2 - 8,
+            fill=colors['body_secondary'], outline='', stipple='gray12'
+        )
+        
+        # Large prominent blue glowing eyes
+        eye_size = self.size // 3  # Much larger eyes
+        eye_offset_x = self.size // 4
+        eye_offset_y = self.size // 6
+        
+        # Eye outer glow rings
+        glow_size = eye_size + 12
+        self.elements['left_eye_glow'] = self.canvas.create_oval(
+            self.center_x - eye_offset_x - glow_size, self.center_y - eye_offset_y - glow_size,
+            self.center_x - eye_offset_x + glow_size, self.center_y - eye_offset_y + glow_size,
+            fill='', outline=colors['eye_glow'], width=4
+        )
+        
+        self.elements['right_eye_glow'] = self.canvas.create_oval(
+            self.center_x + eye_offset_x - glow_size, self.center_y - eye_offset_y - glow_size,
+            self.center_x + eye_offset_x + glow_size, self.center_y - eye_offset_y + glow_size,
+            fill='', outline=colors['eye_glow'], width=4
+        )
+        
+        # Eye frames (black bezels)
+        frame_size = eye_size + 6
+        self.elements['left_eye_frame'] = self.canvas.create_oval(
+            self.center_x - eye_offset_x - frame_size, self.center_y - eye_offset_y - frame_size,
+            self.center_x - eye_offset_x + frame_size, self.center_y - eye_offset_y + frame_size,
+            fill='#2a2a2a', outline='#1a1a1a', width=2
+        )
+        
+        self.elements['right_eye_frame'] = self.canvas.create_oval(
+            self.center_x + eye_offset_x - frame_size, self.center_y - eye_offset_y - frame_size,
+            self.center_x + eye_offset_x + frame_size, self.center_y - eye_offset_y + frame_size,
+            fill='#2a2a2a', outline='#1a1a1a', width=2
+        )
+        
+        # Main eye globes with blue glow
+        self.elements['left_eye'] = self.canvas.create_oval(
+            self.center_x - eye_offset_x - eye_size, self.center_y - eye_offset_y - eye_size,
+            self.center_x - eye_offset_x + eye_size, self.center_y - eye_offset_y + eye_size,
+            fill=colors['eye_glow'], outline=colors['eye_inner'], width=3
+        )
+        
+        self.elements['right_eye'] = self.canvas.create_oval(
+            self.center_x + eye_offset_x - eye_size, self.center_y - eye_offset_y - eye_size,
+            self.center_x + eye_offset_x + eye_size, self.center_y - eye_offset_y + eye_size,
+            fill=colors['eye_glow'], outline=colors['eye_inner'], width=3
+        )
+        
+        # Inner eye circles for depth
+        inner_size = eye_size - 8
+        self.elements['left_eye_inner'] = self.canvas.create_oval(
+            self.center_x - eye_offset_x - inner_size, self.center_y - eye_offset_y - inner_size,
+            self.center_x - eye_offset_x + inner_size, self.center_y - eye_offset_y + inner_size,
+            fill=colors['eye_inner'], outline=''
+        )
+        
+        self.elements['right_eye_inner'] = self.canvas.create_oval(
+            self.center_x + eye_offset_x - inner_size, self.center_y - eye_offset_y - inner_size,
+            self.center_x + eye_offset_x + inner_size, self.center_y - eye_offset_y + inner_size,
+            fill=colors['eye_inner'], outline=''
+        )
+        
+        # Bright center pupils for life-like appearance
+        pupil_size = 8
+        self.elements['left_pupil'] = self.canvas.create_oval(
+            self.center_x - eye_offset_x - pupil_size, self.center_y - eye_offset_y - pupil_size,
+            self.center_x - eye_offset_x + pupil_size, self.center_y - eye_offset_y + pupil_size,
+            fill='#66d9ff', outline='white', width=1
+        )
+        
+        self.elements['right_pupil'] = self.canvas.create_oval(
+            self.center_x + eye_offset_x - pupil_size, self.center_y - eye_offset_y - pupil_size,
+            self.center_x + eye_offset_x + pupil_size, self.center_y - eye_offset_y + pupil_size,
+            fill='#66d9ff', outline='white', width=1
+        )
+        
+        # Bright highlights for premium look
+        highlight_size = 4
+        self.elements['left_highlight'] = self.canvas.create_oval(
+            self.center_x - eye_offset_x - highlight_size - 6, self.center_y - eye_offset_y - highlight_size - 6,
+            self.center_x - eye_offset_x + highlight_size - 6, self.center_y - eye_offset_y + highlight_size - 6,
+            fill='#ffffff', outline=''
+        )
+        
+        self.elements['right_highlight'] = self.canvas.create_oval(
+            self.center_x + eye_offset_x - highlight_size - 6, self.center_y - eye_offset_y - highlight_size - 6,
+            self.center_x + eye_offset_x + highlight_size - 6, self.center_y - eye_offset_y + highlight_size - 6,
+            fill='#ffffff', outline=''
+        )
+        
+        # Body panel lines for modern tech look
+        panel_y1 = self.center_y + self.size // 3
+        panel_y2 = self.center_y + self.size // 2
+        
+        self.elements['panel_line_1'] = self.canvas.create_line(
+            self.center_x - 25, panel_y1,
+            self.center_x + 25, panel_y1,
+            fill=colors['accent'], width=2
+        )
+        
+        self.elements['panel_line_2'] = self.canvas.create_line(
+            self.center_x - 20, panel_y2,
+            self.center_x + 20, panel_y2,
+            fill=colors['accent'], width=2
+        )
+        
+        # Small status LED
+        self.elements['status_led'] = self.canvas.create_oval(
+            self.center_x - 3, self.center_y - self.size // 2 + 15,
+            self.center_x + 3, self.center_y - self.size // 2 + 21,
+            fill='#00ff00', outline='#00cc00', width=1
+        )
+        
+        # Initialize advanced mouth system for modern robot
+        self._create_advanced_mouth()
+
+    def _create_premium_default_robot(self):
+        """Create default modern robot design."""
+        # Use the same design as modern_robot
+        self._create_modern_robot()
 
 class PremiumVisualFeedbackSystem:
     """Enterprise-grade visual feedback system with advanced emotional AI and premium aesthetics."""
@@ -691,12 +957,12 @@ class PremiumVisualFeedbackSystem:
     def _get_premium_face_type(self, user: str) -> str:
         """Determine premium face type based on user preferences."""
         user_preferences = {
-            "eladriel": "dinosaur",
-            "sophia": "girl_robot", 
-            "alex": "girl_robot",
-            "default": "girl_robot"
+            "eladriel": "modern_robot",
+            "sophia": "modern_robot", 
+            "alex": "modern_robot",
+            "default": "modern_robot"
         }
-        return user_preferences.get(user.lower(), "girl_robot")
+        return user_preferences.get(user.lower(), "modern_robot")
     
     def start(self):
         """Start the premium visual feedback system."""
