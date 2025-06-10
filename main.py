@@ -1080,6 +1080,10 @@ class AIAssistant:
                 self.sophia_tts.say(text)
                 self.sophia_tts.runAndWait()
             
+            # IMPORTANT: Speech is now complete, stop mouth animation
+            if self.visual:
+                self.visual.stop_speaking()
+            
             # CRITICAL: Add delay after speaking to prevent audio feedback loop
             # This prevents the microphone from picking up the AI's own voice
             import time
@@ -1100,8 +1104,9 @@ class AIAssistant:
             import traceback
             logger.error(f"🗣️ SPEAK ERROR: Traceback: {traceback.format_exc()}")
             
-            # Show error state in visual feedback
+            # Stop mouth animation on error
             if self.visual:
+                self.visual.stop_speaking()
                 self.visual.show_error("Speech Error")
             
             # Still play ready cue even on error
@@ -1115,7 +1120,7 @@ class AIAssistant:
             logger.info("🗣️ SPEAK: Resetting AI speaking flag to False")
             self.voice_detector.set_ai_speaking(False)
             
-            # Return to standby state in visual feedback
+            # Return to standby state in visual feedback (but don't stop mouth animation here anymore)
             if self.visual:
                 self.visual.show_standby("Ready to listen...")
 
@@ -1123,6 +1128,10 @@ class AIAssistant:
         """Speak text without interrupt capability (for game instructions, etc.)."""
         if self.quiet_mode:
             return
+        
+        # Show speaking state in visual feedback
+        if self.visual:
+            self.visual.show_speaking(text[:50] + "..." if len(text) > 50 else text)
         
         try:
             # CRITICAL: Set AI speaking flag to prevent voice detector from listening to AI
@@ -1140,6 +1149,10 @@ class AIAssistant:
                 self.sophia_tts.say(text)
                 self.sophia_tts.runAndWait()
             
+            # IMPORTANT: Speech is now complete, stop mouth animation
+            if self.visual:
+                self.visual.stop_speaking()
+            
             # CRITICAL: Add delay after speaking to prevent audio feedback loop
             import time
             time.sleep(0.3)  # Reduced from 1.5 to 0.3 seconds for faster response
@@ -1152,6 +1165,9 @@ class AIAssistant:
             
         except Exception as e:
             logger.error(f"TTS Error (no interrupt): {e}")
+            # Stop mouth animation on error
+            if self.visual:
+                self.visual.stop_speaking()
             # Still play ready cue even on error
             self.play_ready_to_speak_sound()
             time.sleep(0.2)  # Reduced from 0.5 to 0.2 seconds
@@ -1161,6 +1177,10 @@ class AIAssistant:
         finally:
             # CRITICAL: Always reset AI speaking flag when done
             self.voice_detector.set_ai_speaking(False)
+            
+            # Return to standby state
+            if self.visual:
+                self.visual.show_standby("Ready to listen...")
 
     def _speak_with_interrupt_check(self, tts_engine, text: str):
         """DEPRECATED: Interrupt functionality removed. This method is kept for compatibility."""
