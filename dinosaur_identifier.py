@@ -269,7 +269,8 @@ Ready to show me your awesome dinosaur collection?
     
     def cleanup(self):
         """Clean up camera resources."""
-        self.camera_manager.cleanup()
+        if self.camera_manager:
+            self.camera_manager.cleanup()
     
     def __del__(self):
         """Destructor to ensure cleanup."""
