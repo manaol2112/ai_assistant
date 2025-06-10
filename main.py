@@ -26,6 +26,7 @@ try:
     from object_identifier import ObjectIdentifier
     from smart_camera_detector import SmartCameraDetector
     from filipino_translator import FilipinoTranslator  # NEW: Filipino translation game
+    from letter_word_game import LetterWordGame  # NEW: Letter word guessing game
     import openai
     import pyttsx3
     import speech_recognition as sr
@@ -87,6 +88,10 @@ class AIAssistant:
         # Initialize Animal Guessing Game (after camera setup)
         logger.info("🦕 Setting up Animal Guessing Game...")
         self.animal_game = AnimalGuessGame(self, shared_camera=self.camera_handler)
+        
+        # Initialize Letter Word Game
+        logger.info("🔤 Setting up Letter Word Game...")
+        self.letter_word_game = LetterWordGame(self)
         
         # Setup dinosaur identifier for Eladriel (specialized for dinosaurs)
         logger.info("Setting up dinosaur identification for Eladriel...")
@@ -180,7 +185,7 @@ class AIAssistant:
                 'greeting': self.get_dynamic_greeting('sophia'),
                 'face_greeting': self.get_dynamic_face_greeting('sophia'),
                 'tts_engine': self.sophia_tts,
-                'special_commands': ['help', 'what can you do', 'identify this', 'what is this', 'tell me about this', 'spelling game', 'play spelling', 'ready', 'end game', 'teach me filipino', 'filipino game', 'math game', 'math quiz', 'word problems', 'animal game', 'guess the animal', 'animal guessing']
+                'special_commands': ['help', 'what can you do', 'identify this', 'what is this', 'tell me about this', 'spelling game', 'play spelling', 'ready', 'end game', 'teach me filipino', 'filipino game', 'math game', 'math quiz', 'word problems', 'animal game', 'guess the animal', 'animal guessing', 'letter game', 'letter word game', 'word guessing', 'guess the word']
             },
             'eladriel': {
                 'name': 'Eladriel',
@@ -189,7 +194,7 @@ class AIAssistant:
                 'greeting': self.get_dynamic_greeting('eladriel'),
                 'face_greeting': self.get_dynamic_face_greeting('eladriel'),
                 'tts_engine': self.eladriel_tts,
-                'special_commands': ['identify dinosaur', 'identify this', 'what is this', 'tell me about this', 'show me camera', 'dinosaur tips', 'help', 'spelling game', 'play spelling', 'ready', 'end game', 'teach me filipino', 'filipino game', 'math game', 'math quiz', 'word problems', 'animal game', 'guess the animal', 'animal guessing']
+                'special_commands': ['identify dinosaur', 'identify this', 'what is this', 'tell me about this', 'show me camera', 'dinosaur tips', 'help', 'spelling game', 'play spelling', 'ready', 'end game', 'teach me filipino', 'filipino game', 'math game', 'math quiz', 'word problems', 'animal game', 'guess the animal', 'animal guessing', 'letter game', 'letter word game', 'word guessing', 'guess the word']
             },
             'parent': {
                 'name': 'Parent',
@@ -202,7 +207,7 @@ class AIAssistant:
                     'help', 'status report', 'system check', 'quiet mode on', 'quiet mode off',
                     'identify this', 'what is this', 'tell me about this', 'show me camera',
                     'check on kids', 'home automation', 'schedule reminder', 'weather',
-                    'news update', 'shopping list', 'calendar', 'notes', 'spelling game', 'play spelling', 'ready', 'end game', 'teach me filipino', 'filipino game', 'math game', 'math quiz', 'word problems', 'animal game', 'guess the animal', 'animal guessing'
+                    'news update', 'shopping list', 'calendar', 'notes', 'spelling game', 'play spelling', 'ready', 'end game', 'teach me filipino', 'filipino game', 'math game', 'math quiz', 'word problems', 'animal game', 'guess the animal', 'animal guessing', 'letter game', 'letter word game', 'word guessing', 'guess the word'
                 ]
             }
         }
@@ -1493,6 +1498,34 @@ class AIAssistant:
                 elif any(phrase in user_input_lower for phrase in ['end animal game', 'stop animal', 'quit animal']):
                     return self.animal_game.end_game(user)
         
+        # Letter Word Game Commands (for Sophia, Eladriel, and Parent)
+        if user in ['sophia', 'eladriel', 'parent']:
+            # Letter game start commands
+            if any(phrase in user_input_lower for phrase in ['letter game', 'letter word game', 'word guessing', 'guess the word', 'play letter game']):
+                return self.letter_word_game.start_game(user)
+            
+            # Handle letter game commands when active
+            elif self.letter_word_game.is_game_active():
+                # Check for game control commands first
+                if any(phrase in user_input_lower for phrase in ['hint please', 'give me a hint', 'need a hint', 'extra hint']):
+                    return self.letter_word_game.get_hint(user)
+                
+                elif any(phrase in user_input_lower for phrase in ['skip', 'skip word', 'next word', 'skip this one']):
+                    return self.letter_word_game.skip_word(user)
+                
+                elif any(phrase in user_input_lower for phrase in ['stats', 'my stats', 'game stats', 'score']):
+                    return self.letter_word_game.get_game_stats(user)
+                
+                elif any(phrase in user_input_lower for phrase in ['help', 'how to play', 'game help']):
+                    return self.letter_word_game.get_game_help(user)
+                
+                elif any(phrase in user_input_lower for phrase in ['end letter game', 'stop letter', 'quit letter', 'end game']):
+                    return self.letter_word_game.end_game(user)
+                
+                # If none of the control commands match, treat as a word guess
+                else:
+                    return self.letter_word_game.check_answer(user_input, user)
+        
         # Spelling Game Commands (for Sophia, Eladriel, and Parent)
         if user in ['sophia', 'eladriel', 'parent']:
             if any(phrase in user_input_lower for phrase in ['spelling game', 'play spelling', 'start spelling']):
@@ -1625,6 +1658,16 @@ class AIAssistant:
 • Get helpful tips if you need help with tricky words
 • Say "End Game" to stop playing anytime
 
+🔤 LETTER WORD GAME (NEW!):
+• Say "Letter Game" or "Letter Word Game" to start a fun word adventure!
+• I'll give you a letter and a hint - guess the word that starts with that letter!
+• Example: "Letter B, something you read" → Answer: "Book"
+• Say "Hint" if you need another clue
+• Say "Skip" to try a different word
+• Say "Stats" to see how you're doing
+• Say "End Game" when you're ready to stop
+• Build your vocabulary and thinking skills!
+
 🇵🇭 FILIPINO TRANSLATION GAME (NEW!):
 • Say "Filipino Game" for a language exploration! 🦕🇵🇭
 • Simple: I say English, you say Filipino!
@@ -1680,7 +1723,7 @@ class AIAssistant:
 • Say "turn off sounds" to disable audio cues
 • Say "turn on sounds" to re-enable them
 
-Ask me anything, show me any object, or play the spelling game to practice your writing!"""
+Ask me anything, show me any object, or play any of the games to practice your skills!"""
         
         elif user == 'eladriel':
             return """Hey Eladriel! I'm your dinosaur-loving assistant! Here's what I can do:
@@ -1705,6 +1748,17 @@ Ask me anything, show me any object, or play the spelling game to practice your 
   - Just show me your paper - my dino-eyes are always watching!
 • Get dinosaur-themed help and encouragement for tricky words
 • Say "End Game" whenever you want to stop
+
+🔤 DINO-LETTER WORD ADVENTURE (NEW!):
+• Say "Letter Game" or "Letter Word Game" for a prehistoric word hunt! 🦕🔤
+• I'll give you a letter and a dino-themed hint - guess the word!
+• Example: "Letter T, a giant dino with tiny arms" → Answer: "Triceratops"
+• Learn words about dinosaurs, animals, and cool things!
+• Say "Hint" if you need a dino-clue boost
+• Say "Skip" to hunt for a different word
+• Say "Stats" to see your discovery count
+• Say "End Game" when your expedition is complete
+• Build your paleontologist vocabulary!
 
 🇵🇭 FILIPINO TRANSLATION ADVENTURE (NEW!):
 • Say "Filipino Game" for a language exploration! 🦕🇵🇭
@@ -1766,7 +1820,7 @@ Ask me anything, show me any object, or play the spelling game to practice your 
 • Say "turn off sounds" to disable audio cues
 • Say "turn on sounds" to re-enable them
 
-What do you want to explore today? Show me anything you've discovered, or let's practice spelling! 🚀"""
+What do you want to explore today? Show me anything you've discovered, or let's practice with games! 🚀"""
         
         elif user == 'parent':
             return """Parent Mode Active - Advanced Features Available:
@@ -1793,6 +1847,15 @@ What do you want to explore today? Show me anything you've discovered, or let's 
 • Test all game mechanics before kids use it
 • Use "Ready" and "End Game" commands for full testing
 • NEW: Auto check is now continuous by default - automatically monitors all words
+
+🔤 LETTER WORD GAME TESTING (NEW!):
+• Say "Letter Game" to test the word guessing system
+• Validates letter-based vocabulary building mechanics
+• Reviews age-appropriate words and hints for each letter
+• Tests hint system and skip functionality
+• Monitors scoring and progress tracking
+• Use "Stats", "Hint", "Skip", and "End Game" commands for full testing
+• Perfect for validating educational content and difficulty levels
 
 🇵🇭 FILIPINO TRANSLATION GAME TESTING:
 • Say "Filipino Game" to test the language learning system
