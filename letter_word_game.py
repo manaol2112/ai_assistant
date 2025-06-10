@@ -27,267 +27,163 @@ class LetterWordGame:
         self.attempts = 0
         self.max_attempts = 3
         
-        # Word database organized by letters with hints
+        # Elementary-level word database organized by letters with simple hints
         self.word_database = {
             'A': [
-                {'word': 'APPLE', 'hint': 'A round, red or green fruit that grows on trees. Snow White ate one!'},
-                {'word': 'AIRPLANE', 'hint': 'A big machine that flies in the sky and carries people to faraway places.'},
-                {'word': 'ANT', 'hint': 'A tiny insect that works very hard and carries food back to its home.'},
-                {'word': 'ALLIGATOR', 'hint': 'A large green animal with big teeth that lives in water and swamps.'},
-                {'word': 'ASTRONAUT', 'hint': 'A person who travels to space and walks on the moon!'},
-                {'word': 'AMBULANCE', 'hint': 'A special vehicle that helps sick people get to the hospital quickly.'},
-                {'word': 'ARROW', 'hint': 'A pointy stick that flies through the air when shot from a bow.'},
-                {'word': 'ANCHOR', 'hint': 'A heavy metal object that keeps boats from floating away.'}
+                {'word': 'APPLE', 'hint': 'A red or green fruit that grows on trees'},
+                {'word': 'ANT', 'hint': 'A tiny insect that works hard and carries food'},
+                {'word': 'ARM', 'hint': 'The part of your body between your shoulder and hand'},
+                {'word': 'AXE', 'hint': 'A tool used to chop wood'}
             ],
             'B': [
-                {'word': 'BUTTERFLY', 'hint': 'A beautiful insect with colorful wings that flies from flower to flower.'},
-                {'word': 'BANANA', 'hint': 'A long, yellow fruit that monkeys love to eat.'},
-                {'word': 'BEAR', 'hint': 'A big, furry animal that loves honey and sleeps all winter.'},
-                {'word': 'BALL', 'hint': 'A round toy that you can throw, catch, or kick.'},
-                {'word': 'BIRD', 'hint': 'An animal with feathers and wings that can fly and sing beautiful songs.'},
-                {'word': 'BOOK', 'hint': 'Something with pages full of stories and pictures that you can read.'},
-                {'word': 'BICYCLE', 'hint': 'A vehicle with two wheels that you pedal with your feet to move.'},
-                {'word': 'BALLOON', 'hint': 'A colorful, round thing that floats in the air when filled with gas.'}
+                {'word': 'BALL', 'hint': 'A round toy that you can throw and catch'},
+                {'word': 'BED', 'hint': 'Where you sleep at night'},
+                {'word': 'BUS', 'hint': 'A big yellow vehicle that takes kids to school'},
+                {'word': 'BAT', 'hint': 'An animal that flies at night'}
             ],
             'C': [
-                {'word': 'CAT', 'hint': 'A furry pet that says "meow" and loves to chase mice.'},
-                {'word': 'CAR', 'hint': 'A vehicle with four wheels that drives on roads and takes you places.'},
-                {'word': 'CAKE', 'hint': 'A sweet dessert that you eat on birthdays with candles on top.'},
-                {'word': 'CASTLE', 'hint': 'A big, stone building where kings and queens used to live.'},
-                {'word': 'CLOUD', 'hint': 'White, fluffy things in the sky that sometimes bring rain.'},
-                {'word': 'COOKIE', 'hint': 'A small, sweet treat that you can eat as a snack.'},
-                {'word': 'CROWN', 'hint': 'A golden hat with jewels that kings and queens wear on their heads.'},
-                {'word': 'CARROT', 'hint': 'An orange vegetable that grows underground and rabbits love to eat.'}
+                {'word': 'CAT', 'hint': 'A furry pet that says meow'},
+                {'word': 'CAR', 'hint': 'A vehicle with four wheels'},
+                {'word': 'CUP', 'hint': 'Something you drink from'},
+                {'word': 'COW', 'hint': 'A farm animal that gives milk'}
             ],
             'D': [
-                {'word': 'DOG', 'hint': 'A loyal pet that barks, wags its tail, and loves to play fetch.'},
-                {'word': 'DINOSAUR', 'hint': 'A huge, ancient animal that lived millions of years ago like T-Rex!'},
-                {'word': 'DRAGON', 'hint': 'A magical creature from stories that can breathe fire and fly.'},
-                {'word': 'DUCK', 'hint': 'A bird that swims in ponds, says "quack," and has webbed feet.'},
-                {'word': 'DONUT', 'hint': 'A round, sweet food with a hole in the middle, often covered in sprinkles.'},
-                {'word': 'DOOR', 'hint': 'Something you open and close to go in and out of rooms.'},
-                {'word': 'DOLPHIN', 'hint': 'A smart, gray sea animal that jumps out of water and is very friendly.'},
-                {'word': 'DRUM', 'hint': 'A musical instrument that you hit with sticks to make loud sounds.'}
+                {'word': 'DOG', 'hint': 'A pet that barks and wags its tail'},
+                {'word': 'DUCK', 'hint': 'A bird that swims and says quack'},
+                {'word': 'DOOR', 'hint': 'What you open to go into a room'},
+                {'word': 'DOLL', 'hint': 'A toy that looks like a person'}
             ],
             'E': [
-                {'word': 'ELEPHANT', 'hint': 'The biggest land animal with a long nose called a trunk.'},
-                {'word': 'EGG', 'hint': 'A round, white thing that chickens lay and you can cook for breakfast.'},
-                {'word': 'EAGLE', 'hint': 'A large bird with sharp eyes that soars high in the sky.'},
-                {'word': 'EARTH', 'hint': 'The planet we live on with land, water, and all the animals.'},
-                {'word': 'ERASER', 'hint': 'A small, rubbery thing that removes pencil marks from paper.'},
-                {'word': 'ENGINE', 'hint': 'The part of a car or train that makes it move and go fast.'},
-                {'word': 'ENVELOPE', 'hint': 'A paper holder that you put letters in before mailing them.'},
-                {'word': 'ELBOW', 'hint': 'The bendy part in the middle of your arm.'}
+                {'word': 'EGG', 'hint': 'Something chickens lay that you can eat'},
+                {'word': 'EYE', 'hint': 'The part of your body that you see with'},
+                {'word': 'EAR', 'hint': 'The part of your body that you hear with'},
+                {'word': 'ELF', 'hint': 'A small magical person from stories'}
             ],
             'F': [
-                {'word': 'FISH', 'hint': 'An animal that swims in water and breathes through gills.'},
-                {'word': 'FROG', 'hint': 'A green animal that hops and says "ribbit" and lives near ponds.'},
-                {'word': 'FLOWER', 'hint': 'A colorful, pretty plant that smells nice and attracts bees.'},
-                {'word': 'FIRE', 'hint': 'Hot, orange flames that give light and heat but can be dangerous.'},
-                {'word': 'FLAG', 'hint': 'A colorful piece of cloth that represents a country and waves in the wind.'},
-                {'word': 'FORK', 'hint': 'A tool with pointy ends that you use to eat food.'},
-                {'word': 'FOOTBALL', 'hint': 'An oval-shaped ball used in a sport where players try to score touchdowns.'},
-                {'word': 'FEATHER', 'hint': 'A light, soft thing that covers birds and helps them fly.'}
+                {'word': 'FISH', 'hint': 'An animal that swims in water'},
+                {'word': 'FROG', 'hint': 'A green animal that hops and says ribbit'},
+                {'word': 'FAN', 'hint': 'Something that blows air to keep you cool'},
+                {'word': 'FIRE', 'hint': 'Hot orange flames'}
             ],
             'G': [
-                {'word': 'GIRAFFE', 'hint': 'The tallest animal in the world with a very long neck and spots.'},
-                {'word': 'GUITAR', 'hint': 'A musical instrument with strings that you play with your fingers.'},
-                {'word': 'GRAPES', 'hint': 'Small, round, purple or green fruits that grow in bunches.'},
-                {'word': 'GHOST', 'hint': 'A spooky, white spirit from scary stories that says "BOO!"'},
-                {'word': 'GIFT', 'hint': 'A present wrapped in pretty paper that you give to someone special.'},
-                {'word': 'GLOBE', 'hint': 'A round model of Earth that spins and shows all the countries.'},
-                {'word': 'GOAT', 'hint': 'A farm animal with horns that likes to climb and eat grass.'},
-                {'word': 'GOLDFISH', 'hint': 'A small, orange fish that swims in a bowl and is kept as a pet.'}
+                {'word': 'GOAT', 'hint': 'A farm animal with horns'},
+                {'word': 'GAME', 'hint': 'Something fun you play'},
+                {'word': 'GATE', 'hint': 'A door in a fence'},
+                {'word': 'GUM', 'hint': 'Something chewy and sweet'}
             ],
             'H': [
-                {'word': 'HORSE', 'hint': 'A large animal that people can ride and says "neigh."'},
-                {'word': 'HOUSE', 'hint': 'A building where people live with rooms, doors, and windows.'},
-                {'word': 'HAT', 'hint': 'Something you wear on your head to keep warm or look stylish.'},
-                {'word': 'HEART', 'hint': 'The part of your body that pumps blood and represents love.'},
-                {'word': 'HAMMER', 'hint': 'A tool used to hit nails into wood when building things.'},
-                {'word': 'HELICOPTER', 'hint': 'A flying machine with spinning blades on top that can hover in air.'},
-                {'word': 'HONEY', 'hint': 'A sweet, golden liquid that bees make in their hives.'},
-                {'word': 'HIPPO', 'hint': 'A huge, gray animal that loves water and has a very big mouth.'}
+                {'word': 'HAT', 'hint': 'Something you wear on your head'},
+                {'word': 'HAND', 'hint': 'The part of your body with five fingers'},
+                {'word': 'HORSE', 'hint': 'A big animal that people can ride'},
+                {'word': 'HEN', 'hint': 'A female chicken'}
             ],
             'I': [
-                {'word': 'ICE', 'hint': 'Frozen water that is cold, slippery, and melts in warm weather.'},
-                {'word': 'IGLOO', 'hint': 'A round house made of ice blocks where Eskimos live.'},
-                {'word': 'ISLAND', 'hint': 'A piece of land completely surrounded by water.'},
-                {'word': 'INSECT', 'hint': 'A tiny creature with six legs like ants, bees, or butterflies.'},
-                {'word': 'IRON', 'hint': 'A hot tool used to make wrinkled clothes smooth and flat.'},
-                {'word': 'ICICLE', 'hint': 'A long, pointy piece of ice that hangs down from roofs in winter.'},
-                {'word': 'IGUANA', 'hint': 'A large, green lizard that likes to sit in the sun.'},
-                {'word': 'INK', 'hint': 'The colored liquid inside pens that makes marks when you write.'}
+                {'word': 'ICE', 'hint': 'Frozen water that is cold'},
+                {'word': 'INK', 'hint': 'What comes out of a pen when you write'},
+                {'word': 'ILL', 'hint': 'When you feel sick'},
+                {'word': 'IMP', 'hint': 'A small mischievous creature'}
             ],
             'J': [
-                {'word': 'JUNGLE', 'hint': 'A thick forest full of trees, vines, and wild animals.'},
-                {'word': 'JUICE', 'hint': 'A sweet drink made from fruits like oranges or apples.'},
-                {'word': 'JELLYFISH', 'hint': 'A see-through sea creature that looks like jelly and can sting.'},
-                {'word': 'JACKET', 'hint': 'A piece of clothing you wear over your shirt to stay warm.'},
-                {'word': 'JUMP', 'hint': 'To push yourself up in the air with your legs and land back down.'},
-                {'word': 'JAR', 'hint': 'A glass container with a lid used to store food like jam or cookies.'},
-                {'word': 'JEWEL', 'hint': 'A precious, shiny stone like diamonds that sparkle in the light.'},
-                {'word': 'JIGSAW', 'hint': 'A puzzle made of many pieces that fit together to make a picture.'}
+                {'word': 'JAR', 'hint': 'A glass container with a lid'},
+                {'word': 'JET', 'hint': 'A fast airplane'},
+                {'word': 'JOB', 'hint': 'Work that people do'},
+                {'word': 'JAM', 'hint': 'Sweet fruit spread for bread'}
             ],
             'K': [
-                {'word': 'KANGAROO', 'hint': 'An animal from Australia that hops on strong legs and carries babies in a pouch.'},
-                {'word': 'KITE', 'hint': 'A colorful toy that flies high in the sky when the wind blows.'},
-                {'word': 'KING', 'hint': 'A man who rules a kingdom and wears a crown on his head.'},
-                {'word': 'KITTEN', 'hint': 'A baby cat that is small, cute, and loves to play.'},
-                {'word': 'KITCHEN', 'hint': 'The room in your house where food is cooked and prepared.'},
-                {'word': 'KEY', 'hint': 'A small metal object that opens locks and doors.'},
-                {'word': 'KNEE', 'hint': 'The bendy part in the middle of your leg that helps you walk.'},
-                {'word': 'KOALA', 'hint': 'A cute, gray animal from Australia that climbs trees and eats leaves.'}
+                {'word': 'KEY', 'hint': 'What you use to open locks'},
+                {'word': 'KID', 'hint': 'Another word for child'},
+                {'word': 'KITE', 'hint': 'A colorful toy that flies in the wind'},
+                {'word': 'KING', 'hint': 'A man who rules a kingdom'}
             ],
             'L': [
-                {'word': 'LION', 'hint': 'The king of the jungle with a big mane who roars very loudly.'},
-                {'word': 'LADDER', 'hint': 'A tall tool with steps that you climb to reach high places.'},
-                {'word': 'LAMP', 'hint': 'Something that gives light when you turn it on in dark rooms.'},
-                {'word': 'LEAF', 'hint': 'The green part of trees and plants that falls off in autumn.'},
-                {'word': 'LETTER', 'hint': 'A message written on paper that you send to friends in the mail.'},
-                {'word': 'LIZARD', 'hint': 'A small reptile with a long tail that likes to sit on rocks.'},
-                {'word': 'LEMON', 'hint': 'A yellow, sour fruit that makes your face scrunch up when you taste it.'},
-                {'word': 'LIBRARY', 'hint': 'A quiet place full of books where you can read and learn.'}
+                {'word': 'LEG', 'hint': 'The part of your body you walk with'},
+                {'word': 'LAMP', 'hint': 'Something that gives light'},
+                {'word': 'LION', 'hint': 'A big cat that roars'},
+                {'word': 'LEAF', 'hint': 'The green part of trees'}
             ],
             'M': [
-                {'word': 'MOUSE', 'hint': 'A tiny animal with a long tail that cats like to chase.'},
-                {'word': 'MOON', 'hint': 'The big, round, white light you see in the sky at night.'},
-                {'word': 'MONKEY', 'hint': 'A playful animal that swings from trees and loves bananas.'},
-                {'word': 'MOUNTAIN', 'hint': 'A very tall, rocky hill that reaches up toward the clouds.'},
-                {'word': 'MIRROR', 'hint': 'A shiny surface that shows your reflection when you look at it.'},
-                {'word': 'MILK', 'hint': 'A white drink that comes from cows and makes your bones strong.'},
-                {'word': 'MAGIC', 'hint': 'Special tricks and spells that seem impossible but are amazing to watch.'},
-                {'word': 'MERMAID', 'hint': 'A magical sea creature that is half person and half fish.'}
+                {'word': 'MOM', 'hint': 'Another word for mother'},
+                {'word': 'MOON', 'hint': 'What you see in the sky at night'},
+                {'word': 'MOUSE', 'hint': 'A tiny animal that cats chase'},
+                {'word': 'MILK', 'hint': 'A white drink that comes from cows'}
             ],
             'N': [
-                {'word': 'NEST', 'hint': 'A cozy home that birds build in trees to keep their eggs safe.'},
-                {'word': 'NOSE', 'hint': 'The part of your face that helps you smell flowers and food.'},
-                {'word': 'NIGHT', 'hint': 'The dark time when the sun goes down and stars come out.'},
-                {'word': 'NURSE', 'hint': 'A kind person who helps doctors take care of sick people.'},
-                {'word': 'NECKLACE', 'hint': 'Pretty jewelry that you wear around your neck.'},
-                {'word': 'NOTEBOOK', 'hint': 'A book with blank pages where you can write or draw pictures.'},
-                {'word': 'NUTS', 'hint': 'Hard-shelled foods that squirrels love to collect and eat.'},
-                {'word': 'NEEDLE', 'hint': 'A thin, sharp tool used for sewing clothes and fabric together.'}
+                {'word': 'NET', 'hint': 'Something with holes used to catch fish'},
+                {'word': 'NOSE', 'hint': 'The part of your face you smell with'},
+                {'word': 'NUT', 'hint': 'A hard shell with food inside'},
+                {'word': 'NAP', 'hint': 'A short sleep during the day'}
             ],
             'O': [
-                {'word': 'OCTOPUS', 'hint': 'A sea creature with eight long arms that can change colors.'},
-                {'word': 'ORANGE', 'hint': 'A round, orange fruit full of vitamin C that\'s sweet and juicy.'},
-                {'word': 'OWL', 'hint': 'A wise bird with big eyes that hoots and hunts at night.'},
-                {'word': 'OCEAN', 'hint': 'A huge body of salty water where whales, fish, and dolphins live.'},
-                {'word': 'OVEN', 'hint': 'A hot box in the kitchen used to bake cookies and cook food.'},
-                {'word': 'ONION', 'hint': 'A round vegetable with layers that makes you cry when you cut it.'},
-                {'word': 'OSTRICH', 'hint': 'The biggest bird in the world that can\'t fly but runs very fast.'},
-                {'word': 'OTTER', 'hint': 'A playful water animal with thick fur that slides down muddy banks.'}
+                {'word': 'OWL', 'hint': 'A bird that hoots at night'},
+                {'word': 'OX', 'hint': 'A strong farm animal'},
+                {'word': 'OIL', 'hint': 'A slippery liquid'},
+                {'word': 'ORB', 'hint': 'A round ball shape'}
             ],
             'P': [
-                {'word': 'PENGUIN', 'hint': 'A black and white bird that can\'t fly but is an excellent swimmer.'},
-                {'word': 'PIZZA', 'hint': 'A round food with cheese and toppings that everyone loves to eat.'},
-                {'word': 'PUPPY', 'hint': 'A baby dog that is playful, cute, and loves to chew on things.'},
-                {'word': 'PRINCESS', 'hint': 'A royal lady who lives in a castle and might marry a prince.'},
-                {'word': 'PIANO', 'hint': 'A big musical instrument with black and white keys that you press.'},
-                {'word': 'PARROT', 'hint': 'A colorful bird that can copy words and sounds that people make.'},
-                {'word': 'PEACOCK', 'hint': 'A beautiful bird with a long neck and colorful tail feathers like a fan.'},
-                {'word': 'PANDA', 'hint': 'A black and white bear from China that loves to eat bamboo.'}
+                {'word': 'PIG', 'hint': 'A pink farm animal that oinks'},
+                {'word': 'PEN', 'hint': 'What you write with'},
+                {'word': 'POT', 'hint': 'What you cook food in'},
+                {'word': 'PUP', 'hint': 'A baby dog'}
             ],
             'Q': [
-                {'word': 'QUEEN', 'hint': 'A royal woman who rules a kingdom and wears a beautiful crown.'},
-                {'word': 'QUACK', 'hint': 'The sound that ducks make when they talk to each other.'},
-                {'word': 'QUESTION', 'hint': 'Something you ask when you want to learn or know more about something.'},
-                {'word': 'QUILT', 'hint': 'A warm blanket made from many colorful pieces of fabric sewn together.'},
-                {'word': 'QUIET', 'hint': 'Making no noise at all, like when everyone is sleeping.'},
-                {'word': 'QUARTER', 'hint': 'A silver coin worth 25 cents that you can use to buy things.'},
-                {'word': 'QUIVER', 'hint': 'A container that holds arrows for people who use bows.'},
-                {'word': 'QUAIL', 'hint': 'A small, plump bird that makes its nest on the ground.'}
+                {'word': 'QUEEN', 'hint': 'A woman who rules a kingdom'},
+                {'word': 'QUIT', 'hint': 'To stop doing something'},
+                {'word': 'QUIZ', 'hint': 'A short test with questions'},
+                {'word': 'QUAY', 'hint': 'A place where boats dock'}
             ],
             'R': [
-                {'word': 'RABBIT', 'hint': 'A soft, furry animal with long ears that hops and loves carrots.'},
-                {'word': 'RAINBOW', 'hint': 'Beautiful colors that appear in the sky after it rains.'},
-                {'word': 'ROBOT', 'hint': 'A mechanical person made of metal that can move and do tasks.'},
-                {'word': 'ROCKET', 'hint': 'A space ship that blasts off and flies to the moon and stars.'},
-                {'word': 'ROSE', 'hint': 'A beautiful red flower with thorns that smells very sweet.'},
-                {'word': 'RIVER', 'hint': 'A long stream of water that flows from mountains to the ocean.'},
-                {'word': 'RING', 'hint': 'A circular piece of jewelry that people wear on their fingers.'},
-                {'word': 'RHINOCEROS', 'hint': 'A huge, gray animal with a horn on its nose that lives in Africa.'}
+                {'word': 'RAT', 'hint': 'A small animal with a long tail'},
+                {'word': 'RUN', 'hint': 'To move fast with your legs'},
+                {'word': 'RED', 'hint': 'The color of fire trucks'},
+                {'word': 'RUG', 'hint': 'Something soft on the floor'}
             ],
             'S': [
-                {'word': 'SNAKE', 'hint': 'A long, slithery animal with no legs that moves by wiggling its body.'},
-                {'word': 'STAR', 'hint': 'A bright, twinkling light in the night sky that\'s very far away.'},
-                {'word': 'SPIDER', 'hint': 'An eight-legged creature that spins webs to catch flies.'},
-                {'word': 'SNOWMAN', 'hint': 'A person made of snow with a carrot nose and coal for eyes.'},
-                {'word': 'SUBMARINE', 'hint': 'A boat that can go underwater to explore the deep ocean.'},
-                {'word': 'SANDWICH', 'hint': 'Food made with two pieces of bread and yummy things in between.'},
-                {'word': 'SUNFLOWER', 'hint': 'A tall, yellow flower that always turns to face the sun.'},
-                {'word': 'SQUIRREL', 'hint': 'A small animal with a bushy tail that collects nuts for winter.'}
+                {'word': 'SUN', 'hint': 'The bright light in the sky during day'},
+                {'word': 'STAR', 'hint': 'What twinkles in the night sky'},
+                {'word': 'SOCK', 'hint': 'What you wear on your feet inside shoes'},
+                {'word': 'SNAKE', 'hint': 'A long animal with no legs'}
             ],
             'T': [
-                {'word': 'TIGER', 'hint': 'A big, orange cat with black stripes that lives in the jungle.'},
-                {'word': 'TURTLE', 'hint': 'A slow animal that carries its house on its back and can hide inside.'},
-                {'word': 'TRAIN', 'hint': 'A long vehicle that runs on tracks and makes "choo-choo" sounds.'},
-                {'word': 'TREE', 'hint': 'A tall plant with leaves, branches, and a thick brown trunk.'},
-                {'word': 'TELESCOPE', 'hint': 'A tool that makes faraway things look bigger, like stars and planets.'},
-                {'word': 'TREASURE', 'hint': 'Valuable things like gold and jewels that pirates bury in chests.'},
-                {'word': 'TORNADO', 'hint': 'A spinning wind storm that looks like a gray funnel in the sky.'},
-                {'word': 'TROPHY', 'hint': 'A shiny prize you get when you win a game or competition.'}
+                {'word': 'TOP', 'hint': 'A spinning toy'},
+                {'word': 'TOY', 'hint': 'Something fun to play with'},
+                {'word': 'TREE', 'hint': 'A tall plant with leaves and branches'},
+                {'word': 'TEN', 'hint': 'The number after nine'}
             ],
             'U': [
-                {'word': 'UMBRELLA', 'hint': 'Something you hold over your head to stay dry when it rains.'},
-                {'word': 'UNICORN', 'hint': 'A magical horse with a horn on its head from fairy tales.'},
-                {'word': 'UNIVERSE', 'hint': 'Everything that exists including all the stars, planets, and space.'},
-                {'word': 'UNIFORM', 'hint': 'Special clothes that people wear for work, like police or firefighters.'},
-                {'word': 'UNDERWATER', 'hint': 'Below the surface of water where fish swim and coral grows.'},
-                {'word': 'UNCLE', 'hint': 'Your mom or dad\'s brother who is part of your family.'},
-                {'word': 'UPSET', 'hint': 'How you feel when something makes you sad or angry.'},
-                {'word': 'UPSTAIRS', 'hint': 'The higher level of a house where you go up steps to reach.'}
+                {'word': 'UP', 'hint': 'The opposite of down'},
+                {'word': 'USE', 'hint': 'To do something with an object'},
+                {'word': 'URN', 'hint': 'A special jar or container'},
+                {'word': 'UMP', 'hint': 'Short for umpire in baseball'}
             ],
             'V': [
-                {'word': 'VIOLIN', 'hint': 'A musical instrument that you hold under your chin and play with a bow.'},
-                {'word': 'VOLCANO', 'hint': 'A mountain that sometimes erupts with hot lava and ash.'},
-                {'word': 'VAMPIRE', 'hint': 'A spooky creature from stories that sleeps during the day.'},
-                {'word': 'VEGETABLE', 'hint': 'Healthy food that grows in gardens like carrots, peas, and broccoli.'},
-                {'word': 'VILLAGE', 'hint': 'A small town where not many people live, smaller than a city.'},
-                {'word': 'VACUUM', 'hint': 'A machine that sucks up dirt and dust from carpets and floors.'},
-                {'word': 'VALLEY', 'hint': 'Low land between hills or mountains where rivers often flow.'},
-                {'word': 'VEST', 'hint': 'A piece of clothing worn over a shirt that has no sleeves.'}
+                {'word': 'VAN', 'hint': 'A big car that carries many people'},
+                {'word': 'VET', 'hint': 'A doctor who helps animals'},
+                {'word': 'VINE', 'hint': 'A plant that climbs up walls'},
+                {'word': 'VOW', 'hint': 'A special promise'}
             ],
             'W': [
-                {'word': 'WHALE', 'hint': 'The biggest animal in the ocean that spouts water from its head.'},
-                {'word': 'WIZARD', 'hint': 'A magical person who casts spells and has a long beard and pointy hat.'},
-                {'word': 'WATERFALL', 'hint': 'Water that falls down from high rocks making a beautiful rushing sound.'},
-                {'word': 'WOLF', 'hint': 'A wild animal that looks like a big dog and howls at the moon.'},
-                {'word': 'WINDMILL', 'hint': 'A tall building with spinning blades that uses wind to make power.'},
-                {'word': 'WORM', 'hint': 'A long, squishy creature that lives in dirt and helps plants grow.'},
-                {'word': 'WINDOW', 'hint': 'A clear opening in walls that lets you see outside and lets light in.'},
-                {'word': 'WITCH', 'hint': 'A magical person from stories who rides a broomstick and makes potions.'}
+                {'word': 'WEB', 'hint': 'What a spider makes'},
+                {'word': 'WIG', 'hint': 'Fake hair you can wear'},
+                {'word': 'WIN', 'hint': 'To come first in a game'},
+                {'word': 'WAX', 'hint': 'What candles are made of'}
             ],
             'X': [
-                {'word': 'XRAY', 'hint': 'A special picture that doctors take to see inside your body and bones.'},
-                {'word': 'XYLOPHONE', 'hint': 'A musical instrument with colorful bars that you hit with mallets.'},
-                {'word': 'XERUS', 'hint': 'A type of ground squirrel that lives in Africa and digs burrows.'},
-                {'word': 'XENOPS', 'hint': 'A small bird from South America with a curved beak.'},
-                {'word': 'XBOX', 'hint': 'A video game console that you can play fun games on with controllers.'},
-                {'word': 'XEROX', 'hint': 'A machine that makes copies of papers and documents.'},
-                {'word': 'XYLEM', 'hint': 'The part of plants that carries water from roots up to the leaves.'},
-                {'word': 'XMAS', 'hint': 'A short way to write Christmas, the holiday with presents and Santa.'}
+                {'word': 'X-RAY', 'hint': 'A picture that shows your bones'},
+                {'word': 'XYZ', 'hint': 'The last three letters of the alphabet'},
+                {'word': 'XBOX', 'hint': 'A video game machine'},
+                {'word': 'XMAS', 'hint': 'A short way to write Christmas'}
             ],
             'Y': [
-                {'word': 'YACHT', 'hint': 'A fancy, big boat that rich people use for sailing on the ocean.'},
-                {'word': 'YARD', 'hint': 'The grassy area around your house where you can play outside.'},
-                {'word': 'YELL', 'hint': 'To shout very loudly when you want someone far away to hear you.'},
-                {'word': 'YELLOW', 'hint': 'A bright, sunny color like bananas, lemons, and the sun.'},
-                {'word': 'YOGA', 'hint': 'Gentle exercises where you stretch and bend your body in peaceful ways.'},
-                {'word': 'YAWN', 'hint': 'What you do when you\'re tired - opening your mouth wide and breathing deep.'},
-                {'word': 'YARN', 'hint': 'Soft, colorful string used for knitting sweaters and making crafts.'},
-                {'word': 'YOLK', 'hint': 'The yellow part inside an egg that\'s round and nutritious.'}
+                {'word': 'YAK', 'hint': 'A furry animal like a big cow'},
+                {'word': 'YES', 'hint': 'The opposite of no'},
+                {'word': 'YAM', 'hint': 'An orange vegetable like a sweet potato'},
+                {'word': 'YAP', 'hint': 'The sound a small dog makes'}
             ],
             'Z': [
-                {'word': 'ZEBRA', 'hint': 'A horse-like animal from Africa with black and white stripes.'},
-                {'word': 'ZOO', 'hint': 'A place where you can visit and see animals from all around the world.'},
-                {'word': 'ZIPPER', 'hint': 'A fastener on clothes and bags that opens and closes with a sliding tab.'},
-                {'word': 'ZERO', 'hint': 'The number that means nothing or none, shaped like a circle.'},
-                {'word': 'ZONE', 'hint': 'A special area or section set aside for particular activities.'},
-                {'word': 'ZOOM', 'hint': 'To move very fast or to make something look bigger and closer.'},
-                {'word': 'ZUCCHINI', 'hint': 'A long, green vegetable that grows in gardens and is good for you.'},
-                {'word': 'ZIGZAG', 'hint': 'A pattern that goes back and forth like lightning or stairs.'}
+                {'word': 'ZOO', 'hint': 'A place where you can see animals'},
+                {'word': 'ZAP', 'hint': 'A quick electric sound'},
+                {'word': 'ZIP', 'hint': 'To close something quickly'},
+                {'word': 'ZEN', 'hint': 'Being very calm and peaceful'}
             ]
         }
         
@@ -372,14 +268,14 @@ What word starts with '{self.current_letter}' and matches this hint?"""
             
             response = f"""{celebration}
 
-The word was indeed '{self.current_word}'! 
+Yes! You got it right! 
 
 📊 Score: {self.score} correct words!
 
 {next_word_message}"""
 
             if self.ai_assistant:
-                self.ai_assistant.speak(f"{celebration} The word was {self.current_word}! Your score is {self.score}. {next_word_message}", user)
+                self.ai_assistant.speak(f"{celebration} Yes, that's right! Your score is {self.score}. {self._get_next_word_speech()}", user)
             
             return response
         
@@ -396,7 +292,7 @@ The word was indeed '{self.current_word}'!
 {next_word_message}"""
 
                 if self.ai_assistant:
-                    self.ai_assistant.speak(f"{encouragement} {self.current_word}. {next_word_message}", user)
+                    self.ai_assistant.speak(f"{encouragement} {self.current_word}. {self._get_next_word_speech()}", user)
                 
                 return response
             
@@ -412,6 +308,10 @@ You have {remaining_attempts} more attempt{'s' if remaining_attempts > 1 else ''
                     self.ai_assistant.speak(f"Not quite right! Try again. {self.current_hint}. You have {remaining_attempts} more tries.", user)
                 
                 return hint_response
+    
+    def _get_next_word_speech(self) -> str:
+        """Get speech-friendly version of next word challenge without revealing previous answer."""
+        return f"Here's your next challenge! Letter {self.current_letter}. {self.current_hint}. What word do you think it is?"
     
     def _prepare_next_word(self) -> str:
         """Prepare the next word challenge."""
@@ -444,16 +344,68 @@ What word starts with '{self.current_letter}' and matches this hint?"""
         
         # Provide additional context or a different angle for the hint
         extra_hints = {
-            'APPLE': "Think of what teachers get as gifts, or what keeps doctors away!",
-            'RABBIT': "This animal is famous for being in magic tricks and eating garden vegetables!",
-            'BUTTERFLY': "It starts as a caterpillar and becomes something beautiful that can fly!",
-            'ELEPHANT': "This animal never forgets and is afraid of tiny mice!",
-            'PENGUIN': "This bird looks like it's wearing a tuxedo and lives where it's very cold!",
-            'RAINBOW': "You can see this after rain, and it has all the colors you can think of!",
-            'DINOSAUR': "These huge creatures lived long, long ago before any people existed!",
-            'CASTLE': "Knights and princesses lived in these tall, stone buildings!",
-            'GIRAFFE': "This animal can eat leaves from the very top of tall trees!",
-            'VOLCANO': "This mountain can explode with hot, melted rock!"
+            'APPLE': "It's a fruit that can be red, green, or yellow!",
+            'ANT': "This tiny bug is super strong and works with its friends!",
+            'ARM': "You use these to hug people and pick things up!",
+            'AXE': "Lumberjacks use this to cut down trees!",
+            'BALL': "You can bounce it, throw it, or kick it!",
+            'BED': "You lie down here with pillows and blankets!",
+            'BUS': "It's bigger than a car and has lots of seats!",
+            'BAT': "This animal hangs upside down and sleeps during the day!",
+            'CAT': "This pet purrs when it's happy!",
+            'CAR': "You ride in this to go places on roads!",
+            'CUP': "You hold this when you drink water or juice!",
+            'COW': "This animal says 'moo' and lives on farms!",
+            'DOG': "This pet is called man's best friend!",
+            'DUCK': "This bird likes to swim in ponds!",
+            'DOOR': "You knock on this before entering a house!",
+            'DOLL': "Children like to play dress-up with this toy!",
+            'EGG': "Baby chickens grow inside these!",
+            'EYE': "You have two of these on your face to see!",
+            'EAR': "You have two of these to hear sounds!",
+            'ELF': "Santa's helpers are these magical creatures!",
+            'FISH': "This animal has fins and lives underwater!",
+            'FROG': "This green animal can jump really far!",
+            'FAN': "This spins around to make you feel cooler!",
+            'FIRE': "This is hot and bright orange or red!",
+            'GOAT': "This farm animal likes to eat grass and climb!",
+            'GAME': "Monopoly and chess are types of this!",
+            'GATE': "This opens and closes like a door in a fence!",
+            'GUM': "You chew this but don't swallow it!",
+            'HAT': "People wear this on sunny days or when it's cold!",
+            'HAND': "You have fingers and a thumb on this!",
+            'HORSE': "Cowboys ride this animal in movies!",
+            'HEN': "This female bird lays eggs!",
+            'ICE': "Water becomes this when it gets very cold!",
+            'INK': "This liquid comes out when you write with a pen!",
+            'JAR': "You can store cookies or jam in this!",
+            'JET': "This airplane flies very fast and high!",
+            'KEY': "You need this small metal thing to unlock doors!",
+            'KITE': "Children love to fly this on windy days!",
+            'LEG': "You have two of these and they help you walk!",
+            'LAMP': "You turn this on when it gets dark!",
+            'LION': "This big cat is the king of the jungle!",
+            'MOM': "She takes care of you and loves you very much!",
+            'MOON': "This bright circle shines in the sky at night!",
+            'MOUSE': "This small animal likes to eat cheese!",
+            'MILK': "This white drink helps make your bones strong!",
+            'NET': "Tennis players hit the ball over this!",
+            'NOSE': "You use this to smell flowers and food!",
+            'OWL': "This wise bird says 'hoo' and has big eyes!",
+            'PIG': "This pink animal rolls in mud and says 'oink'!",
+            'PEN': "You use this to write letters and draw pictures!",
+            'RAT': "This animal looks like a mouse but bigger!",
+            'RUN': "This is faster than walking!",
+            'RED': "Roses and strawberries are this color!",
+            'SUN': "This bright yellow circle gives us light and warmth!",
+            'STAR': "You make a wish when you see a shooting one!",
+            'SNAKE': "This animal slithers on the ground!",
+            'TOP': "You spin this toy with your fingers!",
+            'TOY': "Children love to play with these!",
+            'TREE': "Birds build nests in these tall plants!",
+            'WEB': "Spiders make these to catch bugs!",
+            'WIN': "This is what happens when you come first!",
+            'ZOO': "You can see lions, elephants, and monkeys here!"
         }
         
         extra_hint = extra_hints.get(self.current_word, f"It definitely starts with the letter '{self.current_letter}'!")
@@ -484,7 +436,7 @@ Keep thinking! You can do it!"""
 {next_word_message}"""
 
         if self.ai_assistant:
-            self.ai_assistant.speak(f"Okay, we'll skip that one. The word was {skipped_word}. {next_word_message}", user)
+            self.ai_assistant.speak(f"Okay, we'll skip that one. The word was {skipped_word}. {self._get_next_word_speech()}", user)
         
         return response
     
