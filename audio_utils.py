@@ -15,6 +15,8 @@ import pygame
 import tempfile
 import os
 from pathlib import Path
+import threading
+import time
 
 
 class OpenAITTSEngine:
@@ -48,12 +50,49 @@ class OpenAITTSEngine:
             
             # Generate speech using OpenAI TTS with timeout
             self.logger.info("OpenAI TTS: Calling API...")
-            response = self.client.audio.speech.create(
-                model=self.model,
-                voice=self.voice,
-                input=text,
-                speed=self.rate
-            )
+            
+            # Add timeout to the OpenAI API call
+            response = None
+            api_error = None
+            
+            def api_call():
+                nonlocal response, api_error
+                try:
+                    response = self.client.audio.speech.create(
+                        model=self.model,
+                        voice=self.voice,
+                        input=text,
+                        speed=self.rate
+                    )
+                except Exception as e:
+                    api_error = e
+            
+            # Start API call in separate thread with timeout
+            api_thread = threading.Thread(target=api_call)
+            api_thread.daemon = True
+            api_thread.start()
+            
+            # Wait for API call to complete with 10-second timeout
+            api_thread.join(timeout=10.0)
+            
+            if api_thread.is_alive():
+                self.logger.error("OpenAI TTS: API call timed out after 10 seconds")
+                self.logger.info("OpenAI TTS: Falling back to system TTS due to timeout...")
+                self._fallback_tts(text)
+                return
+            
+            if api_error:
+                self.logger.error(f"OpenAI TTS: API call failed: {api_error}")
+                self.logger.info("OpenAI TTS: Falling back to system TTS due to API error...")
+                self._fallback_tts(text)
+                return
+            
+            if not response:
+                self.logger.error("OpenAI TTS: API call returned no response")
+                self.logger.info("OpenAI TTS: Falling back to system TTS due to no response...")
+                self._fallback_tts(text)
+                return
+                
             self.logger.info("OpenAI TTS: API call successful, processing audio...")
             
             # Create temporary file for audio
