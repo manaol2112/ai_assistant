@@ -29,7 +29,7 @@ from audio_utils import setup_premium_tts_engines, AudioManager
 from camera_handler import CameraHandler
 from wake_word_detector import WakeWordDetector
 from voice_activity_detector import VoiceActivityDetector
-from face_recognition_module import SmartCameraDetector
+from smart_camera_detector import SmartCameraDetector
 from object_identifier import ObjectIdentifier
 from dinosaur_identifier import DinosaurIdentifier
 from filipino_translator import FilipinoTranslator
