@@ -1,22 +1,28 @@
 #!/usr/bin/env python3
 """
-Display Manager for AI Assistant Robot
-Shows visual feedback for different AI states on a screen display.
-Perfect for Raspberry Pi robots with small screens.
+Display Manager for AI Assistant
+Provides visual feedback for different AI states on a small screen (e.g., Raspberry Pi)
+Supports both real display and console simulation mode for development
 """
 
-import pygame
-import threading
-import time
-import math
-import logging
-import platform
 import os
-from typing import Optional, Tuple, Dict, Any
-from enum import Enum
+import sys
 import queue
-import json
+import time
+import logging
+import threading
+import platform
+import math
+from enum import Enum
+from typing import Optional, Dict, Tuple, Any
 from datetime import datetime
+
+try:
+    import pygame
+    PYGAME_AVAILABLE = True
+except ImportError:
+    PYGAME_AVAILABLE = False
+    print("pygame not available - running in simulation mode")
 
 logger = logging.getLogger(__name__)
 
@@ -163,9 +169,12 @@ class DisplayManager:
             return
         
         if self.is_macos:
-            logger.info("macOS detected - Display will run in compatibility mode")
-            # On macOS, we'll use a simpler approach to avoid threading issues
-            self._setup_macos_display()
+            logger.info("macOS detected - Attempting display initialization...")
+            # Try to setup macOS display, but don't fail if it doesn't work
+            success = self._setup_macos_display()
+            if not success:
+                logger.info("macOS display failed - Running in console simulation mode")
+                self._setup_console_simulation()
         else:
             logger.info("Linux/Pi detected - Starting threaded display")
             self.running = True
@@ -174,40 +183,101 @@ class DisplayManager:
         
         logger.info("Display system started")
     
-    def _setup_macos_display(self):
-        """Setup display for macOS with main thread compatibility."""
+    def _setup_macos_display(self) -> bool:
+        """Setup display for macOS with main thread compatibility. Returns True if successful."""
         try:
-            # Set SDL to use a compatible video driver on macOS
-            if 'SDL_VIDEODRIVER' not in os.environ:
-                os.environ['SDL_VIDEODRIVER'] = 'cocoa'
-            
-            # Initialize pygame on main thread
+            # Test if pygame display is available
             pygame.init()
             
-            # Create a smaller window for testing on macOS
-            test_width = min(self.screen_width, 800)
-            test_height = min(self.screen_height, 600)
+            # Try to get display info first
+            try:
+                info = pygame.display.Info()
+                if info.w == 0 or info.h == 0:
+                    logger.warning("Display info shows 0x0 dimensions - display not available")
+                    return False
+            except Exception as display_info_error:
+                logger.warning(f"Cannot get display info: {display_info_error}")
+                return False
             
-            self.screen = pygame.display.set_mode((test_width, test_height))
+            # Set SDL to use a compatible video driver on macOS
+            os.environ['SDL_VIDEODRIVER'] = 'cocoa'
+            
+            # Set window position to center
+            os.environ['SDL_WINDOWID'] = ''
+            os.environ['SDL_VIDEO_WINDOW_POS'] = 'centered'
+            
+            # Ensure minimum dimensions for macOS
+            test_width = max(min(self.screen_width, 800), 320)  # Minimum 320px
+            test_height = max(min(self.screen_height, 600), 240)  # Minimum 240px
+            
+            logger.info(f"Creating macOS display with dimensions: {test_width}x{test_height}")
+            
+            # Create window with proper flags for visibility
+            self.screen = pygame.display.set_mode((test_width, test_height), pygame.SHOWN | pygame.RESIZABLE)
             pygame.display.set_caption("AI Assistant Display (macOS Test Mode)")
             
-            # Initialize fonts
+            # Initialize fonts with error checking
             try:
-                self.font_large = pygame.font.Font(None, 36)
-                self.font_medium = pygame.font.Font(None, 24)
-                self.font_small = pygame.font.Font(None, 18)
-            except:
+                self.font_large = pygame.font.Font(None, max(36, test_height // 15))
+                self.font_medium = pygame.font.Font(None, max(24, test_height // 20))
+                self.font_small = pygame.font.Font(None, max(18, test_height // 25))
+            except Exception as font_error:
+                logger.warning(f"Font initialization error: {font_error}")
+                # Use system default
                 self.font_large = pygame.font.Font(None, 36)
                 self.font_medium = pygame.font.Font(None, 24)
                 self.font_small = pygame.font.Font(None, 18)
             
+            # Verify screen was created successfully
+            if self.screen is None:
+                raise Exception("Failed to create pygame screen")
+            
+            # Check actual screen dimensions
+            actual_size = self.screen.get_size()
+            if actual_size[0] == 0 or actual_size[1] == 0:
+                raise Exception(f"Invalid screen dimensions: {actual_size}")
+            
             self.running = True
-            logger.info(f"macOS display initialized: {test_width}x{test_height}")
+            
+            # Initial render to make window visible with a bright test pattern
+            self.screen.fill((50, 50, 200))  # Blue background for visibility
+            
+            # Draw a test pattern to ensure visibility
+            pygame.draw.circle(self.screen, (255, 255, 0), (test_width//2, test_height//2), 50)  # Yellow circle
+            pygame.draw.rect(self.screen, (255, 0, 0), (10, 10, 100, 50))  # Red rectangle
+            
+            # Add text to confirm it's working
+            if self.font_large:
+                text = self.font_large.render("AI Assistant Display", True, (255, 255, 255))
+                text_rect = text.get_rect(center=(test_width//2, test_height//2 + 80))
+                self.screen.blit(text, text_rect)
+            
+            # Force display update
+            pygame.display.flip()
+            
+            logger.info(f"macOS display initialized successfully: {actual_size[0]}x{actual_size[1]}")
+            return True
             
         except Exception as e:
-            logger.warning(f"Could not initialize display on macOS: {e}")
-            logger.info("Running in headless simulation mode")
-            self.running = True
+            logger.warning(f"macOS display initialization failed: {e}")
+            try:
+                pygame.quit()
+            except:
+                pass
+            self.screen = None
+            return False
+    
+    def _setup_console_simulation(self):
+        """Setup console-based display simulation for development."""
+        self.running = True
+        self.screen = None  # No actual screen
+        logger.info("Console display simulation active - State changes will be logged")
+        
+        # Print a visual indicator
+        print("\n" + "="*60)
+        print("🖥️  AI ASSISTANT DISPLAY SIMULATOR")
+        print("📺 Visual feedback will be shown in console")
+        print("="*60)
     
     def stop_display(self):
         """Stop the display."""
@@ -231,31 +301,63 @@ class DisplayManager:
             self.current_user = user
             self.current_message = message
             
-            # Queue state for display thread if running
-            if self.running and not self.headless_mode:
+            # Handle different display modes
+            if not self.running:
+                return
+            
+            if self.headless_mode or (self.is_macos and self.screen is None):
+                # Console simulation mode
+                self._display_console_state(state, user, message)
+            elif self.screen:
+                # Real display mode
                 try:
-                    self.state_queue.put({
-                        'state': state,
-                        'user': user,
-                        'message': message,
-                        'timestamp': time.time()
-                    }, block=False)
-                except queue.Full:
-                    logger.warning("State queue is full, dropping state update")
+                    if self.is_macos:
+                        # Direct update for macOS
+                        self._render_state()
+                        pygame.display.flip()
+                    else:
+                        # Queue for threaded display
+                        self.state_queue.put({
+                            'state': state,
+                            'user': user,
+                            'message': message,
+                            'timestamp': time.time()
+                        }, block=False)
+                except Exception as e:
+                    logger.debug(f"Display update failed: {e}")
             
             # Log state changes for debugging
             logger.debug(f"Display state: {state.value} | User: {user} | Message: {message}")
-            
-            # On macOS, try to update display if screen exists
-            if self.is_macos and self.screen and not self.headless_mode:
-                try:
-                    self._render_state()
-                    pygame.display.flip()
-                except Exception as e:
-                    logger.debug(f"macOS display update failed: {e}")
         
         except Exception as e:
             logger.warning(f"Error setting display state: {e}")
+    
+    def _display_console_state(self, state: AIState, user: Optional[str], message: str):
+        """Display state in console for simulation mode."""
+        # Get state info
+        config = self.state_config[state]
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        
+        # Create a visual representation
+        state_symbols = {
+            AIState.STANDBY: "🔵",
+            AIState.LISTENING: "🟢",
+            AIState.SPEAKING: "🟠", 
+            AIState.PROCESSING: "🟣",
+            AIState.GAME_ACTIVE: "🔵",
+            AIState.ERROR: "🔴"
+        }
+        
+        symbol = state_symbols.get(state, "⚪")
+        user_info = f" | User: {user.title()}" if user else ""
+        message_info = f" | {message}" if message else ""
+        
+        # Print the state update
+        print(f"\n📺 [{timestamp}] {symbol} {config['text'].upper()}{user_info}{message_info}")
+        
+        # Add visual separator for important states
+        if state in [AIState.LISTENING, AIState.SPEAKING]:
+            print("   " + "━" * 50)
     
     def _display_loop(self):
         """Main display loop running in separate thread (Linux/Pi only)."""
