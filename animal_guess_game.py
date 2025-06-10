@@ -75,14 +75,56 @@ Show me your first animal! 🎉"""
 
         if self.ai_assistant:
             self.ai_assistant.speak(f"Animal guessing game started! Show me your first animal, {user_name}!", user)
+            
+            # Automatically start scanning after a brief pause
+            time.sleep(2)
+            
+            # Encourage and start scanning
+            encouragement = random.choice([
+                f"Show me your animal, {user_name}!",
+                f"What animal do you have, {user_name}?",
+                f"Let me see it, {user_name}!",
+                f"Ready to guess, {user_name}!"
+            ])
+            
+            self.ai_assistant.speak(f"{encouragement} Hold it up to the camera!", user)
+            
+            # Give user time to position the animal
+            time.sleep(3)
+            
+            # Perform the identification
+            try:
+                result = self._identify_animal_with_vision(user)
+                
+                if result["success"]:
+                    self.score += 1
+                    response = self._format_animal_response(result, user)
+                    
+                    # Add to identified animals list
+                    if "animal_name" in result:
+                        self.animals_identified.append(result["animal_name"])
+                    
+                    return welcome_message + "\n\n" + response
+                else:
+                    return welcome_message + f"\n\nHmm, I had trouble seeing your animal clearly, {user_name}. {result.get('message', '')} Try holding it closer to the camera with good lighting!"
+                    
+            except Exception as e:
+                logger.error(f"Error in initial animal scanning: {e}")
+                return welcome_message + "\n\nOops! Something went wrong with the camera. Let's try again!"
         
         return welcome_message
     
     def handle_animal_guess(self, user: str) -> str:
         """Handle the main animal guessing functionality."""
         if not self.game_active:
+            # If game isn't active, start it (which will automatically scan)
             return self.start_game(user)
-        
+        else:
+            # Game is active, perform another scan
+            return self._perform_animal_scan(user)
+    
+    def _perform_animal_scan(self, user: str) -> str:
+        """Perform the actual animal scanning and identification."""
         try:
             user_name = user.title()
             
