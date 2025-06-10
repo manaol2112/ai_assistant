@@ -76,10 +76,10 @@ Show me your first animal! 🎉"""
         if self.ai_assistant:
             self.ai_assistant.speak(f"Animal guessing game started! Show me your first animal, {user_name}!", user)
             
-            # Automatically start scanning after a brief pause
+            # Give user time to understand the game
             time.sleep(2)
             
-            # Encourage and start scanning
+            # Encourage them to show the animal, but don't auto-capture
             encouragement = random.choice([
                 f"Show me your animal, {user_name}!",
                 f"What animal do you have, {user_name}?",
@@ -87,30 +87,7 @@ Show me your first animal! 🎉"""
                 f"Ready to guess, {user_name}!"
             ])
             
-            self.ai_assistant.speak(f"{encouragement} Hold it up to the camera!", user)
-            
-            # Give user time to position the animal
-            time.sleep(3)
-            
-            # Perform the identification
-            try:
-                result = self._identify_animal_with_vision(user)
-                
-                if result["success"]:
-                    self.score += 1
-                    response = self._format_animal_response(result, user)
-                    
-                    # Add to identified animals list
-                    if "animal_name" in result:
-                        self.animals_identified.append(result["animal_name"])
-                    
-                    return welcome_message + "\n\n" + response
-                else:
-                    return welcome_message + f"\n\nHmm, I had trouble seeing your animal clearly, {user_name}. {result.get('message', '')} Try holding it closer to the camera with good lighting!"
-                    
-            except Exception as e:
-                logger.error(f"Error in initial animal scanning: {e}")
-                return welcome_message + "\n\nOops! Something went wrong with the camera. Let's try again!"
+            self.ai_assistant.speak(f"{encouragement} Hold it up to the camera and say 'guess the animal' when ready!", user)
         
         return welcome_message
     
@@ -128,38 +105,69 @@ Show me your first animal! 🎉"""
         try:
             user_name = user.title()
             
-            # Encourage the user
+            # Encourage the user with immediate feedback
             encouragement = random.choice([
-                f"Show me your animal, {user_name}!",
-                f"What animal do you have, {user_name}?",
-                f"Let me see it, {user_name}!",
-                f"Ready to guess, {user_name}!"
+                f"Great! Let me take a look, {user_name}!",
+                f"Perfect! I'm looking at your animal now, {user_name}!",
+                f"Okay {user_name}, taking a picture now!",
+                f"Ready to identify it, {user_name}!"
             ])
             
             if self.ai_assistant:
-                self.ai_assistant.speak(f"{encouragement} Hold it up to the camera!", user)
+                self.ai_assistant.speak(f"{encouragement} Hold it steady!", user)
             
-            # Give user time to position the animal
-            time.sleep(3)
+            # Brief pause for positioning - reduced from 3 seconds to 1.5
+            time.sleep(1.5)
             
             # Use the existing object identifier with specialized animal prompt
+            logger.info(f"Starting animal identification for {user_name}")
             result = self._identify_animal_with_vision(user)
             
             if result["success"]:
                 self.score += 1
                 response = self._format_animal_response(result, user)
                 
-                # Add to identified animals list
-                if "animal_name" in result:
-                    self.animals_identified.append(result["animal_name"])
+                # Extract animal name from AI response for tracking
+                ai_response = result.get("ai_response", "").lower()
+                animal_name = "Unknown Animal"
+                
+                # Try to extract animal name from response
+                if "animal:" in ai_response or "dinosaur:" in ai_response:
+                    lines = ai_response.split('\n')
+                    for line in lines:
+                        if line.strip().startswith(('animal:', 'dinosaur:')):
+                            animal_name = line.split(':', 1)[1].strip().title()
+                            break
+                
+                self.animals_identified.append(animal_name)
+                
+                # Give immediate positive feedback
+                if self.ai_assistant:
+                    feedback = random.choice([
+                        f"Awesome find, {user_name}!",
+                        f"Cool animal, {user_name}!",
+                        f"Great choice, {user_name}!",
+                        f"Amazing, {user_name}!"
+                    ])
+                    # Don't speak here, let the formatted response handle it
                 
                 return response
             else:
-                return f"Hmm, I had trouble seeing your animal clearly, {user_name}. {result.get('message', '')} Try holding it closer to the camera with good lighting!"
+                error_msg = f"Hmm, I had trouble seeing your animal clearly, {user_name}. {result.get('message', '')} Try holding it closer to the camera with better lighting!"
+                
+                if self.ai_assistant:
+                    self.ai_assistant.speak(f"I couldn't see it clearly, {user_name}. Try again with better lighting!", user)
+                
+                return error_msg
                 
         except Exception as e:
             logger.error(f"Error in animal guessing: {e}")
-            return "Oops! Something went wrong with the camera. Let's try again!"
+            error_response = f"Oops! Something went wrong with the camera, {user_name}. Let's try again!"
+            
+            if self.ai_assistant:
+                self.ai_assistant.speak(f"Something went wrong, {user_name}. Let's try again!", user)
+            
+            return error_response
     
     def _identify_animal_with_vision(self, user: str) -> Dict[str, Any]:
         """Use the existing ObjectIdentifier with specialized animal prompts."""
@@ -167,85 +175,120 @@ Show me your first animal! 🎉"""
             # Use the object identifier's capture_and_identify method
             # but we'll need to customize the prompt for animals
             
-            # First, let's capture using the object identifier
-            result = self.object_identifier.capture_and_identify()
+            # Add timeout mechanism - if processing takes too long, return timeout error
+            import signal
             
-            if not result["success"]:
-                return result
+            def timeout_handler(signum, frame):
+                raise TimeoutError("Animal identification timeout")
             
-            # Get the image path from the result
-            image_path = result.get("image_path")
-            if not image_path:
-                return {
-                    "success": False,
-                    "message": "Failed to get captured image path."
-                }
+            # Set a 15-second timeout for the entire process
+            signal.signal(signal.SIGALRM, timeout_handler)
+            signal.alarm(15)
             
-            # Now use custom animal identification logic
-            import base64
-            
-            # Handle image encoding based on camera type
-            if hasattr(self.object_identifier, 'using_shared_camera') and self.object_identifier.using_shared_camera:
-                # For shared camera, encode the image file directly
-                with open(image_path, "rb") as image_file:
-                    base64_image = base64.b64encode(image_file.read()).decode('utf-8')
-            else:
-                # For standalone camera manager, use its method
-                base64_image = self.object_identifier.camera_manager.encode_image_to_base64(image_path)
-            
-            if not base64_image:
-                return {
-                    "success": False,
-                    "message": "I couldn't process the image properly."
-                }
-            
-            # Create specialized animal identification prompt
-            prompt = self._get_animal_identification_prompt(user)
-            
-            # Use OpenAI Vision API
-            messages = [
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": prompt
-                        },
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/jpeg;base64,{base64_image}",
-                                "detail": "high"
-                            }
-                        }
-                    ]
-                }
-            ]
-            
-            response = self.object_identifier.client.chat.completions.create(
-                model="gpt-4o",
-                messages=messages,
-                max_tokens=500,
-                temperature=0.7
-            )
-            
-            ai_response = response.choices[0].message.content.strip()
-            
-            # Clean up image file
             try:
-                import os
-                os.remove(image_path)
+                # First, let's capture using the object identifier
+                logger.info("Capturing image for animal identification...")
+                result = self.object_identifier.capture_and_identify()
+                
+                if not result["success"]:
+                    signal.alarm(0)  # Cancel timeout
+                    return result
+                
+                # Get the image path from the result
+                image_path = result.get("image_path")
+                if not image_path:
+                    signal.alarm(0)  # Cancel timeout
+                    return {
+                        "success": False,
+                        "message": "Failed to get captured image path."
+                    }
+                
+                # Now use custom animal identification logic
+                import base64
+                
+                # Handle image encoding based on camera type
+                if hasattr(self.object_identifier, 'using_shared_camera') and self.object_identifier.using_shared_camera:
+                    # For shared camera, encode the image file directly
+                    with open(image_path, "rb") as image_file:
+                        base64_image = base64.b64encode(image_file.read()).decode('utf-8')
+                else:
+                    # For standalone camera manager, use its method
+                    base64_image = self.object_identifier.camera_manager.encode_image_to_base64(image_path)
+                
+                if not base64_image:
+                    signal.alarm(0)  # Cancel timeout
+                    return {
+                        "success": False,
+                        "message": "I couldn't process the image properly."
+                    }
+                
+                # Create specialized animal identification prompt
+                prompt = self._get_animal_identification_prompt(user)
+                
+                # Use OpenAI Vision API
+                logger.info("Sending image to OpenAI for animal identification...")
+                messages = [
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": prompt
+                            },
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{base64_image}",
+                                    "detail": "high"
+                                }
+                            }
+                        ]
+                    }
+                ]
+                
+                response = self.object_identifier.client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=messages,
+                    max_tokens=500,
+                    temperature=0.7
+                )
+                
+                ai_response = response.choices[0].message.content.strip()
+                logger.info("Successfully received animal identification from OpenAI")
+                
+                # Cancel timeout - success!
+                signal.alarm(0)
+                
+                # Clean up image file
+                try:
+                    import os
+                    os.remove(image_path)
+                except:
+                    pass
+                
+                return {
+                    "success": True,
+                    "ai_response": ai_response,
+                    "user": user,
+                    "message": ai_response
+                }
+                
+            except TimeoutError:
+                signal.alarm(0)  # Cancel timeout
+                logger.error("Animal identification timed out after 15 seconds")
+                return {
+                    "success": False,
+                    "error": "Timeout",
+                    "message": "The animal identification took too long. Let's try again with better lighting!"
+                }
+                
+        except Exception as e:
+            # Make sure to cancel any active alarm
+            try:
+                signal.alarm(0)
             except:
                 pass
-            
-            return {
-                "success": True,
-                "ai_response": ai_response,
-                "user": user,
-                "message": ai_response
-            }
-            
-        except Exception as e:
+                
             logger.error(f"Vision API error in animal identification: {e}")
             return {
                 "success": False,
