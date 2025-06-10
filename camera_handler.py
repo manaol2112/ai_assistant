@@ -63,10 +63,6 @@ class CameraHandler:
         """Check if camera is available and working"""
         return self.is_opened and self.cap is not None and self.cap.isOpened()
     
-    def cleanup(self):
-        """Cleanup camera resources (alias for release)"""
-        self.release()
-    
     def release(self):
         """Release the camera"""
         try:
