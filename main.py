@@ -1,49 +1,56 @@
 #!/usr/bin/env python3
 """
-AI Assistant for Raspberry Pi with Personalized Wake Words and Face Recognition
-Created for Sophia (wake word: "Miley") and Eladriel (wake word: "Dino")
-Enhanced with automatic face recognition, personalized greetings, and universal object identification
+AI Assistant with Face Recognition, Object Identification, and Educational Games
+Premium quality with OpenAI TTS and comprehensive interaction features
 """
 
-import os
-import sys
-import time
-import logging
-import threading
-import signal
-from typing import Optional
-from datetime import datetime
+import asyncio
 import cv2
+import logging
+import openai
+import os
+import pygame
+import pyaudio
+import random
+import signal
+import speech_recognition as sr
+import sys
+import tempfile
+import threading
+import time
+import traceback
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Optional, Dict, Any, List, Tuple
 
-# Add current directory to path for imports
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# Import local modules
+from config import Config
+from audio_utils import setup_premium_tts_engines, AudioManager
+from camera_handler import CameraHandler
+from wake_word_detector import WakeWordDetector
+from voice_activity_detector import VoiceActivityDetector
+from face_recognition_module import SmartCameraDetector
+from object_identifier import ObjectIdentifier
+from dinosaur_identifier import DinosaurIdentifier
+from filipino_translator import FilipinoTranslator
+from math_quiz_game import MathQuizGame
+from animal_guess_game import AnimalGuessGame
+from letter_word_game import LetterWordGame
+from display_manager import DisplayManager, AIState
 
-try:
-    from config import Config
-    from audio_utils import AudioManager, setup_premium_tts_engines
-    from wake_word_detector import WakeWordDetector
-    from dinosaur_identifier import DinosaurIdentifier
-    from object_identifier import ObjectIdentifier
-    from smart_camera_detector import SmartCameraDetector
-    from filipino_translator import FilipinoTranslator  # NEW: Filipino translation game
-    from letter_word_game import LetterWordGame  # NEW: Letter word guessing game
-    import openai
-    import pyttsx3
-    import speech_recognition as sr
-    from voice_activity_detector import VoiceActivityDetector
-    from math_quiz_game import MathQuizGame
-    from animal_guess_game import AnimalGuessGame
-    from camera_handler import CameraHandler
-except ImportError as e:
-    print(f"❌ Import error: {e}")
-    print("Please install required packages: pip install -r requirements.txt")
-    sys.exit(1)
-
-# Configure logging
+# Configure detailed logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
+
+# Disable some noisy loggers
+logging.getLogger("urllib3").setLevel(logging.WARNING)
+logging.getLogger("requests").setLevel(logging.WARNING)
+logging.getLogger("azure").setLevel(logging.WARNING)
+logging.getLogger("openai").setLevel(logging.WARNING)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+
 logger = logging.getLogger(__name__)
 
 class AIAssistant:
@@ -59,6 +66,14 @@ class AIAssistant:
         # Setup premium OpenAI TTS engines with natural human voices
         logger.info("🎙️ Setting up premium OpenAI text-to-speech voices...")
         self.sophia_tts, self.eladriel_tts = setup_premium_tts_engines(self.client)
+        
+        # Initialize Display Manager for visual feedback
+        logger.info("📺 Setting up display manager for visual feedback...")
+        self.display_manager = DisplayManager(
+            screen_width=480,  # Default Raspberry Pi display size
+            screen_height=320,
+            fullscreen=False  # Set to True for full-screen on Pi
+        )
         
         # Setup audio components
         self.audio_manager = AudioManager()
@@ -994,59 +1009,64 @@ class AIAssistant:
             logger.info("🎭 Face recognition system stopped")
 
     def speak(self, text: str, user: Optional[str] = None):
-        """Speak text to user with interrupt capability and audio feedback prevention."""
-        if self.quiet_mode:
-            return
-        
+        """Speak text with premium OpenAI TTS with interrupt capability."""
         try:
-            # CRITICAL: Set AI speaking flag to prevent voice detector from listening to AI
+            # Update display to show speaking state
+            self.display_manager.set_state(AIState.SPEAKING, user or self.current_user, f"Speaking: {text[:50]}...")
+            
+            # Set AI speaking flag for voice detector
             self.voice_detector.set_ai_speaking(True)
             
             # Reset interrupt flag
             self.speech_interrupted = False
             
-            # Start interrupt listener
-            self.start_interrupt_listener()
+            # Start interrupt listener if not already active
+            if not self.interrupt_listener_active:
+                self.start_interrupt_listener()
             
-            # Use personalized TTS engine for each user
-            if user and user in self.users:
-                tts_engine = self.users[user]['tts_engine']
-                logger.info(f"Speaking to {user}: {text}")
-                
-                # Use threaded TTS for smooth speech with interrupt capability
-                self._speak_with_interrupt_check(tts_engine, text)
-                    
+            # Get appropriate TTS engine
+            if user == 'sophia':
+                tts_engine = self.sophia_tts
+            elif user == 'eladriel':
+                tts_engine = self.eladriel_tts
+            elif user == 'parent':
+                tts_engine = self.sophia_tts  # Use calm voice for parent
             else:
-                # Default to Sophia's engine if no user specified
-                logger.info(f"Speaking (default): {text}")
-                self._speak_with_interrupt_check(self.sophia_tts, text)
+                # Default fallback - use Sophia's voice
+                tts_engine = self.sophia_tts
             
-            # Stop interrupt listener
-            self.stop_interrupt_listener()
+            # Adjust volume for quiet mode
+            if self.quiet_mode:
+                original_volume = tts_engine.volume
+                tts_engine.volume = 0.3  # Much quieter
             
-            # CRITICAL: Add delay after speaking to prevent audio feedback loop
-            # This prevents the microphone from picking up the AI's own voice
-            import time
-            time.sleep(0.3)  # Reduced from 1.5 to 0.3 seconds for faster response
+            # Start speech with interrupt checking
+            self._speak_with_interrupt_check(tts_engine, text)
             
-            # NEW: Play clear "you can speak now" cue instead of confusing completion sound
-            self.play_ready_to_speak_sound()
-            
-            # Brief pause to let the cue finish and be clearly understood
-            time.sleep(0.2)  # Reduced from 0.5 to 0.2 seconds for faster response
-            
+            # Restore original volume if quiet mode was active
+            if self.quiet_mode and 'original_volume' in locals():
+                tts_engine.volume = original_volume
+                
         except Exception as e:
-            logger.error(f"TTS Error: {e}")
-            self.stop_interrupt_listener()
-            # Still play ready cue even on error
-            self.play_ready_to_speak_sound()
-            time.sleep(0.2)  # Reduced from 0.5 to 0.2 seconds
-            # Add delay even on error to prevent feedback
-            import time
-            time.sleep(0.3)  # Reduced from 1.5 to 0.3 seconds
+            logger.error(f"Error in speak method: {e}")
+            # Fallback to system TTS if OpenAI TTS fails
+            try:
+                import pyttsx3
+                fallback_engine = pyttsx3.init()
+                fallback_engine.setProperty('rate', 180)
+                fallback_engine.setProperty('volume', 0.8)
+                fallback_engine.say(text)
+                fallback_engine.runAndWait()
+            except Exception as fallback_error:
+                logger.error(f"Fallback TTS also failed: {fallback_error}")
         finally:
-            # CRITICAL: Always reset AI speaking flag when done
+            # Clear AI speaking flag
             self.voice_detector.set_ai_speaking(False)
+            # Update display back to appropriate state
+            if self.current_user:
+                self.display_manager.set_state(AIState.STANDBY, self.current_user, "Ready for next interaction")
+            else:
+                self.display_manager.set_state(AIState.STANDBY, None, "AI Assistant Ready")
 
     def speak_no_interrupt(self, text: str, user: Optional[str] = None):
         """Speak text without interrupt capability (for game instructions, etc.)."""
@@ -1212,6 +1232,9 @@ class AIAssistant:
     def listen_for_speech(self, timeout: int = 15) -> Optional[str]:
         """Listen for speech input using intelligent voice activity detection with speaker differentiation."""
         try:
+            # Update display to show listening state
+            self.display_manager.set_state(AIState.LISTENING, self.current_user, "Waiting for voice input...")
+            
             # Set AI speaking flag to false to allow listening
             self.voice_detector.set_ai_speaking(False)
             
@@ -1243,7 +1266,12 @@ class AIAssistant:
             )
             
             if text is None:
+                # Update display back to standby if no speech detected
+                self.display_manager.set_state(AIState.STANDBY, self.current_user, "Ready for interaction")
                 return None
+            
+            # Update display to show processing state
+            self.display_manager.set_state(AIState.PROCESSING, self.current_user, f"Processing: {text[:30]}...")
             
             # Special handling for "ready" detection in spelling game
             if self.spelling_game_active:
@@ -1256,6 +1284,8 @@ class AIAssistant:
                 
         except Exception as e:
             logger.error(f"Smart voice detection error: {e}")
+            # Update display to show error state
+            self.display_manager.show_error(f"Speech recognition error: {str(e)[:30]}...")
             # Fallback to basic recognition if smart detection fails
             return self._fallback_listen_for_speech(timeout)
     
@@ -1403,6 +1433,18 @@ class AIAssistant:
     def handle_special_commands(self, user_input: str, user: str) -> Optional[str]:
         """Handle special commands for each user."""
         user_input_lower = user_input.lower()
+        
+        # Check for game states and update display accordingly
+        if any(phrase in user_input_lower for phrase in ['letter game', 'letter word game', 'word guessing']):
+            self.display_manager.set_state(AIState.GAME_ACTIVE, user, "Starting Letter Word Game...")
+        elif any(phrase in user_input_lower for phrase in ['animal game', 'guess the animal', 'animal guessing']):
+            self.display_manager.set_state(AIState.GAME_ACTIVE, user, "Starting Animal Guessing Game...")
+        elif any(phrase in user_input_lower for phrase in ['spelling game', 'play spelling']):
+            self.display_manager.set_state(AIState.GAME_ACTIVE, user, "Starting Spelling Game...")
+        elif any(phrase in user_input_lower for phrase in ['math game', 'math quiz']):
+            self.display_manager.set_state(AIState.GAME_ACTIVE, user, "Starting Math Quiz Game...")
+        elif any(phrase in user_input_lower for phrase in ['filipino game', 'teach me filipino']):
+            self.display_manager.set_state(AIState.GAME_ACTIVE, user, "Starting Filipino Translation Game...")
         
         # Parent-specific admin commands
         if user == 'parent':
@@ -2273,6 +2315,10 @@ Everything looks good for when the children wake up!"""
         self.running = True
         logger.info("AI Assistant started - Listening for wake words...")
         
+        # Start the display manager
+        self.display_manager.start_display()
+        self.display_manager.set_state(AIState.STANDBY, None, "Starting up...")
+        
         # Start face recognition system
         self.start_face_recognition()
         
@@ -2289,56 +2335,73 @@ Everything looks good for when the children wake up!"""
         print("🔍 Object identification: Say 'What is this?' with any object!")
         print("👁️ Face recognition active - I can see Sophia and Eladriel!")
         print("👨‍💼 Parent Mode: Say 'Assistant' for admin features and quiet mode!")
+        print("📺 Display: Visual feedback shows AI status on screen!")
         print("🎤 Listening for faces and wake words...")
+        
+        # Update display to ready state
+        self.display_manager.set_state(AIState.STANDBY, None, "Ready - Say wake word or step in front of camera")
         
         try:
             while self.running:
-                # Listen for wake words (only when no one is in conversation)
-                if not self.current_user:
-                    detected_user = self.wake_word_detector.listen_for_wake_word()
+                try:
+                    # Listen for wake words with timeout
+                    detected_user = self.wake_word_detector.listen_for_wake_word(timeout=1.0)
                     
                     if detected_user:
-                        logger.info(f"Wake word detected for: {detected_user}")
-                        print(f"👋 Hello {detected_user.title()}! Starting voice-activated conversation...")
-                        
-                        # Play wake word confirmation sound
+                        logger.info(f"Wake word detected for user: {detected_user}")
+                        self.display_manager.set_state(AIState.PROCESSING, detected_user, f"Wake word detected for {detected_user}")
                         self.play_wake_word_sound()
-                        
-                        # Handle the user interaction with conversation mode
                         self.handle_user_interaction(detected_user)
-                else:
-                    # Someone is in conversation, just wait
-                    time.sleep(0.5)
-                
-                time.sleep(0.1)  # Small delay to prevent excessive CPU usage
-                
-        except KeyboardInterrupt:
-            logger.info("Shutting down AI Assistant...")
-            self.stop()
+                        # Reset to standby after interaction
+                        self.display_manager.set_state(AIState.STANDBY, None, "Ready for next interaction")
+                    
+                    # Small delay to prevent excessive CPU usage
+                    time.sleep(0.1)
+                    
+                except KeyboardInterrupt:
+                    logger.info("Keyboard interrupt received - shutting down...")
+                    break
+                except Exception as e:
+                    logger.error(f"Error in main loop: {e}")
+                    self.display_manager.show_error(f"Main loop error: {str(e)[:30]}...")
+                    time.sleep(1)  # Brief pause before continuing
+                    
         except Exception as e:
-            logger.error(f"Unexpected error in main loop: {e}")
+            logger.error(f"Critical error in run method: {e}")
+            self.display_manager.show_error(f"Critical error: {str(e)[:30]}...")
+        finally:
             self.stop()
 
     def stop(self):
-        """Gracefully shutdown the assistant."""
+        """Stop the AI Assistant and cleanup resources."""
+        logger.info("Stopping AI Assistant...")
         self.running = False
         
-        # Stop interrupt system
-        self.stop_interrupt_listener()
+        # Stop display manager
+        if hasattr(self, 'display_manager'):
+            self.display_manager.set_state(AIState.STANDBY, None, "Shutting down...")
+            time.sleep(1)  # Give time for display update
+            self.display_manager.stop_display()
         
-        # Stop other components
-        self.wake_word_detector.stop()
+        # Stop face recognition
         self.stop_face_recognition()
         
-        # Cleanup object identification resources
-        try:
-            self.object_identifier.cleanup()
-            self.dinosaur_identifier.cleanup()
-        except Exception as e:
-            logger.error(f"Error during cleanup: {e}")
+        # Stop interrupt listener
+        if self.interrupt_listener_active:
+            self.stop_interrupt_listener()
+        
+        # Cleanup camera
+        if hasattr(self, 'camera_handler'):
+            self.camera_handler.cleanup()
+        
+        # Cleanup games
+        if hasattr(self, 'animal_game'):
+            self.animal_game.cleanup()
+        
+        if hasattr(self, 'letter_word_game'):
+            self.letter_word_game.cleanup()
         
         logger.info("AI Assistant stopped")
-        print("👋 AI Assistant stopped. Goodbye!")
 
     def start_spelling_game(self, user: str) -> str:
         """Start an interactive spelling game for kids with streamlined, exciting instructions."""
