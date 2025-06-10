@@ -247,7 +247,7 @@ install_system_deps() {
         libpng-dev \
         libv4l-dev \
         v4l-utils \
-        libdc1394-22-dev \
+        libdc1394-dev \
         libxine2-dev \
         libfaac-dev \
         libmp3lame-dev \

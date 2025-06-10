@@ -61,8 +61,8 @@ def test_camera():
 
 if __name__ == "__main__":
     if test_camera():
-        print("\n🎉 Camera is working! You can now run the dinosaur detector:")
-        print("python camera_detector.py")
+        print("\n🎉 Camera is working! You can now run the smart camera detector:")
+        print("python smart_camera_detector.py")
     else:
         print("\n🚫 Camera test failed. Please check permissions and try again.")
         sys.exit(1) 
