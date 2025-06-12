@@ -7,13 +7,20 @@ Enhanced with automatic face recognition, personalized greetings, and universal 
 
 import os
 import sys
-import time
+import asyncio
 import logging
+import time
 import threading
-import signal
-from typing import Optional
-from datetime import datetime
-import cv2
+import queue
+import json
+from datetime import datetime, timedelta
+from typing import Optional, Dict, Any, List
+import re
+import base64
+import tkinter as tk
+from PIL import Image, ImageTk
+import requests
+from io import BytesIO
 
 # Add current directory to path for imports
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -46,9 +53,213 @@ except ImportError as e:
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('ai_assistant.log'),
+        logging.StreamHandler()
+    ]
 )
 logger = logging.getLogger(__name__)
+
+class ImageGenerator:
+    """Handles AI image generation using DALL-E and displays images on screen."""
+    
+    def __init__(self, visual_feedback=None):
+        self.client = openai.OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+        self.visual_feedback = visual_feedback
+        self.current_image_path = None
+        
+        # Create images directory if it doesn't exist
+        os.makedirs("generated_images", exist_ok=True)
+        
+    def detect_image_request(self, text: str) -> dict:
+        """Detect if the user is requesting image generation."""
+        text_lower = text.lower()
+        
+        # Image generation phrases
+        image_phrases = [
+            'show me', 'draw me', 'create a picture', 'make a picture',
+            'generate an image', 'can you draw', 'picture of', 'image of',
+            'show a picture', 'create an image', 'make an image',
+            'draw a picture', 'generate a picture'
+        ]
+        
+        # Check for image generation requests
+        for phrase in image_phrases:
+            if phrase in text_lower:
+                # Extract what to generate
+                prompt = self._extract_image_prompt(text, phrase)
+                return {
+                    'is_image_request': True,
+                    'prompt': prompt,
+                    'original_text': text
+                }
+        
+        return {'is_image_request': False}
+    
+    def _extract_image_prompt(self, text: str, trigger_phrase: str) -> str:
+        """Extract the image prompt from the user's request."""
+        text_lower = text.lower()
+        
+        # Find the trigger phrase and extract what comes after
+        if trigger_phrase in text_lower:
+            # Split on the trigger phrase and take what comes after
+            parts = text_lower.split(trigger_phrase, 1)
+            if len(parts) > 1:
+                prompt = parts[1].strip()
+                # Clean up common words
+                prompt = prompt.replace('a picture of', '').replace('an image of', '')
+                prompt = prompt.replace('a drawing of', '').replace('a photo of', '')
+                prompt = prompt.strip()
+                
+                if prompt:
+                    return prompt
+        
+        # Fallback: return the whole text minus the trigger
+        return text.replace(trigger_phrase, '').strip()
+    
+    def generate_image(self, prompt: str, user: str) -> dict:
+        """Generate an image using DALL-E and display it."""
+        try:
+            # Show thinking state in visual feedback
+            if self.visual_feedback:
+                self.visual_feedback.show_thinking("🎨 Creating your image...")
+            
+            logger.info(f"🎨 Generating image for {user}: {prompt}")
+            
+            # Enhance prompt for kid-friendly content
+            enhanced_prompt = self._enhance_prompt_for_kids(prompt, user)
+            
+            # Generate image with DALL-E 2 (cheapest option)
+            response = self.client.images.generate(
+                model="dall-e-2",  # Changed from dall-e-3 to dall-e-2 (much cheaper!)
+                prompt=enhanced_prompt,
+                size="256x256",    # Changed from 1024x1024 to 256x256 (cheapest size, perfect for 5" screen)
+                n=1,
+            )
+            
+            # Get the image URL
+            image_url = response.data[0].url
+            
+            # Download and save the image
+            image_path = self._download_and_save_image(image_url, prompt)
+            
+            if image_path:
+                # Display the image
+                self._display_image(image_path, prompt)
+                
+                # Show happy state in visual feedback
+                if self.visual_feedback:
+                    self.visual_feedback.show_happy("🎨 Your image is ready!")
+                
+                return {
+                    'success': True,
+                    'image_path': image_path,
+                    'prompt': enhanced_prompt,
+                    'message': f"🎨 Amazing! I've created your image of '{prompt}'! Take a look at the screen!"
+                }
+            else:
+                return {
+                    'success': False,
+                    'error': 'Failed to save image',
+                    'message': "I created the image but had trouble saving it. Let me try again!"
+                }
+                
+        except Exception as e:
+            logger.error(f"Error generating image: {e}")
+            
+            # Show error state in visual feedback
+            if self.visual_feedback:
+                self.visual_feedback.show_error("Sorry, image generation failed")
+            
+            return {
+                'success': False,
+                'error': str(e),
+                'message': "I'm sorry, I had trouble creating your image. Let me try again later!"
+            }
+    
+    def _enhance_prompt_for_kids(self, prompt: str, user: str) -> str:
+        """Enhance the prompt to be kid-friendly and age-appropriate."""
+        # Base enhancements for safety and quality
+        enhanced = f"A beautiful, colorful, kid-friendly illustration of {prompt}"
+        
+        # Add user-specific enhancements
+        if user == 'sophia':
+            enhanced += ", in a sweet and magical style with bright colors"
+        elif user == 'eladriel':
+            enhanced += ", in an adventurous style with dinosaurs or prehistoric elements if relevant"
+        
+        # Add safety and quality modifiers
+        enhanced += ", safe for children, wholesome, educational, high quality digital art"
+        
+        return enhanced
+    
+    def _download_and_save_image(self, image_url: str, prompt: str) -> str:
+        """Download the image from URL and save it locally."""
+        try:
+            # Download the image
+            response = requests.get(image_url)
+            response.raise_for_status()
+            
+            # Create filename
+            timestamp = int(time.time())
+            safe_prompt = re.sub(r'[^\w\s-]', '', prompt)[:30]
+            safe_prompt = re.sub(r'[-\s]+', '_', safe_prompt)
+            filename = f"generated_images/image_{timestamp}_{safe_prompt}.png"
+            
+            # Save the image
+            with open(filename, 'wb') as f:
+                f.write(response.content)
+            
+            self.current_image_path = filename
+            logger.info(f"✅ Image saved: {filename}")
+            return filename
+            
+        except Exception as e:
+            logger.error(f"Error downloading/saving image: {e}")
+            return None
+    
+    def _display_image(self, image_path: str, prompt: str):
+        """Display the generated image in the robot's visual feedback window."""
+        try:
+            # Use the robot's visual feedback system to display the image
+            if self.visual_feedback and hasattr(self.visual_feedback, 'display_image'):
+                self.visual_feedback.display_image(image_path, prompt.title())
+                logger.info(f"🖼️ Image displayed in robot window")
+            else:
+                logger.warning("Visual feedback system not available for image display")
+                
+        except Exception as e:
+            logger.error(f"Error displaying image in robot window: {e}")
+    
+    def close_image_window(self):
+        """Close the image display (now handled by visual feedback system)."""
+        try:
+            if self.visual_feedback and hasattr(self.visual_feedback, 'hide_image'):
+                self.visual_feedback.hide_image()
+                logger.info("🖼️ Image closed via robot interface")
+        except Exception as e:
+            logger.error(f"Error closing image: {e}")
+    
+    def handle_image_request(self, text: str, user: str) -> str:
+        """Handle image generation requests."""
+        detection = self.detect_image_request(text)
+        
+        if not detection['is_image_request']:
+            return None
+        
+        prompt = detection['prompt']
+        
+        if not prompt or len(prompt.strip()) < 2:
+            return "I'd love to create an image for you! Can you tell me what you'd like me to draw? For example, say 'show me a rainbow' or 'draw me a dinosaur'!"
+        
+        # Generate the image
+        result = self.generate_image(prompt, user)
+        
+        if result['success']:
+            return result['message']
+        else:
+            return result['message']
 
 class AIAssistant:
     def __init__(self):
@@ -115,6 +326,24 @@ class AIAssistant:
         self.face_recognition_active = False
         self.last_face_greeting = {}  # Track when we last greeted each person
         self.face_greeting_cooldown = 30  # seconds between face greetings
+        
+        # Initialize visual feedback system
+        logger.info("🎨 Setting up visual feedback system...")
+        # Initialize visual feedback system with user detection
+        try:
+            # Start with no specific user, will be updated when user is detected
+            self.visual = create_visual_feedback(use_gui=True)
+            if hasattr(self.visual, '__class__') and 'VisualFeedbackSystem' in str(self.visual.__class__):
+                print(f"✅ Visual feedback system initialized: {type(self.visual)}")
+            else:
+                print(f"✅ Minimal visual feedback initialized: {type(self.visual)}")
+        except Exception as e:
+            print(f"⚠️ Could not initialize visual feedback: {e}")
+            self.visual = None
+        
+        # Initialize image generator with visual feedback integration
+        logger.info("🎨 Setting up AI image generation system...")
+        self.image_generator = ImageGenerator(visual_feedback=self.visual)
         
         # Parent mode settings
         self.quiet_mode = False
@@ -186,6 +415,8 @@ class AIAssistant:
         self.users = {
             'sophia': {
                 'name': 'Sophia',
+                'birthday': '2018-08-17',  # August 17, 2018
+                'gender': 'girl',
                 'wake_word': 'miley',
                 'personality': 'friendly, encouraging, and supportive',
                 'greeting': self.get_dynamic_greeting('sophia'),
@@ -195,6 +426,8 @@ class AIAssistant:
             },
             'eladriel': {
                 'name': 'Eladriel',
+                'birthday': '2020-08-12',  # August 12, 2020
+                'gender': 'boy',
                 'wake_word': 'dino',
                 'personality': 'playful, curious, and energetic',
                 'greeting': self.get_dynamic_greeting('eladriel'),
@@ -217,19 +450,6 @@ class AIAssistant:
                 ]
             }
         }
-        
-        # Initialize visual feedback system with user detection
-        try:
-            from visual_feedback import create_visual_feedback
-            # Start with no specific user, will be updated when user is detected
-            self.visual = create_visual_feedback(use_gui=True)
-            if hasattr(self.visual, '__class__') and 'VisualFeedbackSystem' in str(self.visual.__class__):
-                print(f"✅ Visual feedback system initialized: {type(self.visual)}")
-            else:
-                print(f"✅ Minimal visual feedback initialized: {type(self.visual)}")
-        except Exception as e:
-            print(f"⚠️ Could not initialize visual feedback: {e}")
-            self.visual = None
         
         logger.info("🚀 AI Assistant initialized with premium natural voices, face recognition, and universal object identification!")
 
@@ -1407,14 +1627,20 @@ class AIAssistant:
             # Create a personalized system prompt based on user
             user_info = self.users.get(user, {})
             personality = user_info.get('personality', 'helpful and friendly')
-            user_name = user_info.get('name', user.title())
+            user_context = self.get_user_context_info(user)
             
             # Get conversation context
             conversation_context = self.get_conversation_context(user)
             
-            system_prompt = f"""You are a helpful AI assistant speaking to {user_name}. 
+            # Log user context for debugging
+            logger.info(f"👤 User context for {user}: {user_context}")
+            
+            system_prompt = f"""You are a helpful AI assistant speaking to {user_context}. 
             Be {personality}. Keep responses friendly, age-appropriate, and engaging for children. 
             Be encouraging and educational when possible. Keep responses concise but informative.
+            
+            Always remember their age and gender when crafting responses. Use appropriate language, 
+            examples, and concepts that match their developmental stage.
             
             Remember to reference previous conversation when relevant. You have context of what you discussed earlier."""
             
@@ -1431,10 +1657,36 @@ class AIAssistant:
             # Add current user message
             messages.append({"role": "user", "content": text})
             
+            # Intelligent token limit based on request type
+            story_keywords = [
+                'story', 'tell me about', 'once upon a time', 'tale', 'adventure',
+                'fairy tale', 'bedtime story', 'fable', 'legend', 'myth',
+                'tell me a story', 'can you tell', 'long story', 'short story'
+            ]
+            
+            detailed_keywords = [
+                'explain', 'how does', 'why does', 'what is', 'describe',
+                'tell me more', 'can you teach', 'help me understand',
+                'learn about', 'what happens when', 'how do you'
+            ]
+            
+            text_lower = text.lower()
+            
+            # Set appropriate token limits
+            if any(keyword in text_lower for keyword in story_keywords):
+                max_tokens = 800  # Allow longer stories (500-600 words)
+                logger.info("🎭 Story request detected - using extended token limit (800)")
+            elif any(keyword in text_lower for keyword in detailed_keywords):
+                max_tokens = 400  # Allow detailed explanations (250-300 words)
+                logger.info("📚 Detailed explanation request - using medium token limit (400)")
+            else:
+                max_tokens = 200  # Regular conversation (130-150 words)
+                logger.info("💬 Regular conversation - using standard token limit (200)")
+            
             response = self.client.chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=messages,
-                max_tokens=150,
+                max_tokens=max_tokens,
                 temperature=0.7
             )
             
@@ -1503,6 +1755,16 @@ class AIAssistant:
         
         if any(phrase in user_input_lower for phrase in repeat_phrases):
             return self.handle_repeat_request(user)
+        
+        # Singing functionality for all users
+        singing_detection = self.detect_singing_request(user_input)
+        if singing_detection['is_singing']:
+            return self.handle_singing_request(user_input, user)
+        
+        # Image generation functionality for all users
+        image_response = self.image_generator.handle_image_request(user_input, user)
+        if image_response:
+            return image_response
         
         # Math Quiz Game Commands (for Sophia, Eladriel, and Parent) - CHECK FIRST!
         if user in ['sophia', 'eladriel', 'parent']:
@@ -1701,6 +1963,14 @@ class AIAssistant:
 • Say "What is this?" or "Identify this" - I'll tell you all about any object you show me!
 • Learn about colors, materials, history, and fun facts
 • Perfect for exploring household items, toys, books, and more!
+
+🎨 AI IMAGE GENERATION (NEW!):
+• Say "Show me a rainbow" or "Draw me a unicorn" - I'll create beautiful images for you!
+• Try phrases like: "Create a picture of...", "Make an image of...", "Draw me..."
+• I'll make kid-friendly, colorful illustrations perfect for your age
+• Images appear in a special window on the screen - so magical! ✨
+• Examples: "Show me a castle", "Draw me a dinosaur", "Create a picture of a butterfly"
+• I can draw anything you can imagine - animals, places, objects, and more!
 
 📝 SPELLING GAME (NEW!):
 • Say "Spelling Game" to start an interactive spelling practice!
@@ -3169,6 +3439,231 @@ Word #{self.spelling_word_index + 1}: {next_word.upper()}
         except Exception as e:
             logger.error(f"Error stopping auto visual check: {e}")
             return "Auto check mode stopped. Say 'Ready' when you want me to check your answer!"
+
+    def get_user_age(self, user: str) -> int:
+        """Calculate current age from birthday."""
+        from datetime import datetime, date
+        
+        user_info = self.users.get(user, {})
+        birthday_str = user_info.get('birthday')
+        
+        if not birthday_str:
+            return None
+            
+        try:
+            # Parse birthday string (YYYY-MM-DD format)
+            birthday = datetime.strptime(birthday_str, '%Y-%m-%d').date()
+            today = date.today()
+            
+            # Calculate age
+            age = today.year - birthday.year
+            
+            # Adjust if birthday hasn't occurred this year yet
+            if today < birthday.replace(year=today.year):
+                age -= 1
+                
+            return age
+        except Exception as e:
+            logger.error(f"Error calculating age for {user}: {e}")
+            return None
+
+    def get_user_context_info(self, user: str) -> str:
+        """Get formatted context information about the user for AI prompts."""
+        user_info = self.users.get(user, {})
+        
+        if user == 'parent':
+            return "You are speaking with a parent/adult."
+            
+        name = user_info.get('name', user.title())
+        gender = user_info.get('gender', '')
+        age = self.get_user_age(user)
+        birthday_str = user_info.get('birthday', '')
+        
+        context_parts = [f"{name}"]
+        
+        if age is not None:
+            context_parts.append(f"who is {age} years old")
+            
+        if gender:
+            context_parts.append(f"and is a {gender}")
+            
+        context = " ".join(context_parts)
+        
+        # Add birthday information
+        if birthday_str:
+            try:
+                from datetime import datetime
+                birthday = datetime.strptime(birthday_str, '%Y-%m-%d')
+                birthday_formatted = birthday.strftime('%B %d, %Y')  # e.g., "August 12, 2020"
+                context += f". {name}'s birthday is {birthday_formatted}"
+            except Exception as e:
+                logger.error(f"Error formatting birthday for {user}: {e}")
+        
+        # Add age-appropriate guidance
+        if age is not None:
+            if age <= 4:
+                context += ". Use very simple words, short sentences, and be extra patient and encouraging."
+            elif age <= 7:
+                context += ". Use age-appropriate vocabulary, be encouraging, and make learning fun with examples they can relate to."
+            elif age <= 10:
+                context += ". You can use more complex concepts but explain them clearly. Be supportive of their curiosity and learning."
+        
+        return context
+
+    def detect_singing_request(self, text: str) -> dict:
+        """Detect if the user is requesting singing and what type of song."""
+        text_lower = text.lower()
+        
+        # Happy Birthday detection
+        birthday_phrases = [
+            'sing happy birthday', 'happy birthday song', 'birthday song',
+            'sing birthday', 'happy birthday to', 'birthday for'
+        ]
+        
+        # General singing detection
+        singing_phrases = [
+            'sing', 'sing a song', 'sing me', 'can you sing',
+            'song for', 'sing to', 'sing about'
+        ]
+        
+        # Check for Happy Birthday specifically
+        if any(phrase in text_lower for phrase in birthday_phrases):
+            # Try to extract the name
+            name = self.extract_name_from_birthday_request(text)
+            return {
+                'is_singing': True,
+                'song_type': 'happy_birthday',
+                'name': name,
+                'original_text': text
+            }
+        
+        # Check for general singing
+        elif any(phrase in text_lower for phrase in singing_phrases):
+            return {
+                'is_singing': True,
+                'song_type': 'general',
+                'name': None,
+                'original_text': text
+            }
+        
+        return {'is_singing': False}
+
+    def extract_name_from_birthday_request(self, text: str) -> str:
+        """Extract name from birthday singing request."""
+        import re
+        text = text.lower()
+        
+        # Enhanced patterns to extract names from birthday requests
+        patterns = [
+            r'happy birthday to (?:my (?:friend|sister|brother|cousin|mom|dad|mother|father|grandma|grandpa|grandmother|grandfather)\s+)?(\w+)',
+            r'sing happy birthday to (?:my (?:friend|sister|brother|cousin|mom|dad|mother|father|grandma|grandpa|grandmother|grandfather)\s+)?(\w+)',
+            r'birthday song for (?:my (?:friend|sister|brother|cousin|mom|dad|mother|father|grandma|grandpa|grandmother|grandfather)\s+)?(\w+)',
+            r'sing (?:a )?birthday song (?:to|for) (?:my (?:friend|sister|brother|cousin|mom|dad|mother|father|grandma|grandpa|grandmother|grandfather)\s+)?(\w+)',
+            r'(?:to|for) (?:my (?:friend|sister|brother|cousin|mom|dad|mother|father|grandma|grandpa|grandmother|grandfather)\s+)?(\w+)(?:\s+birthday|\s+\'s birthday)',
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, text)
+            if match:
+                name = match.group(1)
+                # Capitalize the first letter
+                return name.capitalize()
+        
+        # Fallback: look for any capitalized word that might be a name
+        words = text.split()
+        for word in words:
+            if word.isalpha() and len(word) > 1 and word not in ['happy', 'birthday', 'sing', 'song', 'the', 'for', 'to', 'my', 'friend', 'sister', 'brother']:
+                return word.capitalize()
+        
+        return "someone special"
+
+    def format_text_for_singing(self, text: str, song_type: str = 'general', name: str = None) -> str:
+        """Format text with musical notation and rhythm cues for better singing."""
+        
+        if song_type == 'happy_birthday':
+            return self.format_happy_birthday_song(name or "you")
+        else:
+            # For general singing, add musical formatting
+            return self.add_musical_formatting(text)
+
+    def format_happy_birthday_song(self, name: str) -> str:
+        """Format Happy Birthday song with musical notation and rhythm."""
+        
+        # Happy Birthday with musical notation and rhythm cues
+        song = f"""🎵 ♪ Hap-py Birth-day to {name} ♪
+♫ Hap-py Birth-day to {name} ♫  
+🎶 Hap-py Birth-day dear {name}! 🎶
+♪♫ Hap-py Birth-day to {name}! ♪♫ 🎉"""
+        
+        # Add singing instructions for the AI
+        singing_instructions = f"""
+
+[SINGING MODE: Use melodic intonation, hold vowels longer, add musical rhythm. 
+This is the Happy Birthday song - make it sound celebratory and musical!
+Emphasize the melody: Hap-PY Birth-DAY to {name}!]"""
+        
+        return song + singing_instructions
+
+    def add_musical_formatting(self, text: str) -> str:
+        """Add musical formatting to make any text sound more song-like."""
+        
+        # Add musical symbols and rhythm cues
+        formatted = f"🎵 {text} 🎵"
+        
+        # Add singing instructions
+        singing_instructions = """
+
+[SINGING MODE: Use melodic intonation, vary pitch, hold vowels longer, 
+add musical rhythm. Make this sound like singing, not talking!]"""
+        
+        return formatted + singing_instructions
+
+    def handle_singing_request(self, text: str, user: str) -> str:
+        """Handle singing requests with proper musical formatting."""
+        
+        singing_info = self.detect_singing_request(text)
+        
+        if not singing_info['is_singing']:
+            return None  # Not a singing request
+        
+        song_type = singing_info['song_type']
+        name = singing_info['name']
+        
+        logger.info(f"🎵 Singing request detected: {song_type} for {name}")
+        
+        if song_type == 'happy_birthday':
+            # Format Happy Birthday song
+            formatted_song = self.format_happy_birthday_song(name)
+            
+            # Add personalized intro based on user
+            if user == 'sophia':
+                intro = f"🎉 Of course, Sophia! Let me sing Happy Birthday for {name}! 🎂"
+            elif user == 'eladriel':
+                intro = f"🦕 Roar-some! Let me sing a birthday song for {name}, Eladriel! 🎂"
+            else:
+                intro = f"🎵 I'd be happy to sing Happy Birthday for {name}! 🎂"
+            
+            return f"{intro}\n\n{formatted_song}"
+        
+        else:
+            # Handle general singing requests
+            if 'about' in text.lower():
+                # Extract what to sing about
+                topic = text.lower().split('about')[-1].strip()
+                song_text = f"Here's a little song about {topic}!"
+            else:
+                song_text = "Here's a song for you!"
+            
+            formatted_song = self.add_musical_formatting(song_text)
+            
+            if user == 'sophia':
+                intro = "🎵 I love singing, Sophia! Here we go! 🎶"
+            elif user == 'eladriel':
+                intro = "🦕🎵 Dino-singing time, Eladriel! 🎶"
+            else:
+                intro = "🎵 I'd be happy to sing for you! 🎶"
+            
+            return f"{intro}\n\n{formatted_song}"
 
 if __name__ == "__main__":
     assistant = AIAssistant()

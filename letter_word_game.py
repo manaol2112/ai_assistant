@@ -272,9 +272,6 @@ Yes! You got it right!
 
 {next_word_message}"""
 
-            if self.ai_assistant:
-                self.ai_assistant.speak(f"{celebration} Yes, that's right! Your score is {self.score}. {self._get_next_word_speech()}", user)
-            
             return response
         
         else:
@@ -292,9 +289,6 @@ Yes! You got it right!
 
 {next_word_message}"""
 
-                if self.ai_assistant:
-                    self.ai_assistant.speak(f"{encouragement} {correct_answer}. {self._get_next_word_speech()}", user)
-                
                 return response
             
             else:
@@ -305,9 +299,6 @@ The word I'm thinking of starts with '{self.current_letter}' and: {self.current_
 
 You have {remaining_attempts} more attempt{'s' if remaining_attempts > 1 else ''}. Try again!"""
 
-                if self.ai_assistant:
-                    self.ai_assistant.speak(f"Not quite right! Try again. You have {remaining_attempts} more tries.", user)
-                
                 return hint_response
     
     def _extract_word_from_answer(self, user_answer: str) -> str:
@@ -456,9 +447,6 @@ Letter: {self.current_letter}
 
 Keep thinking! You can do it!"""
 
-        if self.ai_assistant:
-            self.ai_assistant.speak(f"Here's an extra hint: {extra_hint}", user)
-        
         return response
     
     def skip_word(self, user: str) -> str:
@@ -473,9 +461,6 @@ Keep thinking! You can do it!"""
 
 {next_word_message}"""
 
-        if self.ai_assistant:
-            self.ai_assistant.speak(f"Okay, we'll skip that one. The word was {skipped_word}. {self._get_next_word_speech()}", user)
-        
         return response
     
     def get_game_stats(self, user: str) -> str:
@@ -520,9 +505,6 @@ Want to play again? Just say 'Letter Game' to start a new round!
 
 🧠 Remember: Every time you play, you're getting smarter! Great job!"""
 
-        if self.ai_assistant:
-            self.ai_assistant.speak(f"Game over! You got {self.score} words correct. Great job learning new words!", user)
-        
         return final_stats
     
     def get_game_help(self, user: str) -> str:
