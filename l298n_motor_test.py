@@ -35,8 +35,12 @@ LOW_SPEED = 30    # 30% duty cycle
 MEDIUM_SPEED = 60  # 60% duty cycle
 HIGH_SPEED = 100   # 100% duty cycle
 
+# Global variable to track GPIO initialization
+gpio_initialized = False
+
 def setup():
     """Initialize GPIO pins and PWM"""
+    global gpio_initialized
     try:
         GPIO.setmode(GPIO.BCM)
         GPIO.setup(IN1, GPIO.OUT)
@@ -50,6 +54,8 @@ def setup():
         # Initialize motor to stopped state
         GPIO.output(IN1, GPIO.LOW)
         GPIO.output(IN2, GPIO.LOW)
+        
+        gpio_initialized = True
         return pwm
     except Exception as e:
         print(f"Setup Error: {e}")
@@ -61,6 +67,8 @@ def setup():
 
 def forward(pwm, speed):
     """Move motor forward at specified speed"""
+    if not gpio_initialized:
+        raise RuntimeError("GPIO not initialized. Call setup() first.")
     GPIO.output(IN1, GPIO.HIGH)
     GPIO.output(IN2, GPIO.LOW)
     pwm.ChangeDutyCycle(speed)
@@ -68,6 +76,8 @@ def forward(pwm, speed):
 
 def backward(pwm, speed):
     """Move motor backward at specified speed"""
+    if not gpio_initialized:
+        raise RuntimeError("GPIO not initialized. Call setup() first.")
     GPIO.output(IN1, GPIO.LOW)
     GPIO.output(IN2, GPIO.HIGH)
     pwm.ChangeDutyCycle(speed)
@@ -75,6 +85,8 @@ def backward(pwm, speed):
 
 def stop(pwm):
     """Stop the motor"""
+    if not gpio_initialized:
+        raise RuntimeError("GPIO not initialized. Call setup() first.")
     pwm.ChangeDutyCycle(0)
     GPIO.output(IN1, GPIO.LOW)
     GPIO.output(IN2, GPIO.LOW)
@@ -82,14 +94,22 @@ def stop(pwm):
 
 def cleanup():
     """Clean up GPIO settings"""
+    global gpio_initialized
     try:
-        GPIO.cleanup()
-        print("GPIO cleanup completed.")
+        if gpio_initialized:
+            GPIO.cleanup()
+            gpio_initialized = False
+            print("GPIO cleanup completed.")
+        else:
+            print("No GPIO channels to clean up.")
     except Exception as e:
         print(f"Cleanup Error: {e}")
 
 def test_sequence(pwm):
     """Run a complete test sequence"""
+    if not gpio_initialized:
+        raise RuntimeError("GPIO not initialized. Call setup() first.")
+        
     print("\nStarting motor test sequence...")
     
     # Test forward motion at different speeds
