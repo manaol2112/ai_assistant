@@ -2,13 +2,18 @@ import RPi.GPIO as GPIO
 import time
 import sys
 import os
+import platform
 
 def check_raspberry_pi():
-    """Check if running on a Raspberry Pi"""
+    """Check if running on a Raspberry Pi and get model information"""
     try:
         with open('/proc/device-tree/model', 'r') as f:
             model = f.read()
-            return 'raspberry pi' in model.lower()
+            is_pi = 'raspberry pi' in model.lower()
+            is_pi5 = 'raspberry pi 5' in model.lower()
+            if is_pi5:
+                print("Detected Raspberry Pi 5")
+            return is_pi
     except:
         return False
 
@@ -16,16 +21,19 @@ def check_gpio_permissions():
     """Check if user has GPIO permissions"""
     try:
         # Try to access GPIO
+        GPIO.setwarnings(False)  # Disable warnings first
         GPIO.setmode(GPIO.BCM)
         GPIO.cleanup()
         return True
     except Exception as e:
         print(f"GPIO Permission Error: {e}")
-        print("\nTry running the script with sudo:")
-        print("sudo python l298n_motor_test.py")
+        print("\nFor Raspberry Pi 5, try these steps:")
+        print("1. Run the script with sudo: sudo python l298n_motor_test.py")
+        print("2. Add your user to the gpio group: sudo usermod -a -G gpio $USER")
+        print("3. Make sure you have the latest RPi.GPIO: sudo pip3 install --upgrade RPi.GPIO")
         return False
 
-# Pin Definitions
+# Pin Definitions for Raspberry Pi 5
 IN1 = 17  # GPIO pin for IN1 on L298N
 IN2 = 27  # GPIO pin for IN2 on L298N
 ENA = 22  # GPIO pin for ENA (enable) on L298N
@@ -69,10 +77,10 @@ def setup():
         
     except Exception as e:
         print(f"Setup Error: {e}")
-        print("\nPossible solutions:")
+        print("\nFor Raspberry Pi 5, try these solutions:")
         print("1. Run the script with sudo: sudo python l298n_motor_test.py")
         print("2. Add your user to the gpio group: sudo usermod -a -G gpio $USER")
-        print("3. Make sure you're running this on a Raspberry Pi")
+        print("3. Make sure you have the latest RPi.GPIO: sudo pip3 install --upgrade RPi.GPIO")
         print("4. Check if the pins are already in use by another program")
         cleanup()
         raise
