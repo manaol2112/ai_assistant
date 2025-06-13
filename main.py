@@ -45,6 +45,15 @@ try:
     from visual_feedback import create_visual_feedback
     from visual_config import get_config_for_environment
     from visual_config import VisualConfig
+    # Add at the top, after other imports
+    try:
+        from motor_control import MotorController
+    except ImportError:
+        MotorController = None
+    try:
+        from gesture_control import HandGestureController
+    except ImportError:
+        HandGestureController = None
 except ImportError as e:
     print(f"❌ Import error: {e}")
     print("Please install required packages: pip install -r requirements.txt")
@@ -1063,6 +1072,68 @@ class AIAssistant:
                     # Update visual feedback for the detected user
                     self.update_visual_feedback_for_user(person_name)
                     
+                    # NEW: Auto-gesture trigger for ANY detected face (testing mode)
+                    try:
+                        # Import gesture controller for testing
+                        from gesture_control import HandGestureController
+                        
+                        # Quick gesture check (non-blocking)
+                        gesture_controller = HandGestureController()
+                        if gesture_controller.enabled:
+                            print(f"🖐️ Checking for hand gestures from {person_name}...")
+                            
+                            # Quick gesture detection (2 attempts)
+                            gesture_detected = None
+                            for attempt in range(2):
+                                print(f"   👁️ Gesture detection attempt {attempt + 1}/2...")
+                                gesture = gesture_controller.get_gesture()
+                                print(f"   📊 Raw gesture result: {gesture}")
+                                
+                                if gesture and gesture != 'stop':
+                                    gesture_detected = gesture
+                                    print(f"   ✅ Valid gesture detected: {gesture_detected}")
+                                    break
+                                elif gesture == 'stop':
+                                    print(f"   ⏹️ Stop gesture detected, ignoring for auto-trigger")
+                                else:
+                                    print(f"   ❌ No gesture detected on attempt {attempt + 1}")
+                                
+                                time.sleep(0.5)  # Brief pause between attempts
+                            
+                            gesture_controller.release()
+                            print(f"   🔄 Gesture controller released")
+                            
+                            if gesture_detected:
+                                print(f"🎮 GESTURE VALIDATION SUCCESS! Hand gesture '{gesture_detected}' detected from {person_name}!")
+                                print(f"🚀 Starting gesture control mode...")
+                                if self.visual:
+                                    self.visual.show_happy(f"Gesture control activated for {person_name}!")
+                                
+                                # Start gesture control in a separate thread to avoid blocking face detection
+                                import threading
+                                gesture_thread = threading.Thread(
+                                    target=self.start_gesture_motor_control,
+                                    daemon=True
+                                )
+                                gesture_thread.start()
+                                
+                                # Brief pause to let gesture control start
+                                time.sleep(2)
+                                continue
+                            else:
+                                print(f"❌ GESTURE VALIDATION FAILED: No valid gesture detected from {person_name} after 2 attempts")
+                        else:
+                            print(f"⚠️ Gesture controller not enabled for {person_name}")
+                        
+                    except ImportError:
+                        # Gesture control not available, continue with normal face detection
+                        print("⚠️ Gesture control module not available (ImportError)")
+                        pass
+                    except Exception as e:
+                        print(f"⚠️ Error in gesture detection for {person_name}: {e}")
+                        import traceback
+                        traceback.print_exc()
+                    
                     # Check if we should greet this person
                     if self.should_greet_face(person_name):
                         last_greeting = last_greeting_times.get(person_name, 0)
@@ -1889,6 +1960,10 @@ class AIAssistant:
         if any(phrase in user_input_lower for phrase in ['help', 'what can you do', 'commands']):
             return self.get_help_message(user)
         
+        # Add gesture control command
+        if any(phrase in user_input_lower for phrase in ['gesture control', 'hand control', 'hand gesture']):
+            return self.start_gesture_motor_control()
+        
         return None
     
     def handle_object_identification(self, user: str) -> str:
@@ -2047,6 +2122,13 @@ class AIAssistant:
 • Say "turn off sounds" to disable audio cues
 • Say "turn on sounds" to re-enable them
 
+🤖 GESTURE CONTROL (NEW - TESTING MODE!):
+• AUTO-TRIGGER: Just show me a hand gesture when I see your face!
+• I'll automatically detect gestures and start motor control
+• 5 fingers = Forward, Fist = Backward, 2 fingers = Left, 3 fingers = Right, 1 finger = Stop
+• Or say "gesture control" to start manually
+• Perfect for controlling robots and motors! 🎮
+
 Ask me anything, show me any object, or play any of the games to practice your skills!"""
         
         elif user == 'eladriel':
@@ -2072,6 +2154,14 @@ Ask me anything, show me any object, or play any of the games to practice your s
   - Just show me your paper - my dino-eyes are always watching!
 • Get dinosaur-themed help and encouragement for tricky words
 • Say "End Game" whenever you want to stop
+
+🤖 DINO-GESTURE CONTROL (NEW - TESTING MODE!):
+• AUTO-TRIGGER: Show me a hand gesture when I see your face! 🦕🖐️
+• I'll automatically detect gestures and start dino-robot control!
+• 5 fingers = Forward (like a charging T-Rex!), Fist = Backward
+• 2 fingers = Left turn, 3 fingers = Right turn, 1 finger = Stop
+• Or roar "gesture control" to start manually
+• Control your robot dinosaur adventures! 🦕🎮
 
 🔤 DINO-LETTER WORD ADVENTURE (NEW!):
 • Say "Letter Game" or "Letter Word Game" for a prehistoric word hunt! 🦕🔤
@@ -3664,6 +3754,91 @@ add musical rhythm. Make this sound like singing, not talking!]"""
                 intro = "🎵 I'd be happy to sing for you! 🎶"
             
             return f"{intro}\n\n{formatted_song}"
+
+    def start_gesture_motor_control(self):
+        """Start hand gesture-based motor control loop (Pi 5 only)."""
+        import platform
+        if MotorController is None or HandGestureController is None:
+            print("⚠️ Gesture or motor control module not available.")
+            if self.visual:
+                self.visual.show_error("Gesture/motor control not available.")
+            return "Gesture or motor control module not available."
+        if not (platform.system() == 'Linux' and 'arm' in platform.machine()):
+            print("⚠️ Not running on Raspberry Pi 5. Gesture control is disabled.")
+            if self.visual:
+                self.visual.show_error("Not on Pi 5. Gesture control disabled.")
+            return "Not running on Raspberry Pi 5. Gesture control is disabled."
+        
+        print("🤖 Initializing motor and gesture controllers...")
+        motor = MotorController()
+        gesture = HandGestureController()
+        
+        if not gesture.enabled or not motor.enabled:
+            print("⚠️ Gesture or motor hardware not enabled.")
+            if self.visual:
+                self.visual.show_error("Gesture/motor hardware not enabled.")
+            return "Gesture or motor hardware not enabled."
+        
+        print("🖐️ Hand gesture control started. Show 1-5 fingers for movement. Press Ctrl+C to exit.")
+        print("📋 Gesture Commands:")
+        print("   🖐️ 5 fingers = Forward")
+        print("   ✊ Fist (0 fingers) = Backward") 
+        print("   ✌️ 2 fingers = Left")
+        print("   🤟 3 fingers = Right")
+        print("   ☝️ 1 finger = Stop")
+        
+        if self.visual:
+            self.visual.show_happy("Hand gesture control started!")
+        
+        gesture_count = 0
+        try:
+            while True:
+                print(f"\n👁️ Checking for gesture #{gesture_count + 1}...")
+                action = gesture.get_gesture()
+                gesture_count += 1
+                
+                if action:
+                    print(f"✅ GESTURE DETECTED: {action.upper()}")
+                    if self.visual:
+                        self.visual.show_thinking(f"Gesture: {action}")
+                    
+                    if action == 'forward':
+                        print("🚀 EXECUTING: Moving forward")
+                        motor.forward()
+                    elif action == 'backward':
+                        print("🔙 EXECUTING: Moving backward")
+                        motor.backward()
+                    elif action == 'left':
+                        print("↩️ EXECUTING: Turning left")
+                        motor.left()
+                    elif action == 'right':
+                        print("↪️ EXECUTING: Turning right")
+                        motor.right()
+                    elif action == 'stop':
+                        print("⏹️ EXECUTING: Stopping motors")
+                        motor.stop()
+                    else:
+                        print(f"❓ UNKNOWN GESTURE: {action}")
+                        motor.stop()
+                else:
+                    print("❌ No gesture detected - stopping motors")
+                    motor.stop()
+                    
+        except KeyboardInterrupt:
+            print("\n🛑 Gesture control stopped by user (Ctrl+C).")
+            if self.visual:
+                self.visual.show_standby("Gesture control stopped.")
+        except Exception as e:
+            print(f"⚠️ Error in gesture control loop: {e}")
+            import traceback
+            traceback.print_exc()
+        finally:
+            print("🔄 Cleaning up gesture and motor controllers...")
+            gesture.release()
+            motor.cleanup()
+            print("✅ Cleanup completed.")
+        
+        return "Gesture control stopped."
 
 if __name__ == "__main__":
     assistant = AIAssistant()

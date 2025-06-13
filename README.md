@@ -258,6 +258,38 @@ For issues and questions:
 3. Check the GitHub issues page
 4. Ensure all dependencies are properly installed
 
+## Hand Gesture Controlled Motor Driver (Raspberry Pi 5, L298N, RGPIO)
+
+This project includes a premium-quality, robust hand gesture control system for a robot using a Raspberry Pi 5 and L298N motor driver. It uses RGPIO (for Pi 5 GPIO support) and OpenCV for gesture recognition. The system allows you to control forward, backward, left, right, and stop actions with your hand gestures.
+
+### Requirements
+- Raspberry Pi 5 (tested)
+- L298N Motor Driver
+- RGPIO (for Pi 5 GPIO, NOT RPi.GPIO)
+- OpenCV (for hand gesture recognition)
+- Python 3.9+
+
+### Quick Start (on Raspberry Pi 5)
+1. Install RGPIO:
+   ```bash
+   sudo apt install python3-rgpio python3-rgpio-server
+   sudo systemctl enable --now rgpio-server
+   ```
+2. Install OpenCV:
+   ```bash
+   pip install opencv-python-headless
+   ```
+3. Connect your L298N to the Pi 5 GPIO pins as described in the code comments.
+4. Run the main assistant. The gesture control module will be available and can be triggered from the main assistant interface.
+
+### Features
+- Real-time hand gesture recognition (OpenCV)
+- Robust motor control abstraction (forward, backward, left, right, stop)
+- Designed for Raspberry Pi 5 (RPi.GPIO is NOT supported)
+- Easily extendable for more gestures or robot actions
+
+See `motor_control.py` and `gesture_control.py` for details.
+
 ---
 
 **Happy Learning! 🎓🤖** 
