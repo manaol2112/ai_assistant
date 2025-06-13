@@ -1,6 +1,29 @@
 import RPi.GPIO as GPIO
 import time
 import sys
+import os
+
+def check_raspberry_pi():
+    """Check if running on a Raspberry Pi"""
+    try:
+        with open('/proc/device-tree/model', 'r') as f:
+            model = f.read()
+            return 'raspberry pi' in model.lower()
+    except:
+        return False
+
+def check_gpio_permissions():
+    """Check if user has GPIO permissions"""
+    try:
+        # Try to access GPIO
+        GPIO.setmode(GPIO.BCM)
+        GPIO.cleanup()
+        return True
+    except Exception as e:
+        print(f"GPIO Permission Error: {e}")
+        print("\nTry running the script with sudo:")
+        print("sudo python l298n_motor_test.py")
+        return False
 
 # Pin Definitions
 IN1 = 17  # GPIO pin for IN1 on L298N
@@ -14,19 +37,27 @@ HIGH_SPEED = 100   # 100% duty cycle
 
 def setup():
     """Initialize GPIO pins and PWM"""
-    GPIO.setmode(GPIO.BCM)
-    GPIO.setup(IN1, GPIO.OUT)
-    GPIO.setup(IN2, GPIO.OUT)
-    GPIO.setup(ENA, GPIO.OUT)
-    
-    # Create PWM instance for speed control
-    pwm = GPIO.PWM(ENA, 1000)  # 1000 Hz frequency
-    pwm.start(0)  # Start with 0% duty cycle
-    
-    # Initialize motor to stopped state
-    GPIO.output(IN1, GPIO.LOW)
-    GPIO.output(IN2, GPIO.LOW)
-    return pwm
+    try:
+        GPIO.setmode(GPIO.BCM)
+        GPIO.setup(IN1, GPIO.OUT)
+        GPIO.setup(IN2, GPIO.OUT)
+        GPIO.setup(ENA, GPIO.OUT)
+        
+        # Create PWM instance for speed control
+        pwm = GPIO.PWM(ENA, 1000)  # 1000 Hz frequency
+        pwm.start(0)  # Start with 0% duty cycle
+        
+        # Initialize motor to stopped state
+        GPIO.output(IN1, GPIO.LOW)
+        GPIO.output(IN2, GPIO.LOW)
+        return pwm
+    except Exception as e:
+        print(f"Setup Error: {e}")
+        print("\nPossible solutions:")
+        print("1. Run the script with sudo: sudo python l298n_motor_test.py")
+        print("2. Add your user to the gpio group: sudo usermod -a -G gpio $USER")
+        print("3. Make sure you're running this on a Raspberry Pi")
+        raise
 
 def forward(pwm, speed):
     """Move motor forward at specified speed"""
@@ -51,8 +82,11 @@ def stop(pwm):
 
 def cleanup():
     """Clean up GPIO settings"""
-    GPIO.cleanup()
-    print("GPIO cleanup completed.")
+    try:
+        GPIO.cleanup()
+        print("GPIO cleanup completed.")
+    except Exception as e:
+        print(f"Cleanup Error: {e}")
 
 def test_sequence(pwm):
     """Run a complete test sequence"""
@@ -85,9 +119,14 @@ def test_sequence(pwm):
 def main():
     """Main function to run the motor test"""
     try:
-        # Verify we're running on a Raspberry Pi
-        if not hasattr(GPIO, 'setmode'):
-            print("RPi.GPIO not available. This script must be run on a Raspberry Pi.")
+        # Check if running on Raspberry Pi
+        if not check_raspberry_pi():
+            print("Error: This script must be run on a Raspberry Pi.")
+            print("The 'cannot determine SOC peripheral base address' error occurs when running on non-Raspberry Pi hardware.")
+            sys.exit(1)
+            
+        # Check GPIO permissions
+        if not check_gpio_permissions():
             sys.exit(1)
             
         # Initialize motor
