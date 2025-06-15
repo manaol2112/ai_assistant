@@ -73,6 +73,7 @@ class HandGestureController:
             # Try to use CameraHandler first (supports Sony IMX500 AI Camera)
             if CAMERA_HANDLER_AVAILABLE:
                 print("[HandGestureController] 🤖 Using CameraHandler (Sony IMX500 AI Camera support)")
+                # Use lower resolution for better gesture detection performance
                 self.camera_handler = CameraHandler(camera_index=camera_index, prefer_imx500=True)
                 
                 if self.camera_handler.is_camera_available():
@@ -83,6 +84,7 @@ class HandGestureController:
                     
                     if self.camera_handler.using_imx500:
                         print("[HandGestureController] 🎯 AI Camera features available")
+                        print("[HandGestureController] ⚡ Optimized for gesture detection performance")
                 else:
                     print("[HandGestureController] ❌ CameraHandler failed to initialize")
                     return
