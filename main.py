@@ -21,6 +21,7 @@ import tkinter as tk
 from PIL import Image, ImageTk
 import requests
 from io import BytesIO
+import platform
 
 # Add current directory to path for imports
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -1078,71 +1079,8 @@ class AIAssistant:
                     self.update_visual_feedback_for_user(person_name)
                     
                     # NEW: Auto-gesture trigger for ANY detected face (testing mode)
-                    try:
-                        # Import gesture controller for testing
-                        from gesture_control import HandGestureController
-                        
-                        # Quick gesture check (non-blocking)
-                        gesture_controller = HandGestureController()
-                        if gesture_controller.enabled:
-                            print(f"🖐️ Checking for hand gestures from {person_name}...")
-                            
-                            # Quick gesture detection (2 attempts)
-                            gesture_detected = None
-                            for attempt in range(2):
-                                print(f"   👁️ Gesture detection attempt {attempt + 1}/2...")
-                                gesture = gesture_controller.get_gesture()
-                                print(f"   📊 Raw gesture result: {gesture}")
-                                
-                                if gesture and gesture != 'stop':
-                                    gesture_detected = gesture
-                                    print(f"   ✅ Valid gesture detected: {gesture_detected}")
-                                    break
-                                elif gesture == 'stop':
-                                    print(f"   ⏹️ Stop gesture detected, ignoring for auto-trigger")
-                                else:
-                                    print(f"   ❌ No gesture detected on attempt {attempt + 1}")
-                                
-                                time.sleep(0.5)  # Brief pause between attempts
-                            
-                            gesture_controller.release()
-                            print(f"   🔄 Gesture controller released")
-                            
-                            if gesture_detected:
-                                print(f"🎮 GESTURE VALIDATION SUCCESS! Hand gesture '{gesture_detected}' detected from {person_name}!")
-                                print(f"🚀 Starting gesture control mode...")
-                                if self.visual:
-                                    self.visual.show_happy(f"Gesture control activated for {person_name}!")
-                                
-                                # Check if gesture control is already active
-                                if self.gesture_control_active:
-                                    print("⚠️ Gesture control already active, skipping...")
-                                    continue
-                                
-                                # Start gesture control in a separate thread to avoid blocking face detection
-                                self.gesture_stop_event.clear()  # Reset stop event
-                                self.gesture_control_thread = threading.Thread(
-                                    target=self.start_gesture_motor_control,
-                                    daemon=True
-                                )
-                                self.gesture_control_thread.start()
-                                
-                                # Brief pause to let gesture control start
-                                time.sleep(2)
-                                continue
-                            else:
-                                print(f"❌ GESTURE VALIDATION FAILED: No valid gesture detected from {person_name} after 2 attempts")
-                        else:
-                            print(f"⚠️ Gesture controller not enabled for {person_name}")
-                        
-                    except ImportError:
-                        # Gesture control not available, continue with normal face detection
-                        print("⚠️ Gesture control module not available (ImportError)")
-                        pass
-                    except Exception as e:
-                        print(f"⚠️ Error in gesture detection for {person_name}: {e}")
-                        import traceback
-                        traceback.print_exc()
+                    # REMOVED: Automatic gesture control - now only triggered by voice commands
+                    # This section has been disabled to prevent unwanted gesture activation
                     
                     # Check if we should greet this person
                     if self.should_greet_face(person_name):
@@ -3985,10 +3923,11 @@ add musical rhythm. Make this sound like singing, not talking!]"""
                 self.visual.show_error("Gesture/motor control not available.")
             return response
             
-        if not (platform.system() == 'Linux' and 'arm' in platform.machine()):
-            response = f"⚠️ {character} can only move on Raspberry Pi 5!"
+        # Flexible platform check - allow any Linux system (not just ARM)
+        if platform.system() != 'Linux':
+            response = f"⚠️ {character} robot control requires Linux system!"
             if self.visual:
-                self.visual.show_error("Not on Pi 5. Gesture control disabled.")
+                self.visual.show_error("Linux required for gesture control.")
             return response
         
         # Check if already active
