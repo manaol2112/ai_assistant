@@ -397,8 +397,8 @@ class SimpleRobotEyes:
                 oval_height = 18
             
             # Update oval sizes
-            left_x = self.center_x - self.screen_distance // 2
-            right_x = self.center_x + self.screen_distance // 2
+            left_x = self.center_x - self.eye_distance // 2
+            right_x = self.center_x + self.eye_distance // 2
             screen_y = self.center_y
             oval_width = 15
             
@@ -587,8 +587,8 @@ class SimpleRobotEyes:
             scale = 1.5 - ((ring_cycle - 15) / 15.0) * 0.5
         
         # Update ring sizes
-        left_x = self.center_x - self.screen_distance // 2
-        right_x = self.center_x + self.screen_distance // 2
+        left_x = self.center_x - self.eye_distance // 2
+        right_x = self.center_x + self.eye_distance // 2
         screen_y = self.center_y
         
         ring_size = int(18 * scale)
