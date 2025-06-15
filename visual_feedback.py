@@ -59,7 +59,7 @@ class SimpleRobotEyes:
         self.listening_timer = 0
         
         # Eye configuration - Large circular eyes (OPTIMIZED FOR FULLSCREEN)
-        self.eye_distance = size * 2.0         # Distance between eye centers (WIDER SPACING)
+        self.eye_distance = size * 2.2         # Distance between eye centers (MUCH WIDER SPACING)
         self.eye_radius = size // 2.2          # Main eye radius (BIGGER FOR FULLSCREEN)
         self.pupil_radius = size // 4.5        # Pupil radius (SCALED)
         self.iris_radius = size // 3.2         # Iris radius (SCALED)
@@ -1551,10 +1551,10 @@ class PremiumVisualFeedbackSystem:
         self.root = tk.Tk()
         self.root.title("AI Assistant - Robot Eyes")
         
-        # Make fullscreen without window decorations
+        # Make fullscreen but allow exit
         self.root.attributes('-fullscreen', True)
         self.root.attributes('-topmost', True)
-        self.root.overrideredirect(True)  # Remove window decorations completely
+        # Remove overrideredirect to allow proper window management
         self.root.configure(bg='#000000')
         
         # Get actual screen dimensions
@@ -1594,7 +1594,7 @@ class PremiumVisualFeedbackSystem:
         # Message area at bottom
         self.message_label = tk.Label(
             self.root,
-            text="Ready to assist you!",
+            text="Ready to assist you! (Press ESC, F11, or click to exit fullscreen)",
             font=("Arial", 18, "bold"),  # Larger font for fullscreen
             fg="white",
             bg="#000000",
@@ -1602,13 +1602,76 @@ class PremiumVisualFeedbackSystem:
         )
         self.message_label.pack(side='bottom', pady=15)
         
-        # Add escape key binding to exit fullscreen (for testing)
-        self.root.bind('<Escape>', lambda e: self.stop())
-        self.root.bind('<F11>', lambda e: self.stop())
+        # Add multiple exit methods
+        self.root.bind('<Escape>', self._exit_fullscreen)
+        self.root.bind('<F11>', self._toggle_fullscreen)  # F11 toggles fullscreen
+        self.root.bind('<q>', self._exit_fullscreen)
+        self.root.bind('<Q>', self._exit_fullscreen)
+        self.canvas.bind('<Button-1>', self._exit_fullscreen)  # Left click to exit
+        self.canvas.bind('<Double-Button-1>', self._exit_fullscreen)  # Double click
+        
+        # Make sure the window can receive focus for key events
+        self.root.focus_set()
+        self.canvas.focus_set()
+        
+        # Track fullscreen state
+        self.is_fullscreen = True
         
         # Start animations
         if self.robot_face and hasattr(self.robot_face, 'robot_eyes'):
             self.robot_face.robot_eyes.start_animations()
+    
+    def _toggle_fullscreen(self, event=None):
+        """Toggle between fullscreen and windowed mode."""
+        if self.is_fullscreen:
+            self._exit_fullscreen()
+        else:
+            self._enter_fullscreen()
+    
+    def _enter_fullscreen(self, event=None):
+        """Enter fullscreen mode."""
+        try:
+            self.root.attributes('-fullscreen', True)
+            self.root.attributes('-topmost', True)
+            self.is_fullscreen = True
+            
+            # Update message
+            if self.message_label:
+                self.message_label.config(text="Ready to assist you! (Press ESC, F11, or click to exit fullscreen)")
+                
+        except Exception as e:
+            print(f"Error entering fullscreen: {e}")
+    
+    def _exit_fullscreen(self, event=None):
+        """Exit fullscreen mode and return to windowed mode."""
+        try:
+            self.root.attributes('-fullscreen', False)
+            self.root.attributes('-topmost', False)
+            self.is_fullscreen = False
+            
+            # Resize to a reasonable window size
+            window_width = 800
+            window_height = 600
+            
+            # Center the window
+            screen_width = self.root.winfo_screenwidth()
+            screen_height = self.root.winfo_screenheight()
+            x = (screen_width - window_width) // 2
+            y = (screen_height - window_height) // 2
+            
+            self.root.geometry(f"{window_width}x{window_height}+{x}+{y}")
+            
+            # Update message
+            if self.message_label:
+                self.message_label.config(text="Windowed mode - Press F11 for fullscreen or close window to exit")
+            
+            # Add window close protocol
+            self.root.protocol("WM_DELETE_WINDOW", self.stop)
+            
+        except Exception as e:
+            print(f"Error exiting fullscreen: {e}")
+            # Fallback - just close the application
+            self.stop()
     
     def set_state(self, state: str, message: str = None, intensity: float = 1.0):
         """Set the current state of the robot eyes."""
