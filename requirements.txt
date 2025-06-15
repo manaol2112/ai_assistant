@@ -115,9 +115,9 @@ soundfile>=0.12.1  # Audio file processing
 #    echo 'performance' | sudo tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor
 #
 # 3. Camera Configuration (Pi 5 with libcamera):
-#    # Enable legacy camera support if needed
-#    dtoverlay=imx219  # or your camera module
-#    camera_auto_detect=1
+#    libcamera is installed via apt, not pip:
+#    sudo apt install libcamera-apps libcamera-dev python3-libcamera
+#    Our IMX500CameraHandler uses libcamera command-line tools directly
 #
 # 4. Audio Configuration for Pi 5:
 #    sudo tee -a /boot/config.txt << EOF
@@ -311,9 +311,13 @@ soundfile>=0.12.1  # Audio file processing
 # These packages are typically installed via the Sony AITRIOS SDK
 # or Raspberry Pi system packages, but we list them for reference
 picamera2>=0.3.12  # For Raspberry Pi camera control
-libcamera>=0.0.5   # Camera library for Raspberry Pi
-rpi-libcamera>=1.0.0  # Raspberry Pi camera interface
-imx500-models>=1.0.0  # IMX500 AI models (installed via Sony SDK)
+
+# Note: libcamera for Raspberry Pi is installed via system packages, not pip:
+# sudo apt install libcamera-apps libcamera-dev python3-libcamera
+# Our IMX500CameraHandler uses libcamera command-line tools directly
+
+# IMX500 AI models are installed via Sony SDK or system packages:
+# imx500-models>=1.0.0  # IMX500 AI models (installed via Sony SDK)
 
 # Edge TPU and AI acceleration (optional)
 tflite-runtime>=2.13.0  # TensorFlow Lite runtime
