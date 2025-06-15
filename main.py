@@ -3959,6 +3959,7 @@ add musical rhythm. Make this sound like singing, not talking!]"""
             max_gestures = 100  # Limit to prevent infinite loops
             start_time = time.time()
             max_duration = 30  # 30 seconds maximum
+            current_action = None  # Track current motor action
             
             print(f"🖐️ {character} is now listening for hand gestures...")
             
@@ -3969,7 +3970,8 @@ add musical rhythm. Make this sound like singing, not talking!]"""
                 action = self.gesture.get_gesture()
                 gesture_count += 1
                 
-                if action:
+                # Only change motor command if gesture changed
+                if action and action != current_action:
                     # Simple action messages
                     action_messages = {
                         'forward': "Moving forward!",
@@ -3985,25 +3987,31 @@ add musical rhythm. Make this sound like singing, not talking!]"""
                     if self.visual:
                         self.visual.show_thinking(f"{character}: {action}")
                     
-                    # Execute motor commands
+                    # Execute motor commands with continuous movement
                     if action == 'forward':
-                        self.motor.forward()
+                        self.motor.forward_continuous()
                     elif action == 'backward':
-                        self.motor.backward()
+                        self.motor.backward_continuous()
                     elif action == 'left':
-                        self.motor.left()
+                        self.motor.left_continuous()
                     elif action == 'right':
-                        self.motor.right()
+                        self.motor.right_continuous()
                     elif action == 'stop':
                         self.motor.stop()
                         break  # Stop gesture ends the session
                     else:
                         self.motor.stop()
-                else:
+                    
+                    current_action = action
+                
+                elif not action and current_action != 'stop':
+                    # No gesture detected - stop motors
+                    print("❌ No gesture detected - stopping motors")
                     self.motor.stop()
+                    current_action = 'stop'
                 
                 # Small delay to prevent overwhelming the system
-                time.sleep(0.5)
+                time.sleep(0.3)
             
             # Simple end message
             end_message = "Gesture control complete!"

@@ -311,6 +311,82 @@ class MotorController:
         else:
             return "GPIO control active"
 
+    def forward_continuous(self):
+        """Move all motors forward continuously (no auto-stop)"""
+        if not self.enabled: 
+            return
+            
+        if self.arduino_serial:
+            # Arduino: Move all motors forward
+            print("[MotorController] 🚀 Moving forward (continuous)...")
+            self._send_arduino_command("MOTOR_A_FORWARD")
+            self._send_arduino_command("MOTOR_B_FORWARD")
+            self._send_arduino_command("MOTOR_C_FORWARD")
+            self._send_arduino_command("MOTOR_D_FORWARD")
+        else:
+            # GPIO: Traditional two-motor forward
+            GPIO.output(self.IN1, GPIO.HIGH)
+            GPIO.output(self.IN2, GPIO.LOW)
+            GPIO.output(self.IN3, GPIO.HIGH)
+            GPIO.output(self.IN4, GPIO.LOW)
+
+    def backward_continuous(self):
+        """Move all motors backward continuously (no auto-stop)"""
+        if not self.enabled: 
+            return
+            
+        if self.arduino_serial:
+            # Arduino: Move all motors backward
+            print("[MotorController] ⬅️ Moving backward (continuous)...")
+            self._send_arduino_command("MOTOR_A_BACKWARD")
+            self._send_arduino_command("MOTOR_B_BACKWARD")
+            self._send_arduino_command("MOTOR_C_BACKWARD")
+            self._send_arduino_command("MOTOR_D_BACKWARD")
+        else:
+            # GPIO: Traditional two-motor backward
+            GPIO.output(self.IN1, GPIO.LOW)
+            GPIO.output(self.IN2, GPIO.HIGH)
+            GPIO.output(self.IN3, GPIO.LOW)
+            GPIO.output(self.IN4, GPIO.HIGH)
+
+    def left_continuous(self):
+        """Turn left continuously (no auto-stop)"""
+        if not self.enabled: 
+            return
+            
+        if self.arduino_serial:
+            # Arduino: Left side motors backward, right side forward (tank turn)
+            print("[MotorController] ↪️ Turning left (continuous)...")
+            self._send_arduino_command("MOTOR_A_BACKWARD")  # Left front
+            self._send_arduino_command("MOTOR_B_FORWARD")   # Right front
+            self._send_arduino_command("MOTOR_C_BACKWARD")  # Left rear
+            self._send_arduino_command("MOTOR_D_FORWARD")   # Right rear
+        else:
+            # GPIO: Traditional left turn
+            GPIO.output(self.IN1, GPIO.LOW)
+            GPIO.output(self.IN2, GPIO.HIGH)
+            GPIO.output(self.IN3, GPIO.HIGH)
+            GPIO.output(self.IN4, GPIO.LOW)
+
+    def right_continuous(self):
+        """Turn right continuously (no auto-stop)"""
+        if not self.enabled: 
+            return
+            
+        if self.arduino_serial:
+            # Arduino: Right side motors backward, left side forward (tank turn)
+            print("[MotorController] ↩️ Turning right (continuous)...")
+            self._send_arduino_command("MOTOR_A_FORWARD")   # Left front
+            self._send_arduino_command("MOTOR_B_BACKWARD")  # Right front
+            self._send_arduino_command("MOTOR_C_FORWARD")   # Left rear
+            self._send_arduino_command("MOTOR_D_BACKWARD")  # Right rear
+        else:
+            # GPIO: Traditional right turn
+            GPIO.output(self.IN1, GPIO.HIGH)
+            GPIO.output(self.IN2, GPIO.LOW)
+            GPIO.output(self.IN3, GPIO.LOW)
+            GPIO.output(self.IN4, GPIO.HIGH)
+
 # Test function for standalone testing
 if __name__ == "__main__":
     print("🤖 Testing Arduino Motor Controller...")
