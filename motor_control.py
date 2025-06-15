@@ -44,6 +44,7 @@ class MotorController:
         self.arduino_baud = arduino_baud
         self.arduino_serial = None
         self.enabled = False
+        self.movement_duration = 1.0  # Default movement duration in seconds
         
         # Try Arduino serial communication first
         if self.use_arduino:
@@ -52,9 +53,10 @@ class MotorController:
                 self.arduino_serial = serial.Serial(arduino_port, arduino_baud, timeout=1)
                 time.sleep(2)  # Wait for Arduino to initialize
                 
-                # Test connection
+                # Test connection with a safe stop command
                 self.arduino_serial.write(b"MOTOR_A_STOP\n")
                 self.arduino_serial.flush()
+                time.sleep(0.1)
                 
                 self.enabled = True
                 print(f"[MotorController] ✅ Arduino connected successfully on {arduino_port}")
@@ -106,83 +108,120 @@ class MotorController:
                 self.arduino_serial.write(f"{command}\n".encode())
                 self.arduino_serial.flush()
                 print(f"[MotorController] Arduino command sent: {command}")
+                time.sleep(0.1)  # Small delay for Arduino processing
                 return True
             except Exception as e:
                 print(f"[MotorController] ⚠️ Arduino command failed: {e}")
                 return False
         return False
 
-    def forward(self):
+    def forward(self, duration=None):
         """Move all motors forward"""
         if not self.enabled: 
             return
             
+        duration = duration or self.movement_duration
+        
         if self.arduino_serial:
             # Arduino: Move all motors forward
+            print("[MotorController] 🚀 Moving forward...")
             self._send_arduino_command("MOTOR_A_FORWARD")
             self._send_arduino_command("MOTOR_B_FORWARD")
             self._send_arduino_command("MOTOR_C_FORWARD")
             self._send_arduino_command("MOTOR_D_FORWARD")
+            
+            # Move for specified duration, then stop
+            time.sleep(duration)
+            self.stop()
         else:
             # GPIO: Traditional two-motor forward
             GPIO.output(self.IN1, GPIO.HIGH)
             GPIO.output(self.IN2, GPIO.LOW)
             GPIO.output(self.IN3, GPIO.HIGH)
             GPIO.output(self.IN4, GPIO.LOW)
+            time.sleep(duration)
+            self.stop()
 
-    def backward(self):
+    def backward(self, duration=None):
         """Move all motors backward"""
         if not self.enabled: 
             return
             
+        duration = duration or self.movement_duration
+        
         if self.arduino_serial:
             # Arduino: Move all motors backward
+            print("[MotorController] ⬅️ Moving backward...")
             self._send_arduino_command("MOTOR_A_BACKWARD")
             self._send_arduino_command("MOTOR_B_BACKWARD")
             self._send_arduino_command("MOTOR_C_BACKWARD")
             self._send_arduino_command("MOTOR_D_BACKWARD")
+            
+            # Move for specified duration, then stop
+            time.sleep(duration)
+            self.stop()
         else:
             # GPIO: Traditional two-motor backward
             GPIO.output(self.IN1, GPIO.LOW)
             GPIO.output(self.IN2, GPIO.HIGH)
             GPIO.output(self.IN3, GPIO.LOW)
             GPIO.output(self.IN4, GPIO.HIGH)
+            time.sleep(duration)
+            self.stop()
 
-    def left(self):
+    def left(self, duration=None):
         """Turn left"""
         if not self.enabled: 
             return
             
+        duration = duration or self.movement_duration
+        
         if self.arduino_serial:
-            # Arduino: Left side motors backward, right side forward
+            # Arduino: Left side motors backward, right side forward (tank turn)
+            print("[MotorController] ↪️ Turning left...")
             self._send_arduino_command("MOTOR_A_BACKWARD")  # Left front
             self._send_arduino_command("MOTOR_B_FORWARD")   # Right front
             self._send_arduino_command("MOTOR_C_BACKWARD")  # Left rear
             self._send_arduino_command("MOTOR_D_FORWARD")   # Right rear
+            
+            # Turn for specified duration, then stop
+            time.sleep(duration)
+            self.stop()
         else:
             # GPIO: Traditional left turn
             GPIO.output(self.IN1, GPIO.LOW)
             GPIO.output(self.IN2, GPIO.HIGH)
             GPIO.output(self.IN3, GPIO.HIGH)
             GPIO.output(self.IN4, GPIO.LOW)
+            time.sleep(duration)
+            self.stop()
 
-    def right(self):
+    def right(self, duration=None):
         """Turn right"""
         if not self.enabled: 
             return
             
+        duration = duration or self.movement_duration
+        
         if self.arduino_serial:
-            # Arduino: Right side motors backward, left side forward
+            # Arduino: Right side motors backward, left side forward (tank turn)
+            print("[MotorController] ↩️ Turning right...")
             self._send_arduino_command("MOTOR_A_FORWARD")   # Left front
             self._send_arduino_command("MOTOR_B_BACKWARD")  # Right front
             self._send_arduino_command("MOTOR_C_FORWARD")   # Left rear
             self._send_arduino_command("MOTOR_D_BACKWARD")  # Right rear
+            
+            # Turn for specified duration, then stop
+            time.sleep(duration)
+            self.stop()
         else:
             # GPIO: Traditional right turn
             GPIO.output(self.IN1, GPIO.HIGH)
             GPIO.output(self.IN2, GPIO.LOW)
             GPIO.output(self.IN3, GPIO.LOW)
             GPIO.output(self.IN4, GPIO.HIGH)
+            time.sleep(duration)
+            self.stop()
 
     def stop(self):
         """Stop all motors"""
@@ -191,6 +230,7 @@ class MotorController:
             
         if self.arduino_serial:
             # Arduino: Stop all motors
+            print("[MotorController] 🛑 Stopping all motors...")
             self._send_arduino_command("MOTOR_A_STOP")
             self._send_arduino_command("MOTOR_B_STOP")
             self._send_arduino_command("MOTOR_C_STOP")
@@ -201,6 +241,42 @@ class MotorController:
             GPIO.output(self.IN2, GPIO.LOW)
             GPIO.output(self.IN3, GPIO.LOW)
             GPIO.output(self.IN4, GPIO.LOW)
+
+    def test_arduino_connection(self):
+        """Test Arduino connection and motor functionality"""
+        if not self.arduino_serial or not self.enabled:
+            print("[MotorController] ❌ Arduino not connected for testing")
+            return False
+            
+        print("[MotorController] 🧪 Testing Arduino motor control...")
+        
+        try:
+            # Test each motor individually
+            motors = ['A', 'B', 'C', 'D']
+            
+            for motor in motors:
+                print(f"[MotorController] Testing Motor {motor}...")
+                
+                # Forward test
+                self._send_arduino_command(f"MOTOR_{motor}_FORWARD")
+                time.sleep(0.5)
+                self._send_arduino_command(f"MOTOR_{motor}_STOP")
+                time.sleep(0.2)
+                
+                # Backward test
+                self._send_arduino_command(f"MOTOR_{motor}_BACKWARD")
+                time.sleep(0.5)
+                self._send_arduino_command(f"MOTOR_{motor}_STOP")
+                time.sleep(0.2)
+                
+                print(f"[MotorController] ✅ Motor {motor} test complete")
+            
+            print("[MotorController] 🎉 All motor tests completed successfully!")
+            return True
+            
+        except Exception as e:
+            print(f"[MotorController] ❌ Arduino test failed: {e}")
+            return False
 
     def cleanup(self):
         """Clean up resources"""
@@ -233,4 +309,44 @@ class MotorController:
         elif self.arduino_serial:
             return f"Arduino serial active on {self.arduino_port}"
         else:
-            return "GPIO control active" 
+            return "GPIO control active"
+
+# Test function for standalone testing
+if __name__ == "__main__":
+    print("🤖 Testing Arduino Motor Controller...")
+    
+    # Initialize motor controller
+    motor = MotorController()
+    
+    if motor.enabled:
+        print(f"Status: {motor.get_status()}")
+        
+        if motor.arduino_serial:
+            # Run Arduino connection test
+            motor.test_arduino_connection()
+            
+            # Test movement commands
+            print("\n🚀 Testing movement commands...")
+            print("Forward...")
+            motor.forward(1.0)
+            time.sleep(0.5)
+            
+            print("Backward...")
+            motor.backward(1.0)
+            time.sleep(0.5)
+            
+            print("Left turn...")
+            motor.left(1.0)
+            time.sleep(0.5)
+            
+            print("Right turn...")
+            motor.right(1.0)
+            time.sleep(0.5)
+            
+            print("Final stop...")
+            motor.stop()
+        
+        motor.cleanup()
+        print("✅ Test completed!")
+    else:
+        print("❌ Motor controller not available for testing") 
