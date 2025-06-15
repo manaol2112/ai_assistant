@@ -36,7 +36,7 @@ class EmotionalState:
     blend_with: Optional[str] = None  # emotion to blend with
     
 class SimpleRobotEyes:
-    """TV-screen style robot eyes with digital expressions - inspired by cute robot displays."""
+    """Large circular robot eyes with bluish-white color and expressive emotions."""
     
     def __init__(self, canvas: tk.Canvas, center_x: int, center_y: int, size: int = 120):
         self.canvas = canvas
@@ -56,264 +56,306 @@ class SimpleRobotEyes:
         self.natural_blink_timer = 0
         self.mouth_timer = 0
         self.glow_timer = 0
-        self.listening_timer = 0  # Add listening timer
+        self.listening_timer = 0
         
-        # Screen configuration - TV-like rectangular displays
-        self.screen_distance = size // 1.3    # Distance between screens
-        self.screen_width = size // 2.5       # Screen width (rectangular)
-        self.screen_height = size // 2.8      # Screen height (rectangular)
-        self.corner_radius = 8                # Rounded corners
+        # Eye configuration - Large circular eyes
+        self.eye_distance = size // 1.2        # Distance between eye centers
+        self.eye_radius = size // 2.2          # Main eye radius (much larger)
+        self.pupil_radius = size // 4.5        # Pupil radius
+        self.iris_radius = size // 3.2         # Iris radius
         
-        # Expression colors
-        self.screen_bg = '#1a1a2e'           # Dark blue/purple background
-        self.screen_border = '#16213e'        # Darker border
-        self.glow_color = '#00d4ff'          # Cyan glow
-        self.expression_color = '#00ffff'     # Bright cyan for expressions
-        self.happy_color = '#00ff88'         # Green for happy
-        self.error_color = '#ff4444'         # Red for error
-        self.thinking_color = '#ffaa00'      # Orange for thinking
+        # Bluish-white color scheme
+        self.eye_bg = '#f8fbff'                # Very light bluish-white background
+        self.eye_border = '#d6e7ff'            # Light blue border
+        self.iris_color = '#e6f3ff'            # Light bluish iris
+        self.pupil_color = '#2c5aa0'           # Deep blue pupil
+        self.glow_color = '#87ceeb'            # Sky blue glow
+        self.highlight_color = '#ffffff'        # Pure white highlights
         
-        # Create the TV-screen style eyes
-        self.create_screen_eyes()
+        # Expression colors (keeping emotional variety)
+        self.expression_color = '#4a90e2'      # Medium blue for expressions
+        self.happy_color = '#5cb85c'           # Green for happy
+        self.error_color = '#d9534f'           # Red for error
+        self.thinking_color = '#f0ad4e'        # Orange for thinking
+        self.listening_color = '#5bc0de'       # Light blue for listening
+        
+        # Create the large circular eyes
+        self.create_circular_eyes()
         
         # Start animations
         self.start_glow_animation()
         
-    def create_screen_eyes(self):
-        """Create TV-screen style robot eyes with digital displays."""
-        # Calculate screen positions
-        left_x = self.center_x - self.screen_distance // 2
-        right_x = self.center_x + self.screen_distance // 2
-        screen_y = self.center_y
+    def create_circular_eyes(self):
+        """Create large circular robot eyes with bluish-white design."""
+        # Calculate eye positions
+        left_x = self.center_x - self.eye_distance // 2
+        right_x = self.center_x + self.eye_distance // 2
+        eye_y = self.center_y
         
-        # Create outer glow effect
-        glow_size = 15
-        self.elements['left_glow'] = self.canvas.create_rectangle(
-            left_x - self.screen_width - glow_size, screen_y - self.screen_height - glow_size,
-            left_x + self.screen_width + glow_size, screen_y + self.screen_height + glow_size,
+        # Create outer glow effect (much larger)
+        glow_size = 25
+        self.elements['left_glow'] = self.canvas.create_oval(
+            left_x - self.eye_radius - glow_size, eye_y - self.eye_radius - glow_size,
+            left_x + self.eye_radius + glow_size, eye_y + self.eye_radius + glow_size,
             fill=self.glow_color, outline='', stipple='gray25'
         )
         
-        self.elements['right_glow'] = self.canvas.create_rectangle(
-            right_x - self.screen_width - glow_size, screen_y - self.screen_height - glow_size,
-            right_x + self.screen_width + glow_size, screen_y + self.screen_height + glow_size,
+        self.elements['right_glow'] = self.canvas.create_oval(
+            right_x - self.eye_radius - glow_size, eye_y - self.eye_radius - glow_size,
+            right_x + self.eye_radius + glow_size, eye_y + self.eye_radius + glow_size,
             fill=self.glow_color, outline='', stipple='gray25'
         )
         
-        # Create screen frames (outer border)
-        frame_thickness = 4
-        self.elements['left_frame'] = self.canvas.create_rectangle(
-            left_x - self.screen_width - frame_thickness, screen_y - self.screen_height - frame_thickness,
-            left_x + self.screen_width + frame_thickness, screen_y + self.screen_height + frame_thickness,
-            fill='#ffffff', outline='#e0e0e0', width=2
+        # Create main eye whites (large circles)
+        self.elements['left_eye'] = self.canvas.create_oval(
+            left_x - self.eye_radius, eye_y - self.eye_radius,
+            left_x + self.eye_radius, eye_y + self.eye_radius,
+            fill=self.eye_bg, outline=self.eye_border, width=3
         )
         
-        self.elements['right_frame'] = self.canvas.create_rectangle(
-            right_x - self.screen_width - frame_thickness, screen_y - self.screen_height - frame_thickness,
-            right_x + self.screen_width + frame_thickness, screen_y + self.screen_height + frame_thickness,
-            fill='#ffffff', outline='#e0e0e0', width=2
+        self.elements['right_eye'] = self.canvas.create_oval(
+            right_x - self.eye_radius, eye_y - self.eye_radius,
+            right_x + self.eye_radius, eye_y + self.eye_radius,
+            fill=self.eye_bg, outline=self.eye_border, width=3
         )
         
-        # Create screen displays (main screens)
-        self.elements['left_screen'] = self.canvas.create_rectangle(
-            left_x - self.screen_width, screen_y - self.screen_height,
-            left_x + self.screen_width, screen_y + self.screen_height,
-            fill=self.screen_bg, outline=self.screen_border, width=2
+        # Create iris (colored part)
+        self.elements['left_iris'] = self.canvas.create_oval(
+            left_x - self.iris_radius, eye_y - self.iris_radius,
+            left_x + self.iris_radius, eye_y + self.iris_radius,
+            fill=self.iris_color, outline=self.expression_color, width=2
         )
         
-        self.elements['right_screen'] = self.canvas.create_rectangle(
-            right_x - self.screen_width, screen_y - self.screen_height,
-            right_x + self.screen_width, screen_y + self.screen_height,
-            fill=self.screen_bg, outline=self.screen_border, width=2
+        self.elements['right_iris'] = self.canvas.create_oval(
+            right_x - self.iris_radius, eye_y - self.iris_radius,
+            right_x + self.iris_radius, eye_y + self.iris_radius,
+            fill=self.iris_color, outline=self.expression_color, width=2
         )
         
-        # Create initial expression (happy dots)
+        # Create pupils (dark centers)
+        self.elements['left_pupil'] = self.canvas.create_oval(
+            left_x - self.pupil_radius, eye_y - self.pupil_radius,
+            left_x + self.pupil_radius, eye_y + self.pupil_radius,
+            fill=self.pupil_color, outline=''
+        )
+        
+        self.elements['right_pupil'] = self.canvas.create_oval(
+            right_x - self.pupil_radius, eye_y - self.pupil_radius,
+            right_x + self.pupil_radius, eye_y + self.pupil_radius,
+            fill=self.pupil_color, outline=''
+        )
+        
+        # Create highlights for life-like appearance
+        highlight_size = 8
+        highlight_offset = self.pupil_radius // 2
+        self.elements['left_highlight'] = self.canvas.create_oval(
+            left_x - highlight_offset - highlight_size, eye_y - highlight_offset - highlight_size,
+            left_x - highlight_offset + highlight_size, eye_y - highlight_offset + highlight_size,
+            fill=self.highlight_color, outline=''
+        )
+        
+        self.elements['right_highlight'] = self.canvas.create_oval(
+            right_x - highlight_offset - highlight_size, eye_y - highlight_offset - highlight_size,
+            right_x - highlight_offset + highlight_size, eye_y - highlight_offset + highlight_size,
+            fill=self.highlight_color, outline=''
+        )
+        
+        # Create initial expression
         self.create_expression("standby")
     
     def create_expression(self, expression_type: str):
-        """Create different digital expressions on the screens."""
-        # Clear existing expressions
+        """Create different expressions while maintaining the circular eye design."""
+        # Clear existing expression elements
         expression_elements = [key for key in self.elements.keys() if key.startswith('expr_')]
         for elem in expression_elements:
             self.canvas.delete(self.elements[elem])
             del self.elements[elem]
         
-        left_x = self.center_x - self.screen_distance // 2
-        right_x = self.center_x + self.screen_distance // 2
-        screen_y = self.center_y
+        left_x = self.center_x - self.eye_distance // 2
+        right_x = self.center_x + self.eye_distance // 2
+        eye_y = self.center_y
         
         if expression_type == "standby":
-            self._create_neutral_dots(left_x, right_x, screen_y)
+            self._create_neutral_expression(left_x, right_x, eye_y)
         elif expression_type == "listening":
-            self._create_attentive_expression(left_x, right_x, screen_y)
+            self._create_attentive_expression(left_x, right_x, eye_y)
         elif expression_type == "speaking":
-            self._create_speaking_expression(left_x, right_x, screen_y)
+            self._create_speaking_expression(left_x, right_x, eye_y)
         elif expression_type == "thinking":
-            self._create_thinking_expression(left_x, right_x, screen_y)
+            self._create_thinking_expression(left_x, right_x, eye_y)
         elif expression_type == "happy":
-            self._create_happy_expression(left_x, right_x, screen_y)
+            self._create_happy_expression(left_x, right_x, eye_y)
         elif expression_type == "error":
-            self._create_error_expression(left_x, right_x, screen_y)
+            self._create_error_expression(left_x, right_x, eye_y)
     
-    def _create_neutral_dots(self, left_x: int, right_x: int, screen_y: int):
-        """Create neutral dot eyes for standby."""
-        dot_size = 8
-        # Simple dots in center of each screen
-        self.elements['expr_left_dot'] = self.canvas.create_oval(
-            left_x - dot_size, screen_y - dot_size,
-            left_x + dot_size, screen_y + dot_size,
-            fill=self.expression_color, outline=''
-        )
-        
-        self.elements['expr_right_dot'] = self.canvas.create_oval(
-            right_x - dot_size, screen_y - dot_size,
-            right_x + dot_size, screen_y + dot_size,
-            fill=self.expression_color, outline=''
-        )
+    def _create_neutral_expression(self, left_x: int, right_x: int, eye_y: int):
+        """Create neutral expression - just the basic eyes."""
+        # Update iris color to neutral blue
+        self.canvas.itemconfig(self.elements['left_iris'], fill=self.iris_color, outline=self.expression_color)
+        self.canvas.itemconfig(self.elements['right_iris'], fill=self.iris_color, outline=self.expression_color)
     
-    def _create_attentive_expression(self, left_x: int, right_x: int, screen_y: int):
-        """Create animated listening expression with dynamic effects."""
-        # Create main listening dots
-        dot_size = 12
-        self.elements['expr_left_dot'] = self.canvas.create_oval(
-            left_x - dot_size, screen_y - dot_size,
-            left_x + dot_size, screen_y + dot_size,
-            fill=self.happy_color, outline='', width=0
-        )
-        
-        self.elements['expr_right_dot'] = self.canvas.create_oval(
-            right_x - dot_size, screen_y - dot_size,
-            right_x + dot_size, screen_y + dot_size,
-            fill=self.happy_color, outline='', width=0
-        )
+    def _create_attentive_expression(self, left_x: int, right_x: int, eye_y: int):
+        """Create animated listening expression with pulsing rings."""
+        # Change iris to listening color
+        self.canvas.itemconfig(self.elements['left_iris'], fill='#e6f7ff', outline=self.listening_color)
+        self.canvas.itemconfig(self.elements['right_iris'], fill='#e6f7ff', outline=self.listening_color)
         
         # Add pulsing outer rings for listening animation
-        ring_size = 18
+        ring_size = self.eye_radius + 15
         self.elements['expr_left_ring'] = self.canvas.create_oval(
-            left_x - ring_size, screen_y - ring_size,
-            left_x + ring_size, screen_y + ring_size,
-            fill='', outline=self.happy_color, width=3
+            left_x - ring_size, eye_y - ring_size,
+            left_x + ring_size, eye_y + ring_size,
+            fill='', outline=self.listening_color, width=4
         )
         
         self.elements['expr_right_ring'] = self.canvas.create_oval(
-            right_x - ring_size, screen_y - ring_size,
-            right_x + ring_size, screen_y + ring_size,
-            fill='', outline=self.happy_color, width=3
+            right_x - ring_size, eye_y - ring_size,
+            right_x + ring_size, eye_y + ring_size,
+            fill='', outline=self.listening_color, width=4
         )
         
-        # Add scanning lines for active listening effect
-        for i in range(3):
-            y_offset = -15 + (i * 10)
-            self.elements[f'expr_scan_line_{i}'] = self.canvas.create_line(
-                left_x - 20, screen_y + y_offset,
-                right_x + 20, screen_y + y_offset,
-                fill=self.expression_color, width=2, dash=(4, 4)
+        # Add scanning arcs for active listening effect
+        for i in range(2):
+            arc_start = i * 180
+            self.elements[f'expr_left_arc_{i}'] = self.canvas.create_arc(
+                left_x - ring_size - 10, eye_y - ring_size - 10,
+                left_x + ring_size + 10, eye_y + ring_size + 10,
+                start=arc_start, extent=90, outline=self.listening_color, width=3, style='arc'
+            )
+            
+            self.elements[f'expr_right_arc_{i}'] = self.canvas.create_arc(
+                right_x - ring_size - 10, eye_y - ring_size - 10,
+                right_x + ring_size + 10, eye_y + ring_size + 10,
+                start=arc_start, extent=90, outline=self.listening_color, width=3, style='arc'
             )
     
-    def _create_speaking_expression(self, left_x: int, right_x: int, screen_y: int):
-        """Create animated mouth-like expressions for speaking."""
-        # Create oval shapes that can change for speaking animation
-        oval_width = 15
-        oval_height = 20
+    def _create_speaking_expression(self, left_x: int, right_x: int, eye_y: int):
+        """Create speaking expression with animated elements."""
+        # Change iris to speaking color
+        self.canvas.itemconfig(self.elements['left_iris'], fill='#fff2e6', outline=self.expression_color)
+        self.canvas.itemconfig(self.elements['right_iris'], fill='#fff2e6', outline=self.expression_color)
         
-        self.elements['expr_left_oval'] = self.canvas.create_oval(
-            left_x - oval_width, screen_y - oval_height,
-            left_x + oval_width, screen_y + oval_height,
-            fill=self.expression_color, outline=''
-        )
-        
-        self.elements['expr_right_oval'] = self.canvas.create_oval(
-            right_x - oval_width, screen_y - oval_height,
-            right_x + oval_width, screen_y + oval_height,
-            fill=self.expression_color, outline=''
-        )
+        # Add sound wave effects around eyes
+        for i in range(3):
+            wave_radius = self.eye_radius + 20 + (i * 15)
+            self.elements[f'expr_left_wave_{i}'] = self.canvas.create_arc(
+                left_x - wave_radius, eye_y - wave_radius,
+                left_x + wave_radius, eye_y + wave_radius,
+                start=45, extent=90, outline=self.expression_color, width=2, style='arc'
+            )
+            
+            self.elements[f'expr_right_wave_{i}'] = self.canvas.create_arc(
+                right_x - wave_radius, eye_y - wave_radius,
+                right_x + wave_radius, eye_y + wave_radius,
+                start=45, extent=90, outline=self.expression_color, width=2, style='arc'
+            )
     
-    def _create_thinking_expression(self, left_x: int, right_x: int, screen_y: int):
-        """Create dots that look upward for thinking."""
-        dot_size = 10
-        # Dots positioned higher up (looking up)
-        up_offset = 8
+    def _create_thinking_expression(self, left_x: int, right_x: int, eye_y: int):
+        """Create thinking expression - eyes look up."""
+        # Move pupils up to simulate looking up
+        pupil_offset = self.pupil_radius // 2
+        self.canvas.coords(self.elements['left_pupil'],
+            left_x - self.pupil_radius, eye_y - self.pupil_radius - pupil_offset,
+            left_x + self.pupil_radius, eye_y + self.pupil_radius - pupil_offset)
         
-        self.elements['expr_left_dot'] = self.canvas.create_oval(
-            left_x - dot_size, screen_y - dot_size - up_offset,
-            left_x + dot_size, screen_y + dot_size - up_offset,
-            fill=self.thinking_color, outline=''
-        )
+        self.canvas.coords(self.elements['right_pupil'],
+            right_x - self.pupil_radius, eye_y - self.pupil_radius - pupil_offset,
+            right_x + self.pupil_radius, eye_y + self.pupil_radius - pupil_offset)
         
-        self.elements['expr_right_dot'] = self.canvas.create_oval(
-            right_x - dot_size, screen_y - dot_size - up_offset,
-            right_x + dot_size, screen_y + dot_size - up_offset,
-            fill=self.thinking_color, outline=''
-        )
+        # Change iris to thinking color
+        self.canvas.itemconfig(self.elements['left_iris'], fill='#fff7e6', outline=self.thinking_color)
+        self.canvas.itemconfig(self.elements['right_iris'], fill='#fff7e6', outline=self.thinking_color)
         
-        # Add thinking dots/ellipsis
-        for i, x_offset in enumerate([-15, 0, 15]):
+        # Add thinking dots above eyes
+        for i, x_offset in enumerate([-20, 0, 20]):
+            dot_size = 4
             self.elements[f'expr_think_dot_{i}'] = self.canvas.create_oval(
-                left_x + x_offset - 3, screen_y + 15 - 3,
-                left_x + x_offset + 3, screen_y + 15 + 3,
+                left_x + x_offset - dot_size, eye_y - self.eye_radius - 30 - dot_size,
+                left_x + x_offset + dot_size, eye_y - self.eye_radius - 30 + dot_size,
                 fill=self.thinking_color, outline=''
             )
     
-    def _create_happy_expression(self, left_x: int, right_x: int, screen_y: int):
-        """Create happy curved smile expressions."""
-        # Create happy arcs (smiles)
-        smile_width = 20
-        smile_height = 15
+    def _create_happy_expression(self, left_x: int, right_x: int, eye_y: int):
+        """Create happy expression with sparkles and crescents."""
+        # Change iris to happy color
+        self.canvas.itemconfig(self.elements['left_iris'], fill='#f0fff0', outline=self.happy_color)
+        self.canvas.itemconfig(self.elements['right_iris'], fill='#f0fff0', outline=self.happy_color)
         
-        self.elements['expr_left_smile'] = self.canvas.create_arc(
-            left_x - smile_width, screen_y - smile_height,
-            left_x + smile_width, screen_y + smile_height,
+        # Add happy crescents below eyes (like smile lines)
+        crescent_y = eye_y + self.eye_radius + 10
+        self.elements['expr_left_crescent'] = self.canvas.create_arc(
+            left_x - 25, crescent_y - 15,
+            left_x + 25, crescent_y + 15,
             start=0, extent=180, outline=self.happy_color, width=4, style='arc'
         )
         
-        self.elements['expr_right_smile'] = self.canvas.create_arc(
-            right_x - smile_width, screen_y - smile_height,
-            right_x + smile_width, screen_y + smile_height,
+        self.elements['expr_right_crescent'] = self.canvas.create_arc(
+            right_x - 25, crescent_y - 15,
+            right_x + 25, crescent_y + 15,
             start=0, extent=180, outline=self.happy_color, width=4, style='arc'
         )
         
-        # Add sparkle effects
-        for i, (x_off, y_off) in enumerate([(-10, -10), (10, -10), (0, -15)]):
+        # Add sparkle effects around eyes
+        sparkle_positions = [(-30, -30), (30, -30), (-35, 0), (35, 0), (0, -40)]
+        for i, (x_off, y_off) in enumerate(sparkle_positions):
             self.elements[f'expr_sparkle_{i}'] = self.canvas.create_polygon(
-                left_x + x_off, screen_y + y_off - 3,
-                left_x + x_off - 2, screen_y + y_off,
-                left_x + x_off, screen_y + y_off + 3,
-                left_x + x_off + 2, screen_y + y_off,
+                left_x + x_off, eye_y + y_off - 4,
+                left_x + x_off - 3, eye_y + y_off,
+                left_x + x_off, eye_y + y_off + 4,
+                left_x + x_off + 3, eye_y + y_off,
                 fill=self.happy_color, outline=''
             )
     
-    def _create_error_expression(self, left_x: int, right_x: int, screen_y: int):
-        """Create X marks for error state."""
-        x_size = 15
+    def _create_error_expression(self, left_x: int, right_x: int, eye_y: int):
+        """Create error expression with X marks and sad elements."""
+        # Change iris to error color
+        self.canvas.itemconfig(self.elements['left_iris'], fill='#ffe6e6', outline=self.error_color)
+        self.canvas.itemconfig(self.elements['right_iris'], fill='#ffe6e6', outline=self.error_color)
         
+        # Add X marks over eyes
+        x_size = 20
         # Left X
         self.elements['expr_left_x1'] = self.canvas.create_line(
-            left_x - x_size, screen_y - x_size,
-            left_x + x_size, screen_y + x_size,
-            fill=self.error_color, width=4, capstyle='round'
+            left_x - x_size, eye_y - x_size,
+            left_x + x_size, eye_y + x_size,
+            fill=self.error_color, width=5, capstyle='round'
         )
         
         self.elements['expr_left_x2'] = self.canvas.create_line(
-            left_x - x_size, screen_y + x_size,
-            left_x + x_size, screen_y - x_size,
-            fill=self.error_color, width=4, capstyle='round'
+            left_x - x_size, eye_y + x_size,
+            left_x + x_size, eye_y - x_size,
+            fill=self.error_color, width=5, capstyle='round'
         )
         
         # Right X
         self.elements['expr_right_x1'] = self.canvas.create_line(
-            right_x - x_size, screen_y - x_size,
-            right_x + x_size, screen_y + x_size,
-            fill=self.error_color, width=4, capstyle='round'
+            right_x - x_size, eye_y - x_size,
+            right_x + x_size, eye_y + x_size,
+            fill=self.error_color, width=5, capstyle='round'
         )
         
         self.elements['expr_right_x2'] = self.canvas.create_line(
-            right_x - x_size, screen_y + x_size,
-            right_x + x_size, screen_y - x_size,
-            fill=self.error_color, width=4, capstyle='round'
+            right_x - x_size, eye_y + x_size,
+            right_x + x_size, eye_y - x_size,
+            fill=self.error_color, width=5, capstyle='round'
+        )
+        
+        # Add sad arcs below eyes
+        sad_y = eye_y + self.eye_radius + 10
+        self.elements['expr_left_sad'] = self.canvas.create_arc(
+            left_x - 25, sad_y - 15,
+            left_x + 25, sad_y + 15,
+            start=180, extent=180, outline=self.error_color, width=4, style='arc'
+        )
+        
+        self.elements['expr_right_sad'] = self.canvas.create_arc(
+            right_x - 25, sad_y - 15,
+            right_x + 25, sad_y + 15,
+            start=180, extent=180, outline=self.error_color, width=4, style='arc'
         )
     
     def start_glow_animation(self):
-        """Start the screen glow animation."""
+        """Start the eye glow animation."""
         if not self.animation_active:
             return
         
