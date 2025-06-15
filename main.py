@@ -461,6 +461,11 @@ class AIAssistant:
         }
         
         logger.info("🚀 AI Assistant initialized with premium natural voices, face recognition, and universal object identification!")
+        
+        # Initialize gesture control state
+        self.gesture_control_active = False
+        self.gesture_control_thread = None
+        self.gesture_stop_event = threading.Event()
 
     def setup_audio_feedback(self):
         """Setup audio feedback system for interaction cues."""
@@ -1109,13 +1114,18 @@ class AIAssistant:
                                 if self.visual:
                                     self.visual.show_happy(f"Gesture control activated for {person_name}!")
                                 
+                                # Check if gesture control is already active
+                                if self.gesture_control_active:
+                                    print("⚠️ Gesture control already active, skipping...")
+                                    continue
+                                
                                 # Start gesture control in a separate thread to avoid blocking face detection
-                                import threading
-                                gesture_thread = threading.Thread(
+                                self.gesture_stop_event.clear()  # Reset stop event
+                                self.gesture_control_thread = threading.Thread(
                                     target=self.start_gesture_motor_control,
                                     daemon=True
                                 )
-                                gesture_thread.start()
+                                self.gesture_control_thread.start()
                                 
                                 # Brief pause to let gesture control start
                                 time.sleep(2)
@@ -3769,11 +3779,16 @@ add musical rhythm. Make this sound like singing, not talking!]"""
                 self.visual.show_error("Not on Pi 5. Gesture control disabled.")
             return "Not running on Raspberry Pi 5. Gesture control is disabled."
         
-        print("🤖 Initializing motor and gesture controllers...")
-        motor = MotorController()
-        gesture = HandGestureController()
+        # Check if already active
+        if self.gesture_control_active:
+            print("⚠️ Gesture control already active.")
+            return "Gesture control already active."
         
-        if not gesture.enabled or not motor.enabled:
+        print("🤖 Initializing motor and gesture controllers...")
+        self.motor = MotorController()
+        self.gesture = HandGestureController()
+        
+        if not self.gesture.enabled or not self.motor.enabled:
             print("⚠️ Gesture or motor hardware not enabled.")
             if self.visual:
                 self.visual.show_error("Gesture/motor hardware not enabled.")
@@ -3790,11 +3805,22 @@ add musical rhythm. Make this sound like singing, not talking!]"""
         if self.visual:
             self.visual.show_happy("Hand gesture control started!")
         
+        self.gesture_control_active = True
+        self.gesture_stop_event.clear()
+        
+        # Run gesture control for a limited time (30 seconds) to prevent infinite loops
         gesture_count = 0
+        max_gestures = 100  # Limit to prevent infinite loops
+        start_time = time.time()
+        max_duration = 30  # 30 seconds maximum
+        
         try:
-            while True:
+            while (gesture_count < max_gestures and 
+                   time.time() - start_time < max_duration and 
+                   not self.gesture_stop_event.is_set()):
+                
                 print(f"\n👁️ Checking for gesture #{gesture_count + 1}...")
-                action = gesture.get_gesture()
+                action = self.gesture.get_gesture()
                 gesture_count += 1
                 
                 if action:
@@ -3804,25 +3830,29 @@ add musical rhythm. Make this sound like singing, not talking!]"""
                     
                     if action == 'forward':
                         print("🚀 EXECUTING: Moving forward")
-                        motor.forward()
+                        self.motor.forward()
                     elif action == 'backward':
                         print("🔙 EXECUTING: Moving backward")
-                        motor.backward()
+                        self.motor.backward()
                     elif action == 'left':
                         print("↩️ EXECUTING: Turning left")
-                        motor.left()
+                        self.motor.left()
                     elif action == 'right':
                         print("↪️ EXECUTING: Turning right")
-                        motor.right()
+                        self.motor.right()
                     elif action == 'stop':
                         print("⏹️ EXECUTING: Stopping motors")
-                        motor.stop()
+                        self.motor.stop()
+                        break  # Stop gesture ends the session
                     else:
                         print(f"❓ UNKNOWN GESTURE: {action}")
-                        motor.stop()
+                        self.motor.stop()
                 else:
                     print("❌ No gesture detected - stopping motors")
-                    motor.stop()
+                    self.motor.stop()
+                
+                # Small delay to prevent overwhelming the system
+                time.sleep(0.5)
                     
         except KeyboardInterrupt:
             print("\n🛑 Gesture control stopped by user (Ctrl+C).")
@@ -3834,11 +3864,47 @@ add musical rhythm. Make this sound like singing, not talking!]"""
             traceback.print_exc()
         finally:
             print("🔄 Cleaning up gesture and motor controllers...")
-            gesture.release()
-            motor.cleanup()
+            if hasattr(self, 'gesture') and self.gesture:
+                self.gesture.release()
+            if hasattr(self, 'motor') and self.motor:
+                self.motor.cleanup()
+            self.gesture_control_active = False
             print("✅ Cleanup completed.")
         
         return "Gesture control stopped."
+    
+    def stop_gesture_control(self):
+        """Stop the current gesture control session."""
+        if self.gesture_control_active:
+            print("🛑 Stopping gesture control...")
+            self.gesture_stop_event.set()
+            if self.gesture_control_thread and self.gesture_control_thread.is_alive():
+                self.gesture_control_thread.join(timeout=2)
+            self.gesture_control_active = False
+            return "Gesture control stopped."
+        else:
+            return "Gesture control is not active."
+
+    def _run_gesture_control_safely(self):
+        """Run gesture control in a separate thread safely."""
+        try:
+            while True:
+                if self.gesture_stop_event.is_set():
+                    break
+                self.handle_gesture_control()
+                time.sleep(0.1)  # Small delay between checks
+        except KeyboardInterrupt:
+            print("\n🛑 Gesture control stopped by user (Ctrl+C).")
+            self.gesture_stop_event.set()
+        except Exception as e:
+            print(f"⚠️ Error in gesture control loop: {e}")
+            import traceback
+            traceback.print_exc()
+        finally:
+            print("🔄 Cleaning up gesture and motor controllers...")
+            self.gesture_stop_event.set()
+            self.gesture_control_thread = None
+            self.gesture_control_active = False
 
 if __name__ == "__main__":
     assistant = AIAssistant()
