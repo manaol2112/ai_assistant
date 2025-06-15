@@ -24,6 +24,7 @@ class SmartCameraDetector:
     def __init__(self, model_size='n', confidence_threshold=0.5):
         """
         Initialize smart camera detector with YOLOv8 and face recognition
+        Enhanced for AITRIOS AI Camera support
         
         Args:
             model_size: 'n' (nano), 's' (small), 'm' (medium), 'l' (large), 'x' (extra large)
@@ -31,7 +32,16 @@ class SmartCameraDetector:
         """
         self.logger = logging.getLogger(__name__)
         
-        # Load YOLOv8 model
+        # Check for AITRIOS camera availability
+        try:
+            from aitrios_camera_handler import AITRIOSCameraHandler
+            self.aitrios_available = True
+            self.logger.info("🤖 AITRIOS AI Camera support detected")
+        except ImportError:
+            self.aitrios_available = False
+            self.logger.info("📷 Using standard camera detection")
+        
+        # Load YOLOv8 model for non-AITRIOS cameras
         model_path = f'yolov8{model_size}.pt'
         print(f"🤖 Loading YOLOv8 model: {model_path}")
         self.model = YOLO(model_path)
@@ -118,49 +128,82 @@ class SmartCameraDetector:
         print(f"🎉 Face recognition ready! Loaded {len(self.known_face_names)} face encodings for {len(set(self.known_face_names))} people")
 
     def detect_faces(self, frame):
-        """Detect and recognize faces in the frame."""
-        if not self.face_recognition_enabled or not self.known_face_encodings:
+        """Detect and recognize faces - enhanced with AITRIOS AI when available"""
+        if not self.face_recognition_enabled:
             return []
         
-        # Resize frame for faster face recognition
-        small_frame = cv2.resize(frame, (0, 0), fx=0.25, fy=0.25)
-        rgb_small_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
-        
-        # Find faces
-        face_locations = face_recognition.face_locations(rgb_small_frame)
-        face_encodings = face_recognition.face_encodings(rgb_small_frame, face_locations)
-        
-        face_detections = []
-        
-        for face_encoding, face_location in zip(face_encodings, face_locations):
-            # Compare with known faces
-            matches = face_recognition.compare_faces(self.known_face_encodings, face_encoding, tolerance=self.face_detection_threshold)
-            face_distances = face_recognition.face_distance(self.known_face_encodings, face_encoding)
+        try:
+            # Check if we're using AITRIOS camera with AI face detection
+            if (hasattr(self.shared_camera, 'using_aitrios') and 
+                self.shared_camera.using_aitrios and 
+                hasattr(self.shared_camera, 'aitrios_handler')):
+                
+                # Use AITRIOS AI face detection
+                ai_faces = self.shared_camera.aitrios_handler.detect_faces()
+                
+                # Convert to our format and add greeting logic
+                face_detections = []
+                for face in ai_faces:
+                    name = face.get('name', 'Unknown')
+                    confidence = face.get('confidence', 0)
+                    bbox = face.get('bbox', [0, 0, 0, 0])
+                    
+                    face_detections.append({
+                        'name': name,
+                        'confidence': confidence,
+                        'bbox': bbox,
+                        'location': face.get('location', bbox),
+                        'source': 'AITRIOS_AI'
+                    })
+                
+                self.logger.debug(f"🤖 AITRIOS detected {len(face_detections)} faces")
+                return face_detections
             
-            name = "Unknown"
-            confidence = 0.0
+            # Fallback to standard face recognition
+            # Resize frame for faster face recognition
+            small_frame = cv2.resize(frame, (0, 0), fx=0.25, fy=0.25)
+            rgb_small_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
             
-            if any(matches):
-                best_match_index = np.argmin(face_distances)
-                if matches[best_match_index]:
-                    name = self.known_face_names[best_match_index]
-                    confidence = 1.0 - face_distances[best_match_index]
+            # Find faces
+            face_locations = face_recognition.face_locations(rgb_small_frame)
+            face_encodings = face_recognition.face_encodings(rgb_small_frame, face_locations)
             
-            # Scale back up face locations
-            top, right, bottom, left = face_location
-            top *= 4
-            right *= 4
-            bottom *= 4
-            left *= 4
+            face_detections = []
             
-            face_detections.append({
-                'name': name,
-                'confidence': confidence,
-                'bbox': (left, top, right, bottom),
-                'location': (top, right, bottom, left)
-            })
-        
-        return face_detections
+            for face_encoding, face_location in zip(face_encodings, face_locations):
+                # Compare with known faces
+                matches = face_recognition.compare_faces(self.known_face_encodings, face_encoding, tolerance=self.face_detection_threshold)
+                face_distances = face_recognition.face_distance(self.known_face_encodings, face_encoding)
+                
+                name = "Unknown"
+                confidence = 0.0
+                
+                if any(matches):
+                    best_match_index = np.argmin(face_distances)
+                    if matches[best_match_index]:
+                        name = self.known_face_names[best_match_index]
+                        confidence = 1.0 - face_distances[best_match_index]
+                
+                # Scale back up face locations
+                top, right, bottom, left = face_location
+                top *= 4
+                right *= 4
+                bottom *= 4
+                left *= 4
+                
+                face_detections.append({
+                    'name': name,
+                    'confidence': confidence,
+                    'bbox': (left, top, right, bottom),
+                    'location': (top, right, bottom, left),
+                    'source': 'face_recognition'
+                })
+            
+            return face_detections
+            
+        except Exception as e:
+            self.logger.error(f"Error in face detection: {e}")
+            return []
 
     def should_greet(self, person_name: str) -> bool:
         """Check if we should greet this person (based on cooldown)."""
@@ -195,49 +238,93 @@ class SmartCameraDetector:
         return np.random.choice(person_greetings)
 
     def start_camera(self, camera_index=0):
-        """Start camera capture - use shared camera if available"""
+        """Start camera capture - enhanced for AITRIOS support"""
         # Check if we have a shared camera first
         if self.shared_camera and self.shared_camera.is_camera_available():
-            print("✅ Using shared camera for SmartCameraDetector")
+            self.logger.info("🤖 Using shared camera for smart detection")
+            
+            # Check if shared camera has AI capabilities
+            if hasattr(self.shared_camera, 'using_aitrios') and self.shared_camera.using_aitrios:
+                self.logger.info("✨ AITRIOS AI features available for enhanced detection")
+            
+            self.cap = self.shared_camera
             return True
         
-        # Fallback to standalone camera mode
+        # Otherwise initialize our own camera
+        self.logger.info(f"📷 Starting camera {camera_index} for detection")
         self.cap = cv2.VideoCapture(camera_index)
         
         if not self.cap.isOpened():
-            raise Exception(f"Cannot open camera {camera_index}")
+            self.logger.error(f"❌ Failed to open camera {camera_index}")
+            return False
         
-        # Set camera properties for better performance
+        # Set properties
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
         self.cap.set(cv2.CAP_PROP_FPS, 30)
         
-        print("✅ Camera started successfully in standalone mode")
+        self.logger.info("✅ Camera started successfully")
         return True
 
     def detect_objects(self, frame):
-        """Run YOLOv8 detection on frame"""
-        results = self.model(frame, conf=self.confidence_threshold, verbose=False)
+        """Detect objects - enhanced with AITRIOS AI when available"""
+        object_detections = []
         
-        detections = []
-        
-        for result in results:
-            boxes = result.boxes
-            if boxes is not None:
-                for box in boxes:
-                    x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
-                    confidence = box.conf[0].cpu().numpy()
-                    class_id = int(box.cls[0].cpu().numpy())
-                    class_name = self.model.names[class_id]
+        try:
+            # Check if we're using AITRIOS camera with AI capabilities
+            if (hasattr(self.shared_camera, 'using_aitrios') and 
+                self.shared_camera.using_aitrios and 
+                hasattr(self.shared_camera, 'aitrios_handler')):
+                
+                # Use AITRIOS AI object detection
+                ai_objects = self.shared_camera.aitrios_handler.detect_objects()
+                
+                for obj in ai_objects:
+                    # Convert AITRIOS format to our format
+                    class_name = obj.get('class', 'unknown')
+                    confidence = obj.get('confidence', 0)
+                    bbox = obj.get('bbox', [0, 0, 0, 0])
                     
-                    detections.append({
-                        'bbox': (int(x1), int(y1), int(x2), int(y2)),
-                        'confidence': float(confidence),
-                        'class_name': class_name,
-                        'class_id': class_id
-                    })
-        
-        return detections
+                    if confidence > self.confidence_threshold:
+                        object_detections.append({
+                            'class': class_name,
+                            'confidence': confidence,
+                            'bbox': bbox,
+                            'source': 'AITRIOS_AI'
+                        })
+                
+                self.logger.debug(f"🤖 AITRIOS detected {len(object_detections)} objects")
+                return object_detections
+            
+            # Fallback to YOLOv8 detection for standard cameras
+            results = self.model(frame, conf=self.confidence_threshold, verbose=False)
+            
+            for result in results:
+                boxes = result.boxes
+                if boxes is not None:
+                    for i, box in enumerate(boxes):
+                        # Extract detection info
+                        conf = float(box.conf[0])
+                        cls = int(box.cls[0])
+                        xyxy = box.xyxy[0].cpu().numpy()
+                        
+                        # Get class name
+                        class_name = self.model.names[cls] if cls < len(self.model.names) else 'unknown'
+                        
+                        # Check if it's a target class or high confidence
+                        if class_name in self.target_classes or conf > 0.7:
+                            object_detections.append({
+                                'class': class_name,
+                                'confidence': conf,
+                                'bbox': xyxy.tolist(),
+                                'source': 'YOLOv8'
+                            })
+            
+            return object_detections
+            
+        except Exception as e:
+            self.logger.error(f"Error in object detection: {e}")
+            return []
 
     def draw_detections(self, frame, object_detections, face_detections):
         """Draw bounding boxes and labels on frame"""
@@ -245,7 +332,7 @@ class SmartCameraDetector:
         for detection in object_detections:
             bbox = detection['bbox']
             confidence = detection['confidence']
-            class_name = detection['class_name']
+            class_name = detection['class']
             
             x1, y1, x2, y2 = bbox
             
@@ -386,9 +473,9 @@ class SmartCameraDetector:
                               cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2)
                 
                 # Show interesting detections
-                target_detections = [d for d in object_detections if d['class_name'].lower() in [k.lower() for k in self.target_classes.keys()]]
+                target_detections = [d for d in object_detections if d['class'].lower() in [k.lower() for k in self.target_classes.keys()]]
                 if target_detections:
-                    objects = [d['class_name'] for d in target_detections]
+                    objects = [d['class'] for d in target_detections]
                     print(f"🎯 Objects: {objects}")
                 
                 # Save video frame if enabled

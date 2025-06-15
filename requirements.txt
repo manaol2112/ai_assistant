@@ -304,4 +304,94 @@ soundfile>=0.12.1  # Audio file processing
 # sudo systemctl enable ai-assistant.service
 # sudo systemctl start ai-assistant.service
 #
-# ============================================================================ 
+# ============================================================================
+# AITRIOS AI Camera Support (Raspberry Pi specific)
+# ============================================================================
+#
+# These packages are typically installed via the Sony AITRIOS SDK
+# or Raspberry Pi system packages, but we list them for reference
+picamera2>=0.3.12  # For Raspberry Pi camera control
+libcamera>=0.0.5   # Camera library for Raspberry Pi
+rpi-libcamera>=1.0.0  # Raspberry Pi camera interface
+imx500-models>=1.0.0  # IMX500 AI models (installed via Sony SDK)
+
+# Edge TPU and AI acceleration (optional)
+tflite-runtime>=2.13.0  # TensorFlow Lite runtime
+pycoral>=2.0.0         # Coral Edge TPU support (optional)
+
+# Audio processing
+sounddevice==0.4.6
+pyaudio==0.2.11
+pydub==0.25.1
+whisper==1.1.10
+speech-recognition==3.10.0
+
+# Text-to-Speech
+pyttsx3==2.90
+gTTS==2.3.2
+
+# Networking and Communication
+websockets==12.0
+flask==3.0.0
+socketio==5.9.0
+
+# Data processing and utilities
+pandas==2.1.3
+matplotlib==3.8.2
+scipy==1.11.4
+scikit-learn==1.3.2
+cryptography==41.0.7
+pyyaml==6.0.1
+
+# Database
+sqlite3  # Built into Python
+sqlalchemy==2.0.23
+
+# Game development (for interactive features)
+pygame==2.5.2
+
+# Computer Vision extras
+mediapipe==0.10.8
+imutils==0.5.4
+
+# Hardware interfaces
+RPi.GPIO>=0.7.1  # Raspberry Pi GPIO (Pi only)
+gpiozero>=1.6.2  # GPIO Zero library (Pi only)
+adafruit-circuitpython-motor>=3.4.8  # Motor control
+adafruit-circuitpython-servokit>=1.3.15  # Servo control
+
+# Serial communication
+pyserial==3.5
+
+# JSON and configuration
+jsonschema==4.19.2
+configparser  # Built into Python
+
+# Logging and monitoring
+colorlog==6.8.0
+psutil==5.9.6
+
+# Development and testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+black==23.11.0
+flake8==6.1.0
+
+# Installation notes for AITRIOS:
+# 1. Install Sony AITRIOS SDK following official documentation
+# 2. Install Raspberry Pi OS Bookworm or later
+# 3. Enable camera interface in raspi-config
+# 4. Install IMX500 model files via Sony's package manager
+# 5. Ensure proper permissions for camera access
+
+# Example system commands (run separately):
+# sudo apt update && sudo apt upgrade -y
+# sudo apt install python3-libcamera python3-kms++
+# sudo raspi-config  # Enable camera
+# wget -O - https://archive.raspberrypi.org/debian/raspberrypi.gpg.key | sudo apt-key add -
+# echo "deb https://archive.raspberrypi.org/debian/ bullseye main" | sudo tee /etc/apt/sources.list.d/raspi.list
+
+# Sony AITRIOS specific (follow official Sony documentation):
+# Install AITRIOS SDK for Vision and Sensing
+# Configure device certificates and connection settings
+# Download and install IMX500 AI models 
