@@ -15,14 +15,61 @@ from datetime import datetime
 import subprocess
 import threading
 from pathlib import Path
+import platform
+
+logger = logging.getLogger(__name__)
+
+# Check if running on Raspberry Pi
+IS_RASPBERRY_PI = (
+    platform.machine().startswith('arm') or 
+    platform.machine().startswith('aarch64') or
+    'raspberry' in platform.platform().lower() or
+    os.path.exists('/proc/device-tree/model')
+)
+
+# Additional check for Raspberry Pi
+def _is_raspberry_pi():
+    """More thorough check for Raspberry Pi"""
+    try:
+        # Check /proc/device-tree/model for Pi identification
+        if os.path.exists('/proc/device-tree/model'):
+            with open('/proc/device-tree/model', 'r') as f:
+                model = f.read().lower()
+                return 'raspberry pi' in model
+    except:
+        pass
+    
+    # Check /proc/cpuinfo
+    try:
+        with open('/proc/cpuinfo', 'r') as f:
+            cpuinfo = f.read().lower()
+            return 'raspberry pi' in cpuinfo or 'bcm' in cpuinfo
+    except:
+        pass
+    
+    return False
+
+# Update the detection
+if not IS_RASPBERRY_PI:
+    IS_RASPBERRY_PI = _is_raspberry_pi()
 
 # Try to import required modules for AITRIOS
 try:
-    from picamera2 import Picamera2
-    PICAMERA2_AVAILABLE = True
-except ImportError:
+    if not IS_RASPBERRY_PI:
+        # Running on non-Raspberry Pi system (like Mac)
+        PICAMERA2_AVAILABLE = False
+        print(f"ℹ️ picamera2 is only available on Raspberry Pi systems")
+        print(f"Current system: {platform.system()} {platform.machine()}")
+    else:
+        from picamera2 import Picamera2
+        PICAMERA2_AVAILABLE = True
+except ImportError as e:
     PICAMERA2_AVAILABLE = False
-    print("⚠️ Picamera2 not available. Install with: pip install picamera2")
+    if IS_RASPBERRY_PI:
+        print("⚠️ Picamera2 not available on Raspberry Pi. Install with: pip install picamera2")
+        print(f"Error: {e}")
+    else:
+        print(f"ℹ️ picamera2 not available on {platform.system()}. This is expected - picamera2 only works on Raspberry Pi.")
 
 # Try to import face recognition
 try:
@@ -31,8 +78,6 @@ try:
 except ImportError:
     FACE_RECOGNITION_AVAILABLE = False
     print("⚠️ Face recognition not available. Install with: pip install face-recognition")
-
-logger = logging.getLogger(__name__)
 
 class AITRIOSCameraHandler:
     """
@@ -90,7 +135,12 @@ class AITRIOSCameraHandler:
         """Initialize the AITRIOS AI Camera"""
         try:
             if not PICAMERA2_AVAILABLE:
-                self.logger.error("Picamera2 not available. Cannot initialize AITRIOS camera.")
+                if not IS_RASPBERRY_PI:
+                    self.logger.info(f"🖥️ Running on {platform.system()} {platform.machine()}")
+                    self.logger.info("ℹ️ AITRIOS AI Camera is only available on Raspberry Pi systems")
+                    self.logger.info("💡 The main camera handler will automatically fallback to USB camera")
+                else:
+                    self.logger.error("Picamera2 not available on Raspberry Pi. Install with: pip install picamera2")
                 return False
             
             # Check if IMX500 firmware is available
