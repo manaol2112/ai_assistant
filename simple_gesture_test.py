@@ -3,13 +3,14 @@
 simple_gesture_test.py
 Quick and simple gesture detection test
 Perfect for debugging gesture recognition issues
+Now supports Sony IMX500 AI Camera via CameraHandler
 """
 
 import sys
 import time
 
 def test_gesture_detection():
-    """Simple gesture detection test"""
+    """Simple gesture detection test with Sony IMX500 AI Camera support"""
     print("🚀 Simple Gesture Detection Test")
     print("=" * 40)
     
@@ -31,19 +32,41 @@ def test_gesture_detection():
         print("⚠️ MediaPipe not available, using OpenCV fallback")
         use_mediapipe = False
     
-    # Initialize camera
-    print("\n📷 Initializing camera...")
-    cap = cv2.VideoCapture(0)
+    # Try to use CameraHandler first (supports Sony IMX500 AI Camera)
+    camera_handler = None
+    cap = None
     
-    if not cap.isOpened():
-        print("❌ Camera not available")
-        return False
+    try:
+        from camera_handler import CameraHandler
+        print("\n🤖 Initializing CameraHandler (Sony IMX500 AI Camera support)...")
+        camera_handler = CameraHandler(camera_index=0, prefer_imx500=True)
+        
+        if camera_handler.is_camera_available():
+            camera_type = "Sony IMX500 AI" if camera_handler.using_imx500 else "USB"
+            print(f"✅ {camera_type} Camera initialized via CameraHandler")
+            
+            if camera_handler.using_imx500:
+                print("🎯 AI Camera features available")
+        else:
+            print("❌ CameraHandler failed to initialize")
+            camera_handler = None
+    except ImportError:
+        print("⚠️ CameraHandler not available, trying direct OpenCV access...")
     
-    print("✅ Camera initialized")
-    
-    # Set camera properties
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+    # Fallback to direct OpenCV if CameraHandler not available
+    if not camera_handler:
+        print("\n📷 Initializing direct OpenCV camera...")
+        cap = cv2.VideoCapture(0)
+        
+        if not cap.isOpened():
+            print("❌ Camera not available")
+            return False
+        
+        print("✅ OpenCV Camera initialized")
+        
+        # Set camera properties
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
     
     # Initialize MediaPipe if available
     if use_mediapipe:
@@ -165,8 +188,13 @@ def test_gesture_detection():
     # Main detection loop
     try:
         while True:
-            ret, frame = cap.read()
-            if not ret:
+            # Read frame from camera handler or direct OpenCV
+            if camera_handler:
+                ret, frame = camera_handler.read()
+            else:
+                ret, frame = cap.read()
+                
+            if not ret or frame is None:
                 continue
             
             # Flip frame for mirror effect
@@ -197,6 +225,14 @@ def test_gesture_detection():
                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
                 print(f"🖐️ {finger_count} fingers → {action}")
             
+            # Add camera type info
+            if camera_handler:
+                camera_type = "Sony IMX500 AI" if camera_handler.using_imx500 else "USB via CameraHandler"
+            else:
+                camera_type = "USB via OpenCV"
+            cv2.putText(frame, f"Camera: {camera_type}", (10, frame.shape[0] - 50), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 1)
+            
             # Add instructions
             cv2.putText(frame, "Press 'q' to quit", (10, frame.shape[0] - 20), 
                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
@@ -210,7 +246,10 @@ def test_gesture_detection():
         print("\n🛑 Test interrupted")
     
     finally:
-        cap.release()
+        if camera_handler:
+            camera_handler.release()
+        elif cap:
+            cap.release()
         cv2.destroyAllWindows()
         print("✅ Test completed")
     

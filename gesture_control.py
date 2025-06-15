@@ -2,6 +2,7 @@
 gesture_control.py
 Premium Hand Gesture Recognition for Robot Control (MediaPipe + OpenCV)
 Enhanced with visual feedback and robust finger counting
+Uses CameraHandler for Sony IMX500 AI Camera support
 """
 import sys
 import platform
@@ -23,9 +24,17 @@ except ImportError:
     MEDIAPIPE_AVAILABLE = False
     mp = None
 
+# Import the camera handler
+try:
+    from camera_handler import CameraHandler
+    CAMERA_HANDLER_AVAILABLE = True
+except ImportError:
+    CAMERA_HANDLER_AVAILABLE = False
+
 class HandGestureController:
     """
     HandGestureController uses MediaPipe + OpenCV for robust hand gesture detection.
+    Now supports Sony IMX500 AI Camera via CameraHandler.
     Maps finger counts to robot actions:
     - 5 fingers (open hand) = forward
     - 0 fingers (fist) = backward  
@@ -48,6 +57,7 @@ class HandGestureController:
         self.show_debug = show_debug
         self.enabled = False
         self.cap = None
+        self.camera_handler = None
         self.mp_hands = None
         self.hands = None
         self.mp_draw = None
@@ -58,20 +68,40 @@ class HandGestureController:
             return
             
         try:
-            print(f"[HandGestureController] 📷 Initializing camera {camera_index}...")
-            self.cap = cv2.VideoCapture(camera_index)
+            print(f"[HandGestureController] 📷 Initializing camera system...")
             
-            if not self.cap.isOpened():
-                print(f"[HandGestureController] ❌ Camera {camera_index} not available.")
-                return
+            # Try to use CameraHandler first (supports Sony IMX500 AI Camera)
+            if CAMERA_HANDLER_AVAILABLE:
+                print("[HandGestureController] 🤖 Using CameraHandler (Sony IMX500 AI Camera support)")
+                self.camera_handler = CameraHandler(camera_index=camera_index, prefer_imx500=True)
                 
-            # Set camera properties for better performance
-            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-            self.cap.set(cv2.CAP_PROP_FPS, 30)
-            
-            self.enabled = True
-            print(f"[HandGestureController] ✅ Camera {camera_index} initialized")
+                if self.camera_handler.is_camera_available():
+                    self.enabled = True
+                    camera_status = self.camera_handler.get_ai_status()
+                    camera_type = "Sony IMX500 AI" if self.camera_handler.using_imx500 else "USB"
+                    print(f"[HandGestureController] ✅ {camera_type} Camera initialized")
+                    
+                    if self.camera_handler.using_imx500:
+                        print("[HandGestureController] 🎯 AI Camera features available")
+                else:
+                    print("[HandGestureController] ❌ CameraHandler failed to initialize")
+                    return
+            else:
+                # Fallback to direct OpenCV access
+                print("[HandGestureController] 📷 Using direct OpenCV camera access")
+                self.cap = cv2.VideoCapture(camera_index)
+                
+                if not self.cap.isOpened():
+                    print(f"[HandGestureController] ❌ Camera {camera_index} not available.")
+                    return
+                    
+                # Set camera properties for better performance
+                self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+                self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+                self.cap.set(cv2.CAP_PROP_FPS, 30)
+                
+                self.enabled = True
+                print(f"[HandGestureController] ✅ OpenCV Camera {camera_index} initialized")
             
         except Exception as e:
             print(f"[HandGestureController] ❌ Camera initialization failed: {e}")
@@ -189,12 +219,17 @@ class HandGestureController:
 
     def get_gesture(self):
         """Get current gesture from camera feed"""
-        if not self.enabled or not self.cap:
+        if not self.enabled:
             return None
             
         try:
-            ret, frame = self.cap.read()
-            if not ret:
+            # Read frame from camera handler or direct OpenCV
+            if self.camera_handler:
+                ret, frame = self.camera_handler.read()
+            else:
+                ret, frame = self.cap.read()
+                
+            if not ret or frame is None:
                 return None
                 
             # Flip frame horizontally for mirror effect
@@ -231,6 +266,11 @@ class HandGestureController:
                 if action:
                     cv2.putText(frame, f"Action: {action}", (10, 70), 
                                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                
+                # Add camera type info
+                camera_type = "Sony IMX500 AI" if (self.camera_handler and self.camera_handler.using_imx500) else "USB/OpenCV"
+                cv2.putText(frame, f"Camera: {camera_type}", (10, frame.shape[0] - 50), 
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 1)
                 
                 cv2.imshow('Hand Gesture Detection', frame)
                 cv2.waitKey(1)
@@ -272,8 +312,13 @@ class HandGestureController:
         
         try:
             while time.time() - start_time < duration:
-                ret, frame = self.cap.read()
-                if not ret:
+                # Read frame from camera handler or direct OpenCV
+                if self.camera_handler:
+                    ret, frame = self.camera_handler.read()
+                else:
+                    ret, frame = self.cap.read()
+                    
+                if not ret or frame is None:
                     continue
                     
                 frame = cv2.flip(frame, 1)
@@ -302,7 +347,10 @@ class HandGestureController:
                                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
                     print(f"🖐️ Detected: {finger_count} fingers → {action.upper()}")
                 
-                # Add instructions
+                # Add camera type and instructions
+                camera_type = "Sony IMX500 AI" if (self.camera_handler and self.camera_handler.using_imx500) else "USB/OpenCV"
+                cv2.putText(frame, f"Camera: {camera_type}", (10, frame.shape[0] - 50), 
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 1)
                 cv2.putText(frame, "Press 'q' to quit", (10, frame.shape[0] - 20), 
                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
                 
@@ -322,8 +370,12 @@ class HandGestureController:
     def release(self):
         """Release camera and cleanup resources"""
         try:
-            if self.cap:
+            if self.camera_handler:
+                self.camera_handler.release()
+                self.camera_handler = None
+            elif self.cap:
                 self.cap.release()
+                self.cap = None
             cv2.destroyAllWindows()
             print("[HandGestureController] 📷 Camera released")
         except Exception as e:
@@ -333,6 +385,8 @@ class HandGestureController:
         """Get current status of gesture controller"""
         if not self.enabled:
             return "Gesture controller disabled"
+        elif self.camera_handler and self.camera_handler.using_imx500:
+            return "Sony IMX500 AI Camera with MediaPipe gesture detection" if self.use_mediapipe else "Sony IMX500 AI Camera with OpenCV gesture detection"
         elif self.use_mediapipe:
             return "MediaPipe gesture detection active"
         else:

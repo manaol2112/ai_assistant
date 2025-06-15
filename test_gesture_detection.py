@@ -50,11 +50,42 @@ def check_dependencies():
     return True, mediapipe_available
 
 def check_camera():
-    """Check if camera is available"""
+    """Check if camera is available using CameraHandler (Sony IMX500 AI Camera support)"""
     print("\n📷 Checking camera availability...")
     
     try:
+        # First try CameraHandler (supports Sony IMX500 AI Camera)
+        try:
+            from camera_handler import CameraHandler
+            print("🤖 Testing CameraHandler (Sony IMX500 AI Camera support)...")
+            
+            camera_handler = CameraHandler(camera_index=0, prefer_imx500=True)
+            
+            if camera_handler.is_camera_available():
+                # Test reading a frame
+                ret, frame = camera_handler.read()
+                if ret and frame is not None:
+                    camera_type = "Sony IMX500 AI" if camera_handler.using_imx500 else "USB"
+                    print(f"✅ {camera_type} Camera working via CameraHandler - Resolution: {frame.shape[1]}x{frame.shape[0]}")
+                    
+                    # Get AI status if available
+                    ai_status = camera_handler.get_ai_status()
+                    if ai_status.get('ai_enabled', False):
+                        print("🎯 AI features available")
+                    
+                    camera_handler.release()
+                    return 0  # Return 0 as camera index for compatibility
+                else:
+                    print("⚠️ CameraHandler opened but no frame")
+            else:
+                print("❌ CameraHandler failed to initialize")
+                
+        except ImportError:
+            print("⚠️ CameraHandler not available, trying direct OpenCV access...")
+        
+        # Fallback to direct OpenCV camera access
         import cv2
+        print("📷 Testing direct OpenCV camera access...")
         
         # Try different camera indices
         for i in range(3):
@@ -62,11 +93,11 @@ def check_camera():
             if cap.isOpened():
                 ret, frame = cap.read()
                 if ret:
-                    print(f"✅ Camera {i} working - Resolution: {frame.shape[1]}x{frame.shape[0]}")
+                    print(f"✅ OpenCV Camera {i} working - Resolution: {frame.shape[1]}x{frame.shape[0]}")
                     cap.release()
                     return i
                 else:
-                    print(f"⚠️ Camera {i} opened but no frame")
+                    print(f"⚠️ OpenCV Camera {i} opened but no frame")
             cap.release()
         
         print("❌ No working camera found")
