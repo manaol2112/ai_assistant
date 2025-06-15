@@ -1756,6 +1756,30 @@ class AIAssistant:
             
             return self.start_voice_triggered_gesture_control(character, target_user)
         
+        # NEW: Direct voice movement commands (work immediately without gesture control)
+        direct_movement_phrases = {
+            'forward': ['hey robot go forward', 'hey robot move forward', 'robot go forward', 'robot move forward', 
+                       'go forward', 'move forward', 'forward', 'hey dino go forward', 'hey miley go forward',
+                       'dino go forward', 'miley go forward', 'dino move forward', 'miley move forward'],
+            'backward': ['hey robot go backward', 'hey robot go backwards', 'hey robot move backward', 'robot go backward', 
+                        'robot go backwards', 'robot move backward', 'go backward', 'go backwards', 'move backward', 
+                        'backward', 'backwards', 'hey dino go backward', 'hey miley go backward',
+                        'dino go backward', 'miley go backward', 'dino move backward', 'miley move backward'],
+            'left': ['hey robot go left', 'hey robot turn left', 'robot go left', 'robot turn left', 
+                    'go left', 'turn left', 'left', 'hey dino go left', 'hey miley go left',
+                    'dino go left', 'miley go left', 'dino turn left', 'miley turn left'],
+            'right': ['hey robot go right', 'hey robot turn right', 'robot go right', 'robot turn right', 
+                     'go right', 'turn right', 'right', 'hey dino go right', 'hey miley go right',
+                     'dino go right', 'miley go right', 'dino turn right', 'miley turn right'],
+            'stop': ['hey robot stop', 'robot stop', 'stop', 'stop moving', 'halt', 
+                    'hey dino stop', 'hey miley stop', 'dino stop', 'miley stop']
+        }
+        
+        # Check for direct movement commands
+        for action, phrases in direct_movement_phrases.items():
+            if any(phrase in user_input_lower for phrase in phrases):
+                return self.handle_direct_movement_command(action, user)
+        
         # Parent-specific admin commands
         if user == 'parent':
             if any(phrase in user_input_lower for phrase in ['status report', 'system status', 'report']):
@@ -2115,6 +2139,15 @@ class AIAssistant:
 • ☝️ 1 finger = Strike a pose and stop!
 • Perfect for interactive play and motor control! 🎵🎮
 
+🎤 DIRECT VOICE ROBOT CONTROL (NEW!):
+• Say "Hey Miley go forward" - Instant movement without gestures! 🚀
+• Say "Hey Miley go backward" - Graceful reverse moves! ⬅️
+• Say "Hey Miley go left" - Spin left like a dance move! ↪️
+• Say "Hey Miley go right" - Twirl right with flair! ↩️
+• Say "Hey Miley stop" - Strike the perfect pose! 🛑
+• Also works with: "Miley move forward", "go left", "turn right", etc.
+• TWO WAYS TO CONTROL: Voice commands OR hand gestures - your choice! 🎵✨
+
 Ask me anything, show me any object, or play any of the games to practice your skills!"""
         
         elif user == 'eladriel':
@@ -2239,6 +2272,15 @@ Ask me anything, show me any object, or play any of the games to practice your s
 • ☝️ 1 finger = Stop and rest like a sleeping Brontosaurus!
 • Perfect for prehistoric adventures and motor control! 🦕🎮
 
+🦕 DIRECT VOICE DINO CONTROL (NEW!):
+• Say "Hey Dino go forward" - Charge like a T-Rex instantly! 🦕🚀
+• Say "Hey Dino go backward" - Step back like a careful Triceratops! ⬅️
+• Say "Hey Dino go left" - Turn left like a hunting Velociraptor! ↪️
+• Say "Hey Dino go right" - Turn right like a swift Compsognathus! ↩️
+• Say "Hey Dino stop" - Rest like a sleeping Brontosaurus! 🛑
+• Also works with: "Dino move forward", "go left", "turn right", etc.
+• TWO WAYS TO CONTROL: Voice commands OR hand gestures - roar your choice! 🦕✨
+
 What do you want to explore today? Show me anything you've discovered, or let's practice with games! 🚀"""
         
         elif user == 'parent':
@@ -2264,6 +2306,16 @@ What do you want to explore today? Show me anything you've discovered, or let's 
   • ☝️ 1 finger = Stop and hold position
 • Professional operation mode with precise movement commands
 • Perfect for testing motor control and gesture recognition systems
+
+🤖 DIRECT VOICE ROBOT CONTROL (NEW!):
+• Say "Hey Robot go forward" - Instant forward movement! 🚀
+• Say "Hey Robot go backward" - Smooth reverse operation! ⬅️
+• Say "Hey Robot go left" - Precise left turn! ↪️
+• Say "Hey Robot go right" - Accurate right turn! ↩️
+• Say "Hey Robot stop" - Immediate stop command! 🛑
+• Also works with: "Robot move forward", "go left", "turn right", etc.
+• TWO CONTROL METHODS: Direct voice commands OR hand gestures
+• Perfect for testing both voice recognition and motor control systems! 🤖✨
 
 🔍 OBJECT IDENTIFICATION:
 • Same advanced object identification as the kids
@@ -4061,6 +4113,83 @@ add musical rhythm. Make this sound like singing, not talking!]"""
             print(f"✅ {character} cleanup completed.")
         
         return f"{character} gesture control session completed!"
+
+    def handle_direct_movement_command(self, action: str, user: str) -> str:
+        """Handle direct voice movement commands without gesture control."""
+        import platform
+        
+        # Check if motor control is available
+        if MotorController is None:
+            return "⚠️ Sorry! Motor control isn't available right now."
+        
+        # Flexible platform check - allow any Linux system
+        if platform.system() != 'Linux':
+            return "⚠️ Robot movement requires Linux system!"
+        
+        # Initialize motor controller if not already done
+        if not hasattr(self, 'motor') or self.motor is None:
+            try:
+                print("🤖 Initializing motor controller for direct movement...")
+                self.motor = MotorController()
+                if not self.motor.enabled:
+                    return "⚠️ Motor hardware not available right now."
+            except Exception as e:
+                print(f"❌ Motor initialization failed: {e}")
+                return f"Sorry, motor control isn't working: {e}"
+        
+        # Determine character based on user
+        character_responses = {
+            'eladriel': {
+                'forward': "🦕 Dino charging forward like a T-Rex!",
+                'backward': "🦕 Dino stepping back carefully!",
+                'left': "🦕 Dino turning left like a hunting Velociraptor!",
+                'right': "🦕 Dino turning right like a swift Compsognathus!",
+                'stop': "🦕 Dino stopping and standing guard!"
+            },
+            'sophia': {
+                'forward': "🎤 Miley moving forward with pop star confidence!",
+                'backward': "🎤 Miley gracefully stepping backward!",
+                'left': "🎤 Miley spinning left like a dance move!",
+                'right': "🎤 Miley twirling right with flair!",
+                'stop': "🎤 Miley stopping for the perfect pose!"
+            },
+            'parent': {
+                'forward': "🤖 Robot moving forward efficiently!",
+                'backward': "🤖 Robot reversing smoothly!",
+                'left': "🤖 Robot turning left precisely!",
+                'right': "🤖 Robot turning right accurately!",
+                'stop': "🤖 Robot stopped and ready!"
+            }
+        }
+        
+        # Get appropriate response for user
+        responses = character_responses.get(user, character_responses['parent'])
+        response_message = responses.get(action, f"🤖 Robot executing {action} command!")
+        
+        try:
+            # Execute the movement command with a reasonable duration (2 seconds)
+            print(f"🎯 Executing direct movement: {action.upper()}")
+            
+            if action == 'forward':
+                self.motor.forward(2.0)  # Move forward for 2 seconds
+            elif action == 'backward':
+                self.motor.backward(2.0)  # Move backward for 2 seconds
+            elif action == 'left':
+                self.motor.left(1.5)  # Turn left for 1.5 seconds
+            elif action == 'right':
+                self.motor.right(1.5)  # Turn right for 1.5 seconds
+            elif action == 'stop':
+                self.motor.stop()  # Stop immediately
+                
+            # Visual feedback
+            if self.visual:
+                self.visual.show_thinking(f"Moving {action}")
+            
+            return response_message
+            
+        except Exception as e:
+            print(f"❌ Movement command failed: {e}")
+            return f"Sorry, I couldn't move {action}. There might be a hardware issue."
 
 if __name__ == "__main__":
     assistant = AIAssistant()
