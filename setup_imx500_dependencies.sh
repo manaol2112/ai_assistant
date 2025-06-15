@@ -18,15 +18,20 @@ sudo apt install -y \
     libcamera-tools \
     python3-libcamera \
     python3-kms++ \
-    python3-prctl \
-    python3-pidng
+    python3-prctl
 
-# Install additional camera tools
+# Install additional camera and video tools
 echo "🔧 Installing additional camera tools..."
 sudo apt install -y \
     v4l-utils \
-    media-ctl \
-    libcamera-v4l2
+    libcamera0
+
+# Optional: Install additional development tools if available
+echo "🔧 Installing optional development tools..."
+sudo apt install -y \
+    cmake \
+    build-essential \
+    pkg-config || echo "⚠️ Some development tools not available"
 
 # Check if libcamera is working
 echo "🧪 Testing libcamera installation..."
@@ -49,6 +54,14 @@ if [ -d "/usr/share/imx500-models" ]; then
 else
     echo "⚠️ IMX500 models directory not found"
     echo "   You may need to install Sony AITRIOS SDK for AI models"
+fi
+
+# Check for camera devices
+echo "🔍 Checking camera devices..."
+if [ -e "/dev/video0" ]; then
+    echo "✅ Camera device /dev/video0 found"
+else
+    echo "⚠️ No camera device found at /dev/video0"
 fi
 
 # Set proper permissions
