@@ -59,7 +59,7 @@ class SimpleRobotEyes:
         self.listening_timer = 0
         
         # Eye configuration - Large circular eyes (OPTIMIZED FOR FULLSCREEN)
-        self.eye_distance = size * 1.4         # Distance between eye centers (OPTIMIZED)
+        self.eye_distance = size * 2.0         # Distance between eye centers (WIDER SPACING)
         self.eye_radius = size // 2.2          # Main eye radius (BIGGER FOR FULLSCREEN)
         self.pupil_radius = size // 4.5        # Pupil radius (SCALED)
         self.iris_radius = size // 3.2         # Iris radius (SCALED)
