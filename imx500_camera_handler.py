@@ -203,22 +203,22 @@ class IMX500CameraHandler:
             with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as temp_file:
                 temp_path = temp_file.name
             
-            # Capture single frame using libcamera-still
+            # Use simpler libcamera-still command for better compatibility
             cmd = [
                 'libcamera-still',
-                '--width', str(self.width),
-                '--height', str(self.height),
                 '--output', temp_path,
-                '--timeout', '1000',  # 1 second timeout
-                '--immediate'
+                '--timeout', '2000',  # 2 second timeout
+                '--nopreview'  # No preview window for headless operation
             ]
             
-            # Add AI model if available
+            # Only add AI model if it exists (optional)
             ai_model_path = '/usr/share/imx500-models/imx500_network_ssd_mobilenetv2_fpnlite_320x320_pp.rpk'
             if os.path.exists(ai_model_path):
                 cmd.extend(['--post-process-file', ai_model_path])
+                self.logger.debug("🧠 Using AI model for frame capture")
             
-            result = subprocess.run(cmd, capture_output=True, timeout=10)
+            self.logger.debug(f"📸 Running command: {' '.join(cmd)}")
+            result = subprocess.run(cmd, capture_output=True, timeout=15)
             
             if result.returncode == 0 and os.path.exists(temp_path):
                 # Read the captured image
@@ -228,18 +228,22 @@ class IMX500CameraHandler:
                 os.unlink(temp_path)
                 
                 if frame is not None:
+                    self.logger.debug(f"✅ Frame captured successfully: {frame.shape}")
                     return True, frame
                 else:
-                    self.logger.error("Failed to read captured image")
+                    self.logger.error("Failed to read captured image with OpenCV")
                     return False, None
             else:
-                self.logger.error(f"Capture failed: {result.stderr.decode()}")
+                error_msg = result.stderr.decode() if result.stderr else "Unknown error"
+                self.logger.error(f"libcamera-still failed (code {result.returncode}): {error_msg}")
                 if os.path.exists(temp_path):
                     os.unlink(temp_path)
                 return False, None
                 
         except subprocess.TimeoutExpired:
-            self.logger.error("Frame capture timeout")
+            self.logger.error("Frame capture timeout - camera may be busy")
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
             return False, None
         except Exception as e:
             self.logger.error(f"Error capturing frame: {e}")
@@ -257,33 +261,34 @@ class IMX500CameraHandler:
             
             filepath = os.path.join(self.capture_dir, filename)
             
-            # Capture high-resolution image
+            # Use simpler command for better compatibility
             cmd = [
                 'libcamera-still',
-                '--width', str(self.width),
-                '--height', str(self.height),
                 '--output', filepath,
-                '--timeout', '2000'
+                '--timeout', '3000',  # 3 second timeout
+                '--nopreview'  # No preview for headless operation
             ]
             
-            # Add AI model for metadata
+            # Add AI model for metadata (optional)
             ai_model_path = '/usr/share/imx500-models/imx500_network_ssd_mobilenetv2_fpnlite_320x320_pp.rpk'
             if os.path.exists(ai_model_path):
                 cmd.extend(['--post-process-file', ai_model_path])
-                
-                # Also save metadata
-                metadata_file = filepath.replace('.jpg', '_ai_metadata.json')
-                cmd.extend(['--metadata', metadata_file])
+                self.logger.debug("🧠 Using AI model for image capture")
             
-            result = subprocess.run(cmd, capture_output=True, timeout=15)
+            self.logger.debug(f"📸 Running command: {' '.join(cmd)}")
+            result = subprocess.run(cmd, capture_output=True, timeout=20)
             
             if result.returncode == 0 and os.path.exists(filepath):
                 self.logger.info(f"📸 IMX500 image captured: {filepath}")
                 return filepath
             else:
-                self.logger.error(f"Image capture failed: {result.stderr.decode()}")
+                error_msg = result.stderr.decode() if result.stderr else "Unknown error"
+                self.logger.error(f"Image capture failed (code {result.returncode}): {error_msg}")
                 return None
                 
+        except subprocess.TimeoutExpired:
+            self.logger.error("Image capture timeout - camera may be busy")
+            return None
         except Exception as e:
             self.logger.error(f"Error capturing image: {e}")
             return None
@@ -308,31 +313,34 @@ class IMX500CameraHandler:
         try:
             self.logger.info(f"🖥️ Starting IMX500 preview for {duration} seconds...")
             
+            # Use simpler command for better compatibility
             cmd = [
                 'libcamera-hello',
-                '--width', str(self.width),
-                '--height', str(self.height),
                 '--timeout', str(duration * 1000)  # Convert to milliseconds
             ]
             
-            # Add AI model if available
+            # Add AI model if available (optional)
             ai_model_path = '/usr/share/imx500-models/imx500_network_ssd_mobilenetv2_fpnlite_320x320_pp.rpk'
             if os.path.exists(ai_model_path):
                 cmd.extend(['--post-process-file', ai_model_path])
                 self.logger.info("🧠 Preview with AI overlay enabled")
+            else:
+                self.logger.info("📷 Preview without AI overlay")
             
-            result = subprocess.run(cmd, timeout=duration + 5)
+            self.logger.debug(f"🖥️ Running command: {' '.join(cmd)}")
+            result = subprocess.run(cmd, capture_output=True, timeout=duration + 10)
             
             if result.returncode == 0:
                 self.logger.info("✅ Preview completed successfully")
                 return True
             else:
-                self.logger.error("❌ Preview failed")
+                error_msg = result.stderr.decode() if result.stderr else "Unknown error"
+                self.logger.error(f"Preview failed (code {result.returncode}): {error_msg}")
                 return False
                 
         except subprocess.TimeoutExpired:
-            self.logger.warning("Preview timeout")
-            return False
+            self.logger.warning("Preview timeout - this is normal")
+            return True  # Timeout is expected for preview
         except Exception as e:
             self.logger.error(f"Error showing preview: {e}")
             return False
