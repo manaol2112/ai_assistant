@@ -1795,7 +1795,10 @@ class AIAssistant:
         gesture_trigger_phrases = [
             'hey dino come', 'hey miley come', 'dino come', 'miley come',
             'come here dino', 'come here miley', 'come to me dino', 'come to me miley',
-            'dino come here', 'miley come here'
+            'dino come here', 'miley come here',
+            # Parent commands
+            'hey robot come', 'robot come', 'come here robot', 'robot come here',
+            'activate robot', 'start robot', 'robot control', 'gesture robot'
         ]
         
         if any(phrase in user_input_lower for phrase in gesture_trigger_phrases):
@@ -1806,6 +1809,9 @@ class AIAssistant:
             elif any(word in user_input_lower for word in ['miley']):
                 character = 'Miley'
                 target_user = 'sophia'
+            elif any(word in user_input_lower for word in ['robot']) or user == 'parent':
+                character = 'Assistant Robot'
+                target_user = 'parent'
             else:
                 character = 'Robot'
                 target_user = user
@@ -2309,6 +2315,17 @@ What do you want to explore today? Show me anything you've discovered, or let's 
 • "Check on kids" - Review recent activity and interactions
 • Face recognition shows when children are detected
 • Conversation logs available for review
+
+🤖 GESTURE CONTROL & VOICE-CONTROLLED ROBOT:
+• Say "Hey Robot Come", "Robot Come", or "Activate Robot" to trigger gesture control
+• Control the robot with hand gestures for 30 seconds:
+  • ✋ 5 fingers = Move forward with precision
+  • ✌️ 2 fingers = Move backward smoothly  
+  • 🤟 3 fingers = Turn right efficiently
+  • 🤘 4 fingers = Turn left precisely
+  • ☝️ 1 finger = Stop and hold position
+• Professional operation mode with precise movement commands
+• Perfect for testing motor control and gesture recognition systems
 
 🔍 OBJECT IDENTIFICATION:
 • Same advanced object identification as the kids
@@ -4000,6 +4017,16 @@ add musical rhythm. Make this sound like singing, not talking!]"""
             response += "   ☝️ 1 finger = Strike a pose and stop!\n"
             response += "\n🎵 Miley-bot is ready to perform for 30 seconds! Let's dance!"
             
+        elif character == 'Assistant Robot':
+            response = f"🤖 Assistant Robot activated and ready for professional operation! 🔧\n\n"
+            response += "🤖 PROFESSIONAL ROBOT CONTROLS:\n"
+            response += "   🖐️ 5 fingers = Move forward with precision\n"
+            response += "   ✊ Fist = Reverse with control\n"
+            response += "   ✌️ 2 fingers = Execute left turn\n"
+            response += "   🤟 3 fingers = Execute right turn\n"
+            response += "   ☝️ 1 finger = Emergency stop\n"
+            response += "\n🤖 Professional robot control active for 30 seconds. Gesture commands ready!"
+            
         else:
             response = f"🤖 {character} robot responding to your call! Ready for gesture control!\n\n"
             response += "🤖 ROBOT COMMANDS:\n"
@@ -4063,6 +4090,14 @@ add musical rhythm. Make this sound like singing, not talking!]"""
                             'right': "🎵 Twirling right with flair!",
                             'stop': "🎵 Strike a pose!"
                         }
+                    elif character == 'Assistant Robot':
+                        action_messages = {
+                            'forward': "🤖 Moving forward with precision!",
+                            'backward': "🤖 Moving backward with control!",
+                            'left': "🤖 Turning left!",
+                            'right': "🤖 Turning right!",
+                            'stop': "🤖 Stopping!"
+                        }
                     else:
                         action_messages = {
                             'forward': f"🤖 {character} moving forward!",
@@ -4103,6 +4138,8 @@ add musical rhythm. Make this sound like singing, not talking!]"""
                 end_message = "🦕 Dino had a roar-some time! Call 'Hey Dino Come' anytime for more prehistoric adventures!"
             elif character == 'Miley':
                 end_message = "🎵 That was an amazing performance, Sophia! Say 'Hey Miley Come' whenever you want to dance again!"
+            elif character == 'Assistant Robot':
+                end_message = "🤖 Professional robot session complete! Call again anytime!"
             else:
                 end_message = f"🤖 {character} robot session complete! Call again anytime!"
             
