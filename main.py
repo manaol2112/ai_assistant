@@ -3935,62 +3935,19 @@ add musical rhythm. Make this sound like singing, not talking!]"""
             response = f"🤖 {character} is already responding to gestures!"
             return response
         
-        # Personalized responses based on character
-        if character == 'Dino':
-            response = f"🦕 ROAR! Dino is coming, Eladriel! Show me your hand gestures to control my dino-robot! 🤖\n\n"
-            response += "🦕 DINO GESTURE COMMANDS:\n"
-            response += "   🖐️ 5 fingers = Charge forward like a T-Rex!\n"
-            response += "   ✊ Fist = Back up like a careful Triceratops!\n" 
-            response += "   ✌️ 2 fingers = Turn left like a hunting Velociraptor!\n"
-            response += "   🤟 3 fingers = Turn right like a swift Compsognathus!\n"
-            response += "   ☝️ 1 finger = Stop and rest like a sleeping Brontosaurus!\n"
-            response += "\n🦕 Dino-robot activated for 30 seconds! Show me those prehistoric gestures!"
-            
-        elif character == 'Miley':
-            response = f"🎵 Hey Sophia! Miley is here and ready to dance with your gestures! 🤖✨\n\n"
-            response += "🎵 MILEY'S DANCE MOVES:\n"
-            response += "   🖐️ 5 fingers = Dance forward with style!\n"
-            response += "   ✊ Fist = Graceful step backward!\n"
-            response += "   ✌️ 2 fingers = Spin left like a pop star!\n"
-            response += "   🤟 3 fingers = Twirl right with flair!\n"
-            response += "   ☝️ 1 finger = Strike a pose and stop!\n"
-            response += "\n🎵 Miley-bot is ready to perform for 30 seconds! Let's dance!"
-            
-        elif character == 'Assistant Robot':
-            response = f"🤖 Assistant Robot activated and ready for professional operation! 🔧\n\n"
-            response += "🤖 PROFESSIONAL ROBOT CONTROLS:\n"
-            response += "   🖐️ 5 fingers = Move forward with precision\n"
-            response += "   ✊ Fist = Reverse with control\n"
-            response += "   ✌️ 2 fingers = Execute left turn\n"
-            response += "   🤟 3 fingers = Execute right turn\n"
-            response += "   ☝️ 1 finger = Emergency stop\n"
-            response += "\n🤖 Professional robot control active for 30 seconds. Gesture commands ready!"
-            
-        else:
-            response = f"🤖 {character} robot responding to your call! Ready for gesture control!\n\n"
-            response += "🤖 ROBOT COMMANDS:\n"
-            response += "   🖐️ 5 fingers = Move forward\n"
-            response += "   ✊ Fist = Move backward\n"
-            response += "   ✌️ 2 fingers = Turn left\n"
-            response += "   🤟 3 fingers = Turn right\n"
-            response += "   ☝️ 1 finger = Stop\n"
-            response += "\n🤖 Robot activated for 30 seconds!"
+        # Simple response - just ask where to go
+        response = "Where do you want me to go?"
         
-        # Speak the response first
+        # Speak the simple response
         self.speak(response, target_user)
         
-        # Initialize hardware
+        # Initialize hardware with Arduino serial support
         try:
             print(f"🤖 Initializing {character}'s motor and gesture controllers...")
             self.motor = MotorController()
             self.gesture = HandGestureController()
             
-            if not self.gesture.enabled or not self.motor.enabled:
-                error_response = f"⚠️ {character}'s hardware isn't ready right now!"
-                if self.visual:
-                    self.visual.show_error("Gesture/motor hardware not enabled.")
-                return error_response
-            
+            # Don't check enabled status - let Arduino handle hardware
             if self.visual:
                 self.visual.show_happy(f"{character} gesture control started!")
             
@@ -4013,40 +3970,16 @@ add musical rhythm. Make this sound like singing, not talking!]"""
                 gesture_count += 1
                 
                 if action:
-                    if character == 'Dino':
-                        action_messages = {
-                            'forward': "🦕 ROAR! Dino charges forward!",
-                            'backward': "🦕 Careful steps backward!",
-                            'left': "🦕 Hunting turn to the left!",
-                            'right': "🦕 Swift turn to the right!",
-                            'stop': "🦕 Dino rests peacefully!"
-                        }
-                    elif character == 'Miley':
-                        action_messages = {
-                            'forward': "🎵 Dancing forward with style!",
-                            'backward': "🎵 Graceful step back!",
-                            'left': "🎵 Spinning left like a star!",
-                            'right': "🎵 Twirling right with flair!",
-                            'stop': "🎵 Strike a pose!"
-                        }
-                    elif character == 'Assistant Robot':
-                        action_messages = {
-                            'forward': "🤖 Moving forward with precision!",
-                            'backward': "🤖 Moving backward with control!",
-                            'left': "🤖 Turning left!",
-                            'right': "🤖 Turning right!",
-                            'stop': "🤖 Stopping!"
-                        }
-                    else:
-                        action_messages = {
-                            'forward': f"🤖 {character} moving forward!",
-                            'backward': f"🤖 {character} moving backward!",
-                            'left': f"🤖 {character} turning left!",
-                            'right': f"🤖 {character} turning right!",
-                            'stop': f"🤖 {character} stopping!"
-                        }
+                    # Simple action messages
+                    action_messages = {
+                        'forward': "Moving forward!",
+                        'backward': "Moving backward!",
+                        'left': "Turning left!",
+                        'right': "Turning right!",
+                        'stop': "Stopping!"
+                    }
                     
-                    message = action_messages.get(action, f"❓ {character} doesn't understand that gesture!")
+                    message = action_messages.get(action, "Unknown gesture!")
                     print(f"✅ {message}")
                     
                     if self.visual:
@@ -4072,16 +4005,8 @@ add musical rhythm. Make this sound like singing, not talking!]"""
                 # Small delay to prevent overwhelming the system
                 time.sleep(0.5)
             
-            # End session message
-            if character == 'Dino':
-                end_message = "🦕 Dino had a roar-some time! Call 'Hey Dino Come' anytime for more prehistoric adventures!"
-            elif character == 'Miley':
-                end_message = "🎵 That was an amazing performance, Sophia! Say 'Hey Miley Come' whenever you want to dance again!"
-            elif character == 'Assistant Robot':
-                end_message = "🤖 Professional robot session complete! Call again anytime!"
-            else:
-                end_message = f"🤖 {character} robot session complete! Call again anytime!"
-            
+            # Simple end message
+            end_message = "Gesture control complete!"
             print(f"⏰ {end_message}")
             self.speak(end_message, target_user)
                     
