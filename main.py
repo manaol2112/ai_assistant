@@ -1791,6 +1791,27 @@ class AIAssistant:
         """Handle special commands for each user."""
         user_input_lower = user_input.lower()
         
+        # NEW: Voice-triggered gesture control commands
+        gesture_trigger_phrases = [
+            'hey dino come', 'hey miley come', 'dino come', 'miley come',
+            'come here dino', 'come here miley', 'come to me dino', 'come to me miley',
+            'dino come here', 'miley come here'
+        ]
+        
+        if any(phrase in user_input_lower for phrase in gesture_trigger_phrases):
+            # Determine which character was called
+            if any(word in user_input_lower for word in ['dino', 'dinosaur']):
+                character = 'Dino'
+                target_user = 'eladriel'
+            elif any(word in user_input_lower for word in ['miley']):
+                character = 'Miley'
+                target_user = 'sophia'
+            else:
+                character = 'Robot'
+                target_user = user
+            
+            return self.start_voice_triggered_gesture_control(character, target_user)
+        
         # Parent-specific admin commands
         if user == 'parent':
             if any(phrase in user_input_lower for phrase in ['status report', 'system status', 'report']):
@@ -1970,7 +1991,7 @@ class AIAssistant:
         if any(phrase in user_input_lower for phrase in ['help', 'what can you do', 'commands']):
             return self.get_help_message(user)
         
-        # Add gesture control command
+        # Manual gesture control command (keep as backup)
         if any(phrase in user_input_lower for phrase in ['gesture control', 'hand control', 'hand gesture']):
             return self.start_gesture_motor_control()
         
@@ -2139,6 +2160,17 @@ class AIAssistant:
 • Or say "gesture control" to start manually
 • Perfect for controlling robots and motors! 🎮
 
+🎵 VOICE-CONTROLLED ROBOT (NEW!):
+• Say "Hey Miley Come" to call your personal robot assistant! 🤖✨
+• Miley-bot will respond with dance moves and personality!
+• Control with hand gestures for 30 seconds of fun
+• 🖐️ 5 fingers = Dance forward with style!
+• ✊ Fist = Graceful step backward!
+• ✌️ 2 fingers = Spin left like a pop star!
+• 🤟 3 fingers = Twirl right with flair!
+• ☝️ 1 finger = Strike a pose and stop!
+• Perfect for interactive play and motor control! 🎵🎮
+
 Ask me anything, show me any object, or play any of the games to practice your skills!"""
         
         elif user == 'eladriel':
@@ -2243,6 +2275,25 @@ Ask me anything, show me any object, or play any of the games to practice your s
 • I play a gentle tone when I'm done talking
 • Say "turn off sounds" to disable audio cues
 • Say "turn on sounds" to re-enable them
+
+🤖 DINO-GESTURE CONTROL (NEW - TESTING MODE!):
+• AUTO-TRIGGER: Show me a hand gesture when I see your face! 🦕🖐️
+• I'll automatically detect gestures and start dino-robot control!
+• 5 fingers = Forward (like a charging T-Rex!), Fist = Backward
+• 2 fingers = Left turn, 3 fingers = Right turn, 1 finger = Stop
+• Or roar "gesture control" to start manually
+• Control your robot dinosaur adventures! 🦕🎮
+
+🦕 VOICE-CONTROLLED DINO-ROBOT (NEW!):
+• Say "Hey Dino Come" to call your prehistoric robot companion! 🦕🤖
+• Dino-bot will respond with roars and dinosaur personality!
+• Control with hand gestures for 30 seconds of dino-adventures!
+• 🖐️ 5 fingers = Charge forward like a T-Rex!
+• ✊ Fist = Back up like a careful Triceratops!
+• ✌️ 2 fingers = Turn left like a hunting Velociraptor!
+• 🤟 3 fingers = Turn right like a swift Compsognathus!
+• ☝️ 1 finger = Stop and rest like a sleeping Brontosaurus!
+• Perfect for prehistoric adventures and motor control! 🦕🎮
 
 What do you want to explore today? Show me anything you've discovered, or let's practice with games! 🚀"""
         
@@ -3905,6 +3956,177 @@ add musical rhythm. Make this sound like singing, not talking!]"""
             self.gesture_stop_event.set()
             self.gesture_control_thread = None
             self.gesture_control_active = False
+
+    def start_voice_triggered_gesture_control(self, character: str, target_user: str):
+        """Start gesture control triggered by voice commands like 'Hey Dino Come' or 'Hey Miley Come'."""
+        import platform
+        import time
+        
+        if MotorController is None or HandGestureController is None:
+            response = f"⚠️ Sorry! {character}'s motor control isn't available right now."
+            if self.visual:
+                self.visual.show_error("Gesture/motor control not available.")
+            return response
+            
+        if not (platform.system() == 'Linux' and 'arm' in platform.machine()):
+            response = f"⚠️ {character} can only move on Raspberry Pi 5!"
+            if self.visual:
+                self.visual.show_error("Not on Pi 5. Gesture control disabled.")
+            return response
+        
+        # Check if already active
+        if self.gesture_control_active:
+            response = f"🤖 {character} is already responding to gestures!"
+            return response
+        
+        # Personalized responses based on character
+        if character == 'Dino':
+            response = f"🦕 ROAR! Dino is coming, Eladriel! Show me your hand gestures to control my dino-robot! 🤖\n\n"
+            response += "🦕 DINO GESTURE COMMANDS:\n"
+            response += "   🖐️ 5 fingers = Charge forward like a T-Rex!\n"
+            response += "   ✊ Fist = Back up like a careful Triceratops!\n" 
+            response += "   ✌️ 2 fingers = Turn left like a hunting Velociraptor!\n"
+            response += "   🤟 3 fingers = Turn right like a swift Compsognathus!\n"
+            response += "   ☝️ 1 finger = Stop and rest like a sleeping Brontosaurus!\n"
+            response += "\n🦕 Dino-robot activated for 30 seconds! Show me those prehistoric gestures!"
+            
+        elif character == 'Miley':
+            response = f"🎵 Hey Sophia! Miley is here and ready to dance with your gestures! 🤖✨\n\n"
+            response += "🎵 MILEY'S DANCE MOVES:\n"
+            response += "   🖐️ 5 fingers = Dance forward with style!\n"
+            response += "   ✊ Fist = Graceful step backward!\n"
+            response += "   ✌️ 2 fingers = Spin left like a pop star!\n"
+            response += "   🤟 3 fingers = Twirl right with flair!\n"
+            response += "   ☝️ 1 finger = Strike a pose and stop!\n"
+            response += "\n🎵 Miley-bot is ready to perform for 30 seconds! Let's dance!"
+            
+        else:
+            response = f"🤖 {character} robot responding to your call! Ready for gesture control!\n\n"
+            response += "🤖 ROBOT COMMANDS:\n"
+            response += "   🖐️ 5 fingers = Move forward\n"
+            response += "   ✊ Fist = Move backward\n"
+            response += "   ✌️ 2 fingers = Turn left\n"
+            response += "   🤟 3 fingers = Turn right\n"
+            response += "   ☝️ 1 finger = Stop\n"
+            response += "\n🤖 Robot activated for 30 seconds!"
+        
+        # Speak the response first
+        self.speak(response, target_user)
+        
+        # Initialize hardware
+        try:
+            print(f"🤖 Initializing {character}'s motor and gesture controllers...")
+            self.motor = MotorController()
+            self.gesture = HandGestureController()
+            
+            if not self.gesture.enabled or not self.motor.enabled:
+                error_response = f"⚠️ {character}'s hardware isn't ready right now!"
+                if self.visual:
+                    self.visual.show_error("Gesture/motor hardware not enabled.")
+                return error_response
+            
+            if self.visual:
+                self.visual.show_happy(f"{character} gesture control started!")
+            
+            self.gesture_control_active = True
+            self.gesture_stop_event.clear()
+            
+            # Run gesture control for a limited time (30 seconds)
+            gesture_count = 0
+            max_gestures = 100  # Limit to prevent infinite loops
+            start_time = time.time()
+            max_duration = 30  # 30 seconds maximum
+            
+            print(f"🖐️ {character} is now listening for hand gestures...")
+            
+            while (gesture_count < max_gestures and 
+                   time.time() - start_time < max_duration and 
+                   not self.gesture_stop_event.is_set()):
+                
+                action = self.gesture.get_gesture()
+                gesture_count += 1
+                
+                if action:
+                    if character == 'Dino':
+                        action_messages = {
+                            'forward': "🦕 ROAR! Dino charges forward!",
+                            'backward': "🦕 Careful steps backward!",
+                            'left': "🦕 Hunting turn to the left!",
+                            'right': "🦕 Swift turn to the right!",
+                            'stop': "🦕 Dino rests peacefully!"
+                        }
+                    elif character == 'Miley':
+                        action_messages = {
+                            'forward': "🎵 Dancing forward with style!",
+                            'backward': "🎵 Graceful step back!",
+                            'left': "🎵 Spinning left like a star!",
+                            'right': "🎵 Twirling right with flair!",
+                            'stop': "🎵 Strike a pose!"
+                        }
+                    else:
+                        action_messages = {
+                            'forward': f"🤖 {character} moving forward!",
+                            'backward': f"🤖 {character} moving backward!",
+                            'left': f"🤖 {character} turning left!",
+                            'right': f"🤖 {character} turning right!",
+                            'stop': f"🤖 {character} stopping!"
+                        }
+                    
+                    message = action_messages.get(action, f"❓ {character} doesn't understand that gesture!")
+                    print(f"✅ {message}")
+                    
+                    if self.visual:
+                        self.visual.show_thinking(f"{character}: {action}")
+                    
+                    # Execute motor commands
+                    if action == 'forward':
+                        self.motor.forward()
+                    elif action == 'backward':
+                        self.motor.backward()
+                    elif action == 'left':
+                        self.motor.left()
+                    elif action == 'right':
+                        self.motor.right()
+                    elif action == 'stop':
+                        self.motor.stop()
+                        break  # Stop gesture ends the session
+                    else:
+                        self.motor.stop()
+                else:
+                    self.motor.stop()
+                
+                # Small delay to prevent overwhelming the system
+                time.sleep(0.5)
+            
+            # End session message
+            if character == 'Dino':
+                end_message = "🦕 Dino had a roar-some time! Call 'Hey Dino Come' anytime for more prehistoric adventures!"
+            elif character == 'Miley':
+                end_message = "🎵 That was an amazing performance, Sophia! Say 'Hey Miley Come' whenever you want to dance again!"
+            else:
+                end_message = f"🤖 {character} robot session complete! Call again anytime!"
+            
+            print(f"⏰ {end_message}")
+            self.speak(end_message, target_user)
+                    
+        except KeyboardInterrupt:
+            print(f"\n🛑 {character} stopped by user (Ctrl+C).")
+            if self.visual:
+                self.visual.show_standby(f"{character} gesture control stopped.")
+        except Exception as e:
+            print(f"⚠️ Error in {character}'s gesture control: {e}")
+            import traceback
+            traceback.print_exc()
+        finally:
+            print(f"🔄 Cleaning up {character}'s controllers...")
+            if hasattr(self, 'gesture') and self.gesture:
+                self.gesture.release()
+            if hasattr(self, 'motor') and self.motor:
+                self.motor.cleanup()
+            self.gesture_control_active = False
+            print(f"✅ {character} cleanup completed.")
+        
+        return f"{character} gesture control session completed!"
 
 if __name__ == "__main__":
     assistant = AIAssistant()
