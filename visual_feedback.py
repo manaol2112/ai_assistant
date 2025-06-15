@@ -58,11 +58,11 @@ class SimpleRobotEyes:
         self.glow_timer = 0
         self.listening_timer = 0
         
-        # Eye configuration - Large circular eyes (FIXED POSITIONING & BIGGER SIZE)
-        self.eye_distance = size * 1.8         # Distance between eye centers (MUCH WIDER)
-        self.eye_radius = size // 1.8          # Main eye radius (BIGGER)
-        self.pupil_radius = size // 3.5        # Pupil radius (BIGGER)
-        self.iris_radius = size // 2.5         # Iris radius (BIGGER)
+        # Eye configuration - Large circular eyes (OPTIMIZED FOR FULLSCREEN)
+        self.eye_distance = size * 1.4         # Distance between eye centers (OPTIMIZED)
+        self.eye_radius = size // 2.2          # Main eye radius (BIGGER FOR FULLSCREEN)
+        self.pupil_radius = size // 4.5        # Pupil radius (SCALED)
+        self.iris_radius = size // 3.2         # Iris radius (SCALED)
         
         # Bluish-white color scheme
         self.eye_bg = '#f8fbff'                # Very light bluish-white background
@@ -92,8 +92,8 @@ class SimpleRobotEyes:
         right_x = self.center_x + self.eye_distance // 2
         eye_y = self.center_y
         
-        # Create outer glow effect (BIGGER GLOW)
-        glow_size = 35  # Increased from 25
+        # Create outer glow effect (SCALED FOR FULLSCREEN)
+        glow_size = max(40, self.size // 8)  # Scale glow with eye size
         self.elements['left_glow'] = self.canvas.create_oval(
             left_x - self.eye_radius - glow_size, eye_y - self.eye_radius - glow_size,
             left_x + self.eye_radius + glow_size, eye_y + self.eye_radius + glow_size,
@@ -145,8 +145,8 @@ class SimpleRobotEyes:
             fill=self.pupil_color, outline=''
         )
         
-        # Create highlights for life-like appearance (BIGGER HIGHLIGHTS)
-        highlight_size = 12  # Increased from 8
+        # Create highlights for life-like appearance (SCALED FOR FULLSCREEN)
+        highlight_size = max(15, self.size // 15)  # Scale highlight with eye size
         highlight_offset = self.pupil_radius // 1.8  # Better positioning
         self.elements['left_highlight'] = self.canvas.create_oval(
             left_x - highlight_offset - highlight_size, eye_y - highlight_offset - highlight_size,
@@ -1547,51 +1547,64 @@ class PremiumVisualFeedbackSystem:
             self.root.destroy()
     
     def _create_premium_ui(self):
-        """Create the UI with simple robot eyes."""
+        """Create the UI with simple robot eyes in fullscreen mode."""
         self.root = tk.Tk()
         self.root.title("AI Assistant - Robot Eyes")
-        self.root.geometry(f"{self.width}x{self.height}")
+        
+        # Make fullscreen without window decorations
+        self.root.attributes('-fullscreen', True)
+        self.root.attributes('-topmost', True)
+        self.root.overrideredirect(True)  # Remove window decorations completely
         self.root.configure(bg='#000000')
         
-        # Center window on screen
+        # Get actual screen dimensions
+        self.root.update_idletasks()
         screen_width = self.root.winfo_screenwidth()
         screen_height = self.root.winfo_screenheight()
-        x = (screen_width - self.width) // 2
-        y = (screen_height - self.height) // 2
-        self.root.geometry(f"{self.width}x{self.height}+{x}+{y}")
         
-        # Create main canvas for robot eyes
+        # Update dimensions to actual screen size
+        self.width = screen_width
+        self.height = screen_height
+        
+        # Create main canvas for robot eyes (fullscreen)
         self.canvas = tk.Canvas(
             self.root,
             width=self.width,
-            height=self.height - 100,  # Leave space for message
+            height=self.height - 80,  # Leave small space for message at bottom
             bg='#000000',
             highlightthickness=0
         )
-        self.canvas.pack(pady=20)
+        self.canvas.pack(fill='both', expand=True)
         
-        # Create robot eyes in center
+        # Create robot eyes in center with larger size for fullscreen
         center_x = self.width // 2
-        center_y = (self.height - 100) // 2
+        center_y = (self.height - 80) // 2
+        
+        # Increase eye size significantly for fullscreen display
+        eye_size = min(self.width, self.height) // 4  # Much larger eyes
         
         self.robot_face = PremiumRobotFace(
             canvas=self.canvas,
             center_x=center_x,
             center_y=center_y,
-            size=150,
+            size=eye_size,
             face_type="simple_eyes"
         )
         
-        # Message area
+        # Message area at bottom
         self.message_label = tk.Label(
             self.root,
             text="Ready to assist you!",
-            font=("Arial", 16),
+            font=("Arial", 18, "bold"),  # Larger font for fullscreen
             fg="white",
             bg="#000000",
             wraplength=self.width - 40
         )
-        self.message_label.pack(pady=10)
+        self.message_label.pack(side='bottom', pady=15)
+        
+        # Add escape key binding to exit fullscreen (for testing)
+        self.root.bind('<Escape>', lambda e: self.stop())
+        self.root.bind('<F11>', lambda e: self.stop())
         
         # Start animations
         if self.robot_face and hasattr(self.robot_face, 'robot_eyes'):
