@@ -58,11 +58,11 @@ class SimpleRobotEyes:
         self.glow_timer = 0
         self.listening_timer = 0
         
-        # Eye configuration - Large circular eyes
-        self.eye_distance = size // 1.2        # Distance between eye centers
-        self.eye_radius = size // 2.2          # Main eye radius (much larger)
-        self.pupil_radius = size // 4.5        # Pupil radius
-        self.iris_radius = size // 3.2         # Iris radius
+        # Eye configuration - Large circular eyes (FIXED POSITIONING & BIGGER SIZE)
+        self.eye_distance = size * 1.8         # Distance between eye centers (MUCH WIDER)
+        self.eye_radius = size // 1.8          # Main eye radius (BIGGER)
+        self.pupil_radius = size // 3.5        # Pupil radius (BIGGER)
+        self.iris_radius = size // 2.5         # Iris radius (BIGGER)
         
         # Bluish-white color scheme
         self.eye_bg = '#f8fbff'                # Very light bluish-white background
@@ -92,8 +92,8 @@ class SimpleRobotEyes:
         right_x = self.center_x + self.eye_distance // 2
         eye_y = self.center_y
         
-        # Create outer glow effect (much larger)
-        glow_size = 25
+        # Create outer glow effect (BIGGER GLOW)
+        glow_size = 35  # Increased from 25
         self.elements['left_glow'] = self.canvas.create_oval(
             left_x - self.eye_radius - glow_size, eye_y - self.eye_radius - glow_size,
             left_x + self.eye_radius + glow_size, eye_y + self.eye_radius + glow_size,
@@ -145,9 +145,9 @@ class SimpleRobotEyes:
             fill=self.pupil_color, outline=''
         )
         
-        # Create highlights for life-like appearance
-        highlight_size = 8
-        highlight_offset = self.pupil_radius // 2
+        # Create highlights for life-like appearance (BIGGER HIGHLIGHTS)
+        highlight_size = 12  # Increased from 8
+        highlight_offset = self.pupil_radius // 1.8  # Better positioning
         self.elements['left_highlight'] = self.canvas.create_oval(
             left_x - highlight_offset - highlight_size, eye_y - highlight_offset - highlight_size,
             left_x - highlight_offset + highlight_size, eye_y - highlight_offset + highlight_size,
