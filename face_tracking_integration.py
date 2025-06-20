@@ -11,7 +11,7 @@ Voice Commands:
 - "who are you looking at" - Get current tracking status
 """
 
-from face_tracking_servo_controller import FaceTrackingServoController
+from face_tracking_servo_controller import PremiumFaceTracker
 import threading
 import time
 import logging
@@ -70,24 +70,25 @@ class FaceTrackingIntegration:
             self.logger.info("🔄 Initializing face tracking integration...")
             
             # Initialize face tracker
-            self.face_tracker = FaceTrackingServoController(
+            self.face_tracker = PremiumFaceTracker(
                 arduino_port=arduino_port,
-                camera_index=camera_index,
-                tracking_smoothness=0.2,  # Smooth tracking
-                face_confidence_threshold=0.5  # More lenient for better tracking
+                camera_index=camera_index
             )
             
-            # Check if initialization was successful
-            status = self.face_tracker.get_status()
-            if not status['arduino_connected']:
+            # Initialize camera and Arduino
+            camera_ok = self.face_tracker.initialize_camera()
+            arduino_ok = self.face_tracker.initialize_arduino()
+            
+            if not arduino_ok:
                 self.logger.error("❌ Arduino not connected")
                 return False
                 
-            if not status['camera_available']:
+            if not camera_ok:
                 self.logger.error("❌ Camera not available") 
                 return False
                 
-            if status['face_encodings_loaded'] == 0:
+            # Check face encodings
+            if len(self.face_tracker.known_face_names) == 0:
                 self.logger.warning("⚠️ No face encodings loaded - will track any face")
                 
             self.is_initialized = True
@@ -158,7 +159,7 @@ class FaceTrackingIntegration:
             }
             
         try:
-            self.face_tracker.start_tracking()
+            self.face_tracker.tracking_active = True
             self.logger.info("👁️ Face tracking started via voice command")
             
             return {
@@ -184,7 +185,12 @@ class FaceTrackingIntegration:
             }
             
         try:
-            self.face_tracker.stop_tracking()
+            self.face_tracker.tracking_active = False
+            # Center servos when stopping
+            self.face_tracker.move_servos(
+                self.face_tracker.servo1_center, 
+                self.face_tracker.servo2_center
+            )
             self.logger.info("🛑 Face tracking stopped via voice command")
             
             return {
@@ -201,47 +207,65 @@ class FaceTrackingIntegration:
             }
             
     def _manual_look(self, direction: str) -> Dict:
-        """Manual servo control for looking in directions"""
+        """Manual servo control for looking in specific directions"""
         if not self.face_tracker:
             return {
                 'status': 'error',
                 'message': 'Face tracker not initialized',
-                'response': "I can't move my eyes right now."
+                'response': "My servo control system isn't available right now."
             }
             
         try:
-            # Stop tracking first for manual control
-            was_tracking = self.face_tracker.is_tracking
-            if was_tracking:
-                self.face_tracker.stop_tracking()
-                time.sleep(0.5)
+            # Temporarily stop tracking for manual control
+            was_tracking = self.face_tracker.tracking_active
+            self.face_tracker.tracking_active = False
             
-            # Calculate servo positions based on direction
-            servo1_angle = self.face_tracker.servo1_current
-            servo2_angle = self.face_tracker.servo2_current
+            # Get current positions
+            current_pan = self.face_tracker.servo1_current
+            current_tilt = self.face_tracker.servo2_current
+            
+            # Calculate new positions based on direction
+            movement_step = 30  # degrees
             
             if direction == 'left':
-                servo1_angle = 45  # Look left
-                response = "Looking to my left."
-            elif direction == 'right':
-                servo1_angle = 135  # Look right
-                response = "Looking to my right."
-            elif direction == 'up':
-                servo2_angle = 60   # Look up
-                response = "Looking up."
-            elif direction == 'down':
-                servo2_angle = 120  # Look down  
-                response = "Looking down."
-            else:
-                response = "I'm not sure which direction you meant."
+                new_pan = max(self.face_tracker.servo_min, current_pan - movement_step)
+                new_tilt = current_tilt
+                response = "Looking left now."
                 
-            # Send command
-            self.face_tracker.manual_servo_control(servo1_angle, servo2_angle)
+            elif direction == 'right':
+                new_pan = min(self.face_tracker.servo_max, current_pan + movement_step)
+                new_tilt = current_tilt
+                response = "Looking right now."
+                
+            elif direction == 'up':
+                new_pan = current_pan
+                new_tilt = max(self.face_tracker.servo_min, current_tilt - movement_step)
+                response = "Looking up now."
+                
+            elif direction == 'down':
+                new_pan = current_pan
+                new_tilt = min(self.face_tracker.servo_max, current_tilt + movement_step)
+                response = "Looking down now."
+                
+            else:
+                return {
+                    'status': 'error',
+                    'message': f'Invalid direction: {direction}',
+                    'response': "I don't understand that direction."
+                }
+                
+            # Move servos
+            self.face_tracker.move_servos(new_pan, new_tilt)
+            
+            # Brief pause, then restore tracking state
+            time.sleep(0.5)
+            self.face_tracker.tracking_active = was_tracking
+            
             self.logger.info(f"👁️ Manual look command: {direction}")
             
             return {
                 'status': 'success',
-                'message': f'Looking {direction}',
+                'message': f'Looked {direction}',
                 'response': response
             }
             
@@ -253,29 +277,27 @@ class FaceTrackingIntegration:
             }
             
     def _center_view(self) -> Dict:
-        """Center the servo view"""
+        """Center the servo positions"""
         if not self.face_tracker:
             return {
                 'status': 'error',
                 'message': 'Face tracker not initialized',
-                'response': "I can't center my view right now."
+                'response': "My servo control system isn't available right now."
             }
             
         try:
-            # Stop tracking for manual control
-            was_tracking = self.face_tracker.is_tracking
-            if was_tracking:
-                self.face_tracker.stop_tracking()
-                time.sleep(0.5)
-                
             # Center servos
-            self.face_tracker.manual_servo_control(90, 90)
-            self.logger.info("🎯 Centered view via voice command")
+            self.face_tracker.move_servos(
+                self.face_tracker.servo1_center,
+                self.face_tracker.servo2_center
+            )
+            
+            self.logger.info("🎯 Servos centered via voice command")
             
             return {
-                'status': 'success',
+                'status': 'success', 
                 'message': 'View centered',
-                'response': "I'm now looking straight ahead with my eyes centered."
+                'response': "I'm now looking straight ahead."
             }
             
         except Exception as e:
@@ -291,60 +313,89 @@ class FaceTrackingIntegration:
             return {
                 'status': 'error',
                 'message': 'Face tracker not initialized',
-                'response': "My face tracking system isn't available."
+                'response': "My face tracking system isn't available right now."
             }
             
         try:
-            status = self.face_tracker.get_status()
+            tracking_active = self.face_tracker.tracking_active
+            current_target = getattr(self.face_tracker, 'target_person', None)
+            known_faces = self.face_tracker.known_face_names
             
-            if status['is_tracking']:
-                if status['current_target']:
-                    response = f"I'm currently tracking {status['current_target']}'s face."
-                else:
-                    response = "I'm looking for familiar faces but don't see anyone I recognize right now."
+            # Build status response
+            if not tracking_active:
+                response = "I'm not currently tracking any faces. I'm looking straight ahead."
+            elif current_target:
+                response = f"I'm actively tracking {current_target}."
+            elif known_faces:
+                response = f"I'm looking for familiar faces. I can recognize: {', '.join(known_faces)}."
             else:
-                response = "I'm not currently tracking any faces. My eyes are in manual mode."
+                response = "I'm looking for any faces to track."
                 
-            servo_pos = f"My eyes are positioned at ({status['servo1_position']}, {status['servo2_position']})"
-            
             return {
                 'status': 'success',
-                'message': f"Tracking: {status['is_tracking']}, Target: {status['current_target']}",
-                'response': f"{response} {servo_pos}."
+                'message': 'Status retrieved',
+                'response': response,
+                'details': {
+                    'tracking_active': tracking_active,
+                    'current_target': current_target,
+                    'known_faces': known_faces,
+                    'servo_positions': {
+                        'pan': self.face_tracker.servo1_current,
+                        'tilt': self.face_tracker.servo2_current
+                    }
+                }
             }
             
         except Exception as e:
             return {
                 'status': 'error',
                 'message': f'Failed to get status: {e}',
-                'response': "I can't check my tracking status right now."
+                'response': "I had trouble checking my tracking status."
             }
             
     def get_system_status(self) -> Dict:
-        """Get overall system status"""
+        """Get comprehensive system status"""
         if not self.is_initialized or not self.face_tracker:
             return {
                 'initialized': False,
-                'available': False,
-                'message': 'Face tracking not initialized'
+                'camera_available': False,
+                'arduino_connected': False,
+                'tracking_active': False,
+                'face_encodings_loaded': 0,
+                'error': 'System not initialized'
             }
             
-        status = self.face_tracker.get_status()
-        return {
-            'initialized': True,
-            'available': status['arduino_connected'] and status['camera_available'],
-            'tracking_active': status['is_tracking'],
-            'current_target': status['current_target'],
-            'face_encodings': status['face_encodings_loaded'],
-            'servo_position': (status['servo1_position'], status['servo2_position']),
-            'target_people': status['target_people']
-        }
-        
+        try:
+            return {
+                'initialized': True,
+                'camera_available': self.face_tracker.camera is not None or self.face_tracker.camera_handler is not None,
+                'arduino_connected': self.face_tracker.arduino is not None,
+                'tracking_active': self.face_tracker.tracking_active,
+                'face_encodings_loaded': len(self.face_tracker.known_face_names),
+                'known_faces': self.face_tracker.known_face_names,
+                'current_target': getattr(self.face_tracker, 'target_person', None),
+                'servo_positions': {
+                    'pan': self.face_tracker.servo1_current,
+                    'tilt': self.face_tracker.servo2_current
+                },
+                'using_imx500': getattr(self.face_tracker, 'using_imx500', False)
+            }
+            
+        except Exception as e:
+            return {
+                'initialized': True,
+                'error': f'Status check failed: {e}'
+            }
+            
     def cleanup(self):
-        """Cleanup face tracking resources"""
+        """Clean up face tracking resources"""
         if self.face_tracker:
-            self.face_tracker.cleanup()
-            self.logger.info("🧹 Face tracking integration cleanup completed")
+            try:
+                self.face_tracker.cleanup()
+            except:
+                pass
+            self.face_tracker = None
+        self.is_initialized = False
 
 # Example integration with main AI assistant
 def integrate_with_main_ai(main_ai_instance):
