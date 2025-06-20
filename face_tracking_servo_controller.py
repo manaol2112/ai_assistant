@@ -1,15 +1,8 @@
 #!/usr/bin/env python3
 """
-Face Tracking Servo Controller for AI Assistant Robot
-Premium face tracking system that automatically controls servo motors to follow Sophia and Eladriel's faces.
-
-Features:
-- Real-time face detection and recognition
-- Smooth servo movement calculations
-- Arduino serial communication
-- Person-specific tracking for Sophia and Eladriel
-- Adaptive tracking with smoothing algorithms
-- Premium UI feedback and logging
+Premium Face Tracking Servo Controller
+Advanced face tracking system with Arduino servo control integration
+Supports Sony IMX500 AI Camera and premium tracking features
 """
 
 import cv2
@@ -17,507 +10,521 @@ import face_recognition
 import numpy as np
 import serial
 import time
-import threading
 import os
-import logging
-from typing import Dict, List, Tuple, Optional
-import queue
-from dataclasses import dataclass
-from collections import deque
-import math
+import threading
+import json
+from typing import List, Tuple, Dict, Optional
+from datetime import datetime
 
-@dataclass
-class FaceData:
-    """Data structure for face detection results"""
-    name: str
-    location: Tuple[int, int, int, int]  # top, right, bottom, left
-    center: Tuple[int, int]
-    confidence: float
-    distance: float
-
-@dataclass
-class ServoCommand:
-    """Data structure for servo commands"""
-    servo1_angle: int  # Left/Right servo (0-180)
-    servo2_angle: int  # Up/Down servo (0-180)
-    timestamp: float
-
-class FaceTrackingServoController:
-    """
-    Premium Face Tracking Servo Controller
-    Automatically tracks and follows Sophia and Eladriel's faces using servo motors
-    """
+class PremiumFaceTracker:
+    """Premium face tracking controller with servo integration"""
     
-    def __init__(self, 
-                 arduino_port='/dev/ttyUSB0', 
-                 arduino_baud=9600,
-                 camera_index=0,
-                 servo1_center=90,  # Center position for left/right servo
-                 servo2_center=90,  # Center position for up/down servo
-                 tracking_smoothness=0.3,  # Lower = smoother, slower response
-                 min_face_size=50,  # Minimum face size to track
-                 face_confidence_threshold=0.6):
-        
-        # Arduino Communication Setup
-        self.arduino_port = arduino_port
-        self.arduino_baud = arduino_baud
-        self.arduino_serial = None
-        self.arduino_connected = False
-        
-        # Camera Setup
+    def __init__(self, arduino_port: str = '/dev/ttyUSB0', camera_index: int = 0):
+        # Camera setup with CameraHandler support
         self.camera_index = camera_index
         self.camera = None
-        self.camera_width = 640
-        self.camera_height = 480
+        self.camera_handler = None
+        self.using_imx500 = False
         
-        # Servo Configuration
-        self.servo1_center = servo1_center
-        self.servo2_center = servo2_center
-        self.servo1_current = servo1_center
-        self.servo2_current = servo2_center
-        self.servo1_range = (0, 180)  # Full range for left/right
-        self.servo2_range = (30, 150)  # Limited range for up/down to prevent mechanical issues
+        # Arduino setup
+        self.arduino_port = arduino_port
+        self.arduino_baud = 9600
+        self.arduino = None
         
-        # Tracking Parameters
-        self.tracking_smoothness = tracking_smoothness
-        self.min_face_size = min_face_size
-        self.face_confidence_threshold = face_confidence_threshold
+        # Servo configuration
+        self.servo1_center = 90  # Pan servo (horizontal)
+        self.servo2_center = 90  # Tilt servo (vertical)
+        self.servo1_current = self.servo1_center
+        self.servo2_current = self.servo2_center
+        self.servo_min = 0
+        self.servo_max = 180
+        self.movement_threshold = 5  # Minimum movement in pixels to trigger servo
         
-        # Face Recognition Setup
+        # Face tracking parameters
+        self.face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
         self.known_face_encodings = []
         self.known_face_names = []
-        self.target_people = ['sophia', 'eladriel']
+        self.face_locations = []
+        self.face_encodings = []
+        self.face_names = []
+        self.process_this_frame = True
         
-        # Tracking State
-        self.is_tracking = False
-        self.tracking_thread = None
-        self.command_queue = queue.Queue()
-        self.current_target = None
-        self.last_face_time = 0
-        self.face_lost_timeout = 2.0  # Seconds before returning to center
+        # Tracking state
+        self.target_person = None
+        self.tracking_active = True
+        self.last_face_center = None
+        self.smoothing_factor = 0.3  # For smooth servo movement
         
-        # Smoothing buffers for stable tracking
-        self.position_buffer = deque(maxlen=5)
-        self.servo_command_buffer = deque(maxlen=3)
+        # Performance tracking
+        self.frame_count = 0
+        self.fps = 0
+        self.last_fps_time = time.time()
         
-        # Logging setup
-        self.setup_logging()
+        # Load known faces
+        self.load_known_faces()
         
-        # Initialize components
-        self.initialize_arduino()
-        self.initialize_camera()
-        self.load_face_encodings()
+    def initialize_camera(self) -> bool:
+        """Initialize camera with CameraHandler support (Sony IMX500 AI Camera)"""
+        print("🎥 Initializing camera system...")
         
-    def setup_logging(self):
-        """Setup premium logging system"""
-        logging.basicConfig(
-            level=logging.INFO,
-            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-            handlers=[
-                logging.FileHandler('face_tracking.log'),
-                logging.StreamHandler()
-            ]
-        )
-        self.logger = logging.getLogger('FaceTracker')
-        
-    def initialize_arduino(self):
-        """Initialize Arduino serial communication"""
+        # Try using the existing CameraHandler first (supports Sony IMX500 AI Camera)
         try:
-            self.logger.info(f"🔌 Connecting to Arduino on {self.arduino_port}...")
-            self.arduino_serial = serial.Serial(self.arduino_port, self.arduino_baud, timeout=1)
-            time.sleep(2)  # Wait for Arduino to initialize
+            from camera_handler import CameraHandler
+            print("  🤖 Attempting to use CameraHandler (Sony IMX500 AI support)...")
             
-            # Test connection with center position
-            self.send_servo_command(self.servo1_center, self.servo2_center)
-            self.arduino_connected = True
-            self.logger.info("✅ Arduino connected successfully!")
+            # Initialize camera handler with IMX500 preference
+            self.camera_handler = CameraHandler(camera_index=self.camera_index, prefer_imx500=True)
             
-        except Exception as e:
-            self.logger.error(f"❌ Arduino connection failed: {e}")
-            self.arduino_connected = False
-            
-    def initialize_camera(self):
-        """Initialize camera for face detection"""
-        try:
-            self.logger.info(f"📸 Initializing camera {self.camera_index}...")
-            self.camera = cv2.VideoCapture(self.camera_index)
-            self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, self.camera_width)
-            self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, self.camera_height)
-            self.camera.set(cv2.CAP_PROP_FPS, 30)
-            
-            # Test camera
-            ret, frame = self.camera.read()
-            if ret:
-                self.logger.info("✅ Camera initialized successfully!")
+            if self.camera_handler.is_camera_available():
+                self.using_imx500 = self.camera_handler.using_imx500
+                camera_type = "Sony IMX500 AI" if self.using_imx500 else "USB"
+                print(f"  ✅ {camera_type} camera initialized successfully")
+                
+                # Test frame capture
+                ret, frame = self.camera_handler.read()
+                if ret and frame is not None:
+                    height, width = frame.shape[:2]
+                    print(f"  📸 Camera working - Resolution: {width}x{height}")
+                    
+                    if self.using_imx500:
+                        ai_status = self.camera_handler.get_ai_status()
+                        print(f"  🤖 AI Status: {ai_status}")
+                    
+                    return True
+                else:
+                    print("  ❌ Camera initialized but can't capture frames")
+                    self.camera_handler.release()
+                    self.camera_handler = None
             else:
-                raise Exception("Camera test failed")
+                print("  ❌ CameraHandler reports camera not available")
+                self.camera_handler = None
                 
         except Exception as e:
-            self.logger.error(f"❌ Camera initialization failed: {e}")
-            self.camera = None
+            print(f"  ❌ CameraHandler error: {e}")
+            self.camera_handler = None
             
-    def load_face_encodings(self):
-        """Load face encodings for Sophia and Eladriel"""
-        self.logger.info("🔍 Loading face encodings...")
+        # Fallback to basic OpenCV
+        print("  🔄 Falling back to basic OpenCV camera...")
+        self.camera = cv2.VideoCapture(self.camera_index)
         
-        for person_name in self.target_people:
-            person_dir = f"people/{person_name}"
-            if not os.path.exists(person_dir):
-                self.logger.warning(f"⚠️ No face data found for {person_name}")
-                continue
-                
-            person_encodings = []
-            for filename in os.listdir(person_dir):
-                if filename.lower().endswith(('.jpg', '.jpeg', '.png')):
-                    image_path = os.path.join(person_dir, filename)
-                    try:
-                        # Load and encode face
-                        image = face_recognition.load_image_file(image_path)
-                        encodings = face_recognition.face_encodings(image)
-                        
-                        if encodings:
-                            person_encodings.append(encodings[0])
-                            self.logger.info(f"📸 Loaded encoding from {filename}")
-                        else:
-                            self.logger.warning(f"⚠️ No faces found in {filename}")
-                            
-                    except Exception as e:
-                        self.logger.error(f"❌ Error loading {filename}: {e}")
-            
-            if person_encodings:
-                self.known_face_encodings.extend(person_encodings)
-                self.known_face_names.extend([person_name] * len(person_encodings))
-                self.logger.info(f"✅ Loaded {len(person_encodings)} encodings for {person_name}")
-            else:
-                self.logger.warning(f"⚠️ No valid encodings found for {person_name}")
-                
-        self.logger.info(f"🎯 Total encodings loaded: {len(self.known_face_encodings)}")
-        
-    def send_servo_command(self, servo1_angle: int, servo2_angle: int):
-        """Send servo position commands to Arduino"""
-        if not self.arduino_connected or not self.arduino_serial:
+        if not self.camera.isOpened():
+            print(f"  ❌ Failed to open camera {self.camera_index}")
             return False
             
+        # Set camera properties for better performance
+        self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+        self.camera.set(cv2.CAP_PROP_FPS, 30)
+        
+        # Test frame capture
+        ret, frame = self.camera.read()
+        if not ret:
+            print("  ❌ Basic camera can't capture frames")
+            return False
+            
+        height, width = frame.shape[:2]
+        print(f"  ✅ Basic camera working - Resolution: {width}x{height}")
+        return True
+        
+    def read_frame(self) -> Tuple[bool, Optional[np.ndarray]]:
+        """Read frame from camera using appropriate handler"""
+        if self.camera_handler:
+            return self.camera_handler.read()
+        elif self.camera:
+            return self.camera.read()
+        else:
+            return False, None
+            
+    def release_camera(self):
+        """Release camera resources"""
+        if self.camera_handler:
+            self.camera_handler.release()
+            self.camera_handler = None
+        if self.camera:
+            self.camera.release()
+            self.camera = None
+            
+    def initialize_arduino(self) -> bool:
+        """Initialize Arduino connection"""
+        print(f"🔌 Connecting to Arduino on {self.arduino_port}...")
+        
         try:
-            # Clamp angles to valid ranges
-            servo1_angle = max(self.servo1_range[0], min(self.servo1_range[1], servo1_angle))
-            servo2_angle = max(self.servo2_range[0], min(self.servo2_range[1], servo2_angle))
+            self.arduino = serial.Serial(self.arduino_port, self.arduino_baud, timeout=2)
+            time.sleep(2)  # Wait for Arduino initialization
             
-            # Send commands to Arduino
-            servo1_cmd = f"SERVO_{servo1_angle}"
-            servo2_cmd = f"SERVO2_{servo2_angle}"
-            
-            self.arduino_serial.write(f"{servo1_cmd}\n".encode())
-            self.arduino_serial.flush()
-            time.sleep(0.05)  # Small delay between commands
-            
-            self.arduino_serial.write(f"{servo2_cmd}\n".encode())
-            self.arduino_serial.flush()
-            
-            self.servo1_current = servo1_angle
-            self.servo2_current = servo2_angle
-            
-            self.logger.debug(f"🎯 Servos moved to: ({servo1_angle}, {servo2_angle})")
+            # Test connection with center position
+            self.move_servos(self.servo1_center, self.servo2_center)
+            print("  ✅ Arduino connected and servos centered")
             return True
             
         except Exception as e:
-            self.logger.error(f"❌ Servo command failed: {e}")
+            print(f"  ❌ Arduino connection failed: {e}")
             return False
             
-    def calculate_servo_angles(self, face_center: Tuple[int, int]) -> Tuple[int, int]:
-        """Calculate servo angles based on face position in frame"""
-        face_x, face_y = face_center
+    def load_known_faces(self):
+        """Load known face encodings from people directory"""
+        print("👤 Loading known faces...")
         
-        # Calculate relative position from center (range: -1 to 1)
-        center_x = self.camera_width // 2
-        center_y = self.camera_height // 2
-        
-        rel_x = (face_x - center_x) / (self.camera_width / 2)
-        rel_y = (face_y - center_y) / (self.camera_height / 2)
-        
-        # Calculate servo angles with proper mapping
-        # Servo1 (left/right): Inverted so robot looks toward face
-        servo1_angle = int(self.servo1_center - (rel_x * 45))  # ±45 degrees from center
-        
-        # Servo2 (up/down): Normal mapping
-        servo2_angle = int(self.servo2_center + (rel_y * 30))  # ±30 degrees from center
-        
-        return servo1_angle, servo2_angle
-        
-    def smooth_servo_movement(self, target_servo1: int, target_servo2: int) -> Tuple[int, int]:
-        """Apply smoothing algorithm to servo movements"""
-        # Linear interpolation for smooth movement
-        smooth_servo1 = int(self.servo1_current + 
-                           (target_servo1 - self.servo1_current) * self.tracking_smoothness)
-        smooth_servo2 = int(self.servo2_current + 
-                           (target_servo2 - self.servo2_current) * self.tracking_smoothness)
-        
-        return smooth_servo1, smooth_servo2
-        
-    def detect_faces(self, frame) -> List[FaceData]:
-        """Detect and recognize faces in frame"""
-        # Resize frame for faster processing
-        small_frame = cv2.resize(frame, (0, 0), fx=0.25, fy=0.25)
-        rgb_small_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
-        
-        # Find faces
-        face_locations = face_recognition.face_locations(rgb_small_frame)
-        if not face_locations:
-            return []
+        people_dir = "people"
+        if not os.path.exists(people_dir):
+            print("  ⚠️ No 'people' directory found - will track any face")
+            return
             
-        face_encodings = face_recognition.face_encodings(rgb_small_frame, face_locations)
-        
-        detected_faces = []
-        for face_encoding, face_location in zip(face_encodings, face_locations):
-            # Scale back up face locations
-            top, right, bottom, left = face_location
-            top *= 4
-            right *= 4
-            bottom *= 4
-            left *= 4
-            
-            # Check face size
-            face_width = right - left
-            face_height = bottom - top
-            if face_width < self.min_face_size or face_height < self.min_face_size:
+        for person_name in os.listdir(people_dir):
+            person_path = os.path.join(people_dir, person_name)
+            if not os.path.isdir(person_path):
                 continue
                 
-            # Recognize face
-            matches = face_recognition.compare_faces(
-                self.known_face_encodings, face_encoding, 
-                tolerance=self.face_confidence_threshold
-            )
+            person_encodings = []
+            image_files = [f for f in os.listdir(person_path) 
+                          if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
             
-            name = "unknown"
-            confidence = 0.0
-            
-            if True in matches:
-                face_distances = face_recognition.face_distance(self.known_face_encodings, face_encoding)
-                best_match_index = np.argmin(face_distances)
-                
-                if matches[best_match_index]:
-                    name = self.known_face_names[best_match_index]
-                    confidence = 1.0 - face_distances[best_match_index]
-            
-            # Only track target people
-            if name in self.target_people:
-                face_center = ((left + right) // 2, (top + bottom) // 2)
-                detected_faces.append(FaceData(
-                    name=name,
-                    location=(top, right, bottom, left),
-                    center=face_center,
-                    confidence=confidence,
-                    distance=face_distances[best_match_index] if 'face_distances' in locals() else 1.0
-                ))
-                
-        return detected_faces
-        
-    def select_target_face(self, faces: List[FaceData]) -> Optional[FaceData]:
-        """Select the best face to track"""
-        if not faces:
-            return None
-            
-        # Priority: Highest confidence, then largest face, then closest to current target
-        faces.sort(key=lambda f: (f.confidence, -f.distance), reverse=True)
-        return faces[0]
-        
-    def return_to_center(self):
-        """Return servos to center position when no face is detected"""
-        self.logger.info("🎯 No face detected, returning to center...")
-        target_servo1, target_servo2 = self.servo1_center, self.servo2_center
-        smooth_servo1, smooth_servo2 = self.smooth_servo_movement(target_servo1, target_servo2)
-        self.send_servo_command(smooth_servo1, smooth_servo2)
-        
-    def tracking_loop(self):
-        """Main tracking loop"""
-        self.logger.info("🚀 Face tracking started!")
-        
-        while self.is_tracking and self.camera:
-            try:
-                ret, frame = self.camera.read()
-                if not ret:
-                    continue
+            for image_file in image_files:
+                try:
+                    image_path = os.path.join(person_path, image_file)
+                    image = face_recognition.load_image_file(image_path)
+                    encodings = face_recognition.face_encodings(image)
                     
-                # Detect faces
-                faces = self.detect_faces(frame)
-                current_time = time.time()
-                
-                if faces:
-                    # Select target face
-                    target_face = self.select_target_face(faces)
+                    if encodings:
+                        person_encodings.extend(encodings)
+                        
+                except Exception as e:
+                    print(f"    ⚠️ Error loading {image_file}: {e}")
                     
-                    if target_face:
-                        self.current_target = target_face.name
-                        self.last_face_time = current_time
-                        
-                        # Calculate servo angles
-                        target_servo1, target_servo2 = self.calculate_servo_angles(target_face.center)
-                        
-                        # Apply smoothing
-                        smooth_servo1, smooth_servo2 = self.smooth_servo_movement(
-                            target_servo1, target_servo2
-                        )
-                        
-                        # Send command
-                        self.send_servo_command(smooth_servo1, smooth_servo2)
-                        
-                        self.logger.info(f"👁️ Tracking {target_face.name} at {target_face.center} "
-                                       f"-> Servos: ({smooth_servo1}, {smooth_servo2})")
-                        
-                elif current_time - self.last_face_time > self.face_lost_timeout:
-                    # No face detected for too long, return to center
-                    if self.current_target:
-                        self.return_to_center()
-                        self.current_target = None
+            if person_encodings:
+                # Use the first encoding as representative
+                self.known_face_encodings.append(person_encodings[0])
+                self.known_face_names.append(person_name)
+                print(f"  ✅ Loaded {len(person_encodings)} encodings for {person_name}")
                 
-                # Small delay to prevent excessive CPU usage
-                time.sleep(0.1)
-                
-            except Exception as e:
-                self.logger.error(f"❌ Tracking loop error: {e}")
-                time.sleep(0.5)
-                
-        self.logger.info("🛑 Face tracking stopped")
+        if self.known_face_encodings:
+            print(f"  🎯 Ready to track: {', '.join(self.known_face_names)}")
+        else:
+            print("  ℹ️ No known faces loaded - will track any detected face")
+            
+    def detect_faces(self, frame: np.ndarray) -> List[Tuple[int, int, int, int]]:
+        """Detect faces in frame using OpenCV cascade"""
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        faces = self.face_cascade.detectMultiScale(
+            gray,
+            scaleFactor=1.1,
+            minNeighbors=5,
+            minSize=(30, 30),
+            flags=cv2.CASCADE_SCALE_IMAGE
+        )
         
-    def start_tracking(self):
-        """Start face tracking"""
-        if self.is_tracking:
-            self.logger.warning("⚠️ Face tracking is already running")
-            return
+        # Convert to (top, right, bottom, left) format for face_recognition compatibility
+        face_locations = []
+        for (x, y, w, h) in faces:
+            face_locations.append((y, x + w, y + h, x))
             
-        if not self.arduino_connected:
-            self.logger.error("❌ Cannot start tracking: Arduino not connected")
-            return
-            
-        if not self.camera:
-            self.logger.error("❌ Cannot start tracking: Camera not available")
-            return
-            
+        return face_locations
+        
+    def recognize_faces(self, frame: np.ndarray, face_locations: List[Tuple[int, int, int, int]]) -> List[str]:
+        """Recognize faces using face_recognition library"""
         if not self.known_face_encodings:
-            self.logger.error("❌ Cannot start tracking: No face encodings loaded")
-            return
+            return ["Unknown"] * len(face_locations)
             
-        self.is_tracking = True
-        self.tracking_thread = threading.Thread(target=self.tracking_loop, daemon=True)
-        self.tracking_thread.start()
+        # Get face encodings for detected faces
+        face_encodings = face_recognition.face_encodings(frame, face_locations)
         
-        # Return to center position first
-        self.send_servo_command(self.servo1_center, self.servo2_center)
-        self.logger.info("✅ Face tracking started successfully!")
-        
-    def stop_tracking(self):
-        """Stop face tracking"""
-        if not self.is_tracking:
-            return
+        face_names = []
+        for face_encoding in face_encodings:
+            # Compare with known faces
+            matches = face_recognition.compare_faces(self.known_face_encodings, face_encoding)
+            name = "Unknown"
             
-        self.is_tracking = False
-        if self.tracking_thread:
-            self.tracking_thread.join(timeout=2.0)
+            # Use the known face with the smallest distance
+            face_distances = face_recognition.face_distance(self.known_face_encodings, face_encoding)
+            best_match_index = np.argmin(face_distances)
             
-        # Return to center position
-        self.send_servo_command(self.servo1_center, self.servo2_center)
-        self.logger.info("🛑 Face tracking stopped")
-        
-    def manual_servo_control(self, servo1_angle: int, servo2_angle: int):
-        """Manual servo control for testing"""
-        self.logger.info(f"🎮 Manual servo control: ({servo1_angle}, {servo2_angle})")
-        self.send_servo_command(servo1_angle, servo2_angle)
-        
-    def get_status(self) -> Dict:
-        """Get current status of the tracking system"""
-        return {
-            'arduino_connected': self.arduino_connected,
-            'camera_available': self.camera is not None,
-            'face_encodings_loaded': len(self.known_face_encodings),
-            'is_tracking': self.is_tracking,
-            'current_target': self.current_target,
-            'servo1_position': self.servo1_current,
-            'servo2_position': self.servo2_current,
-            'target_people': self.target_people
-        }
-        
-    def cleanup(self):
-        """Cleanup resources"""
-        self.stop_tracking()
-        
-        if self.camera:
-            self.camera.release()
-            
-        if self.arduino_serial:
-            # Return to center before closing
-            self.send_servo_command(self.servo1_center, self.servo2_center)
-            time.sleep(0.5)
-            self.arduino_serial.close()
-            
-        self.logger.info("🧹 Cleanup completed")
-
-def main():
-    """Demo function for testing the face tracking system"""
-    print("🤖 AI Assistant Face Tracking Servo Controller")
-    print("=" * 50)
-    
-    # Initialize controller
-    controller = FaceTrackingServoController()
-    
-    try:
-        # Show status
-        status = controller.get_status()
-        print(f"📊 System Status:")
-        for key, value in status.items():
-            print(f"  • {key}: {value}")
-        
-        if not status['arduino_connected']:
-            print("❌ Arduino not connected. Please check connection.")
-            return
-            
-        if not status['camera_available']:
-            print("❌ Camera not available. Please check camera.")
-            return
-            
-        if status['face_encodings_loaded'] == 0:
-            print("❌ No face encodings loaded. Please add faces to people/ folder.")
-            return
-        
-        print("\n🎯 Starting face tracking...")
-        print("Press 'q' to quit, 's' to stop tracking, 'r' to restart tracking")
-        print("Press 'c' to center servos, 't' to test manual control")
-        
-        controller.start_tracking()
-        
-        # Interactive control loop
-        while True:
-            try:
-                command = input("\nCommand (q/quit, s/stop, r/restart, c/center, t/test): ").strip().lower()
+            if matches[best_match_index] and face_distances[best_match_index] < 0.6:
+                name = self.known_face_names[best_match_index]
                 
-                if command in ['q', 'quit']:
-                    break
-                elif command in ['s', 'stop']:
-                    controller.stop_tracking()
-                    print("🛑 Tracking stopped")
-                elif command in ['r', 'restart']:
-                    controller.start_tracking()
-                    print("🚀 Tracking restarted")
-                elif command in ['c', 'center']:
-                    controller.manual_servo_control(90, 90)
-                    print("🎯 Servos centered")
-                elif command in ['t', 'test']:
-                    print("🎮 Manual control test...")
-                    for angle in [45, 135, 90]:
-                        controller.manual_servo_control(angle, 90)
-                        time.sleep(1)
-                    print("✅ Manual control test complete")
-                else:
-                    print("❓ Unknown command")
-                    
-            except KeyboardInterrupt:
+            face_names.append(name)
+            
+        return face_names
+        
+    def get_face_center(self, face_location: Tuple[int, int, int, int]) -> Tuple[int, int]:
+        """Get center point of face bounding box"""
+        top, right, bottom, left = face_location
+        center_x = (left + right) // 2
+        center_y = (top + bottom) // 2
+        return center_x, center_y
+        
+    def calculate_servo_positions(self, face_center: Tuple[int, int], frame_shape: Tuple[int, int]) -> Tuple[int, int]:
+        """Calculate servo positions based on face center"""
+        frame_height, frame_width = frame_shape[:2]
+        face_x, face_y = face_center
+        
+        # Calculate position relative to frame center
+        center_x = frame_width // 2
+        center_y = frame_height // 2
+        
+        offset_x = face_x - center_x
+        offset_y = face_y - center_y
+        
+        # Convert to servo angles (with smoothing)
+        # Pan servo (horizontal movement)
+        pan_adjustment = int(offset_x * 0.1)  # Adjust sensitivity
+        new_servo1 = self.servo1_current - pan_adjustment
+        
+        # Tilt servo (vertical movement) 
+        tilt_adjustment = int(offset_y * 0.1)  # Adjust sensitivity
+        new_servo2 = self.servo2_current + tilt_adjustment
+        
+        # Apply smoothing
+        if self.last_face_center:
+            last_x, last_y = self.last_face_center
+            smooth_x = int(face_x * self.smoothing_factor + last_x * (1 - self.smoothing_factor))
+            smooth_y = int(face_y * self.smoothing_factor + last_y * (1 - self.smoothing_factor))
+            
+            # Recalculate with smoothed values
+            offset_x = smooth_x - center_x
+            offset_y = smooth_y - center_y
+            
+            pan_adjustment = int(offset_x * 0.1)
+            tilt_adjustment = int(offset_y * 0.1)
+            
+            new_servo1 = self.servo1_current - pan_adjustment
+            new_servo2 = self.servo2_current + tilt_adjustment
+        
+        # Constrain to servo limits
+        new_servo1 = max(self.servo_min, min(self.servo_max, new_servo1))
+        new_servo2 = max(self.servo_min, min(self.servo_max, new_servo2))
+        
+        return new_servo1, new_servo2
+        
+    def move_servos(self, servo1_pos: int, servo2_pos: int):
+        """Move servos to specified positions"""
+        if not self.arduino:
+            return
+            
+        try:
+            # Send servo commands
+            self.arduino.write(f"SERVO_{servo1_pos}\n".encode())
+            self.arduino.flush()
+            time.sleep(0.01)
+            
+            self.arduino.write(f"SERVO2_{servo2_pos}\n".encode())
+            self.arduino.flush()
+            
+            # Update current positions
+            self.servo1_current = servo1_pos
+            self.servo2_current = servo2_pos
+            
+        except Exception as e:
+            print(f"Servo movement error: {e}")
+            
+    def should_move_servos(self, face_center: Tuple[int, int], frame_shape: Tuple[int, int]) -> bool:
+        """Determine if servos should move based on face position"""
+        frame_height, frame_width = frame_shape[:2]
+        face_x, face_y = face_center
+        
+        center_x = frame_width // 2
+        center_y = frame_height // 2
+        
+        distance = np.sqrt((face_x - center_x)**2 + (face_y - center_y)**2)
+        return distance > self.movement_threshold
+        
+    def draw_tracking_info(self, frame: np.ndarray, face_locations: List, face_names: List[str]) -> np.ndarray:
+        """Draw tracking information on frame"""
+        # Draw face rectangles and names
+        for (top, right, bottom, left), name in zip(face_locations, face_names):
+            # Draw rectangle around face
+            color = (0, 255, 0) if name != "Unknown" else (0, 0, 255)
+            cv2.rectangle(frame, (left, top), (right, bottom), color, 2)
+            
+            # Draw name label
+            cv2.rectangle(frame, (left, bottom - 35), (right, bottom), color, cv2.FILLED)
+            font = cv2.FONT_HERSHEY_DUPLEX
+            cv2.putText(frame, name, (left + 6, bottom - 6), font, 0.6, (255, 255, 255), 1)
+            
+            # Draw center point
+            center_x, center_y = self.get_face_center((top, right, bottom, left))
+            cv2.circle(frame, (center_x, center_y), 5, color, -1)
+            
+        # Draw frame center crosshair
+        height, width = frame.shape[:2]
+        center_x, center_y = width // 2, height // 2
+        cv2.line(frame, (center_x - 20, center_y), (center_x + 20, center_y), (255, 255, 255), 2)
+        cv2.line(frame, (center_x, center_y - 20), (center_x, center_y + 20), (255, 255, 255), 2)
+        
+        # Draw servo positions
+        servo_text = f"Servos: Pan={self.servo1_current}° Tilt={self.servo2_current}°"
+        cv2.putText(frame, servo_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+        
+        # Draw FPS
+        fps_text = f"FPS: {self.fps:.1f}"
+        cv2.putText(frame, fps_text, (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+        
+        # Draw camera type
+        camera_type = "Sony IMX500 AI" if self.using_imx500 else "USB Camera"
+        cv2.putText(frame, camera_type, (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+        
+        # Draw tracking status
+        status_text = "TRACKING ACTIVE" if self.tracking_active else "TRACKING PAUSED"
+        status_color = (0, 255, 0) if self.tracking_active else (0, 0, 255)
+        cv2.putText(frame, status_text, (10, height - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, status_color, 2)
+        
+        return frame
+        
+    def update_fps(self):
+        """Update FPS calculation"""
+        self.frame_count += 1
+        current_time = time.time()
+        
+        if current_time - self.last_fps_time >= 1.0:
+            self.fps = self.frame_count / (current_time - self.last_fps_time)
+            self.frame_count = 0
+            self.last_fps_time = current_time
+            
+    def run_tracking(self):
+        """Main tracking loop"""
+        print("\n🎯 Starting Premium Face Tracking System")
+        print("=" * 50)
+        print("Controls:")
+        print("  SPACE - Toggle tracking on/off")
+        print("  R - Reset servos to center")
+        print("  Q - Quit")
+        print("  1-9 - Set target person (if multiple faces)")
+        print("=" * 50)
+        
+        while True:
+            # Read frame
+            ret, frame = self.read_frame()
+            if not ret:
+                print("Failed to read frame")
                 break
                 
-    except Exception as e:
-        print(f"❌ Error: {e}")
+            # Update FPS
+            self.update_fps()
+            
+            # Process frame for face detection
+            if self.process_this_frame:
+                # Detect faces
+                face_locations = self.detect_faces(frame)
+                
+                # Recognize faces if we have known encodings
+                if face_locations:
+                    face_names = self.recognize_faces(frame, face_locations)
+                else:
+                    face_names = []
+                    
+                # Store results
+                self.face_locations = face_locations
+                self.face_names = face_names
+                
+            # Alternate frame processing for performance
+            self.process_this_frame = not self.process_this_frame
+            
+            # Track faces and move servos
+            if self.tracking_active and self.face_locations:
+                # Choose target face (prefer known faces)
+                target_face_idx = 0
+                if self.target_person:
+                    # Look for specific target person
+                    for i, name in enumerate(self.face_names):
+                        if name == self.target_person:
+                            target_face_idx = i
+                            break
+                else:
+                    # Prefer known faces over unknown
+                    for i, name in enumerate(self.face_names):
+                        if name != "Unknown":
+                            target_face_idx = i
+                            break
+                            
+                if target_face_idx < len(self.face_locations):
+                    face_location = self.face_locations[target_face_idx]
+                    face_center = self.get_face_center(face_location)
+                    
+                    # Move servos if face is not centered
+                    if self.should_move_servos(face_center, frame.shape):
+                        servo1_pos, servo2_pos = self.calculate_servo_positions(face_center, frame.shape)
+                        self.move_servos(servo1_pos, servo2_pos)
+                        
+                    self.last_face_center = face_center
+                    
+            # Draw tracking information
+            display_frame = self.draw_tracking_info(frame, self.face_locations, self.face_names)
+            
+            # Display frame
+            cv2.imshow('Premium Face Tracking', display_frame)
+            
+            # Handle keyboard input
+            key = cv2.waitKey(1) & 0xFF
+            
+            if key == ord('q'):
+                break
+            elif key == ord(' '):
+                self.tracking_active = not self.tracking_active
+                status = "ACTIVE" if self.tracking_active else "PAUSED"
+                print(f"🎯 Tracking {status}")
+            elif key == ord('r'):
+                self.move_servos(self.servo1_center, self.servo2_center)
+                print("🔄 Servos reset to center")
+            elif key >= ord('1') and key <= ord('9'):
+                person_idx = key - ord('1')
+                if person_idx < len(self.known_face_names):
+                    self.target_person = self.known_face_names[person_idx]
+                    print(f"🎯 Targeting: {self.target_person}")
+                else:
+                    self.target_person = None
+                    print("🎯 Targeting: Any face")
+                    
+        # Cleanup
+        self.cleanup()
         
-    finally:
-        controller.cleanup()
-        print("👋 Face tracking system shutdown complete")
+    def cleanup(self):
+        """Clean up resources"""
+        print("\n🧹 Cleaning up...")
+        
+        # Center servos before exit
+        if self.arduino:
+            self.move_servos(self.servo1_center, self.servo2_center)
+            time.sleep(1)
+            self.arduino.close()
+            
+        # Release camera
+        self.release_camera()
+        cv2.destroyAllWindows()
+        
+        print("✅ Cleanup complete")
+
+def main():
+    """Main function"""
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='Premium Face Tracking Servo Controller')
+    parser.add_argument('--arduino-port', default='/dev/ttyUSB0', 
+                       help='Arduino serial port (default: /dev/ttyUSB0)')
+    parser.add_argument('--camera-index', type=int, default=0,
+                       help='Camera index (default: 0)')
+    
+    args = parser.parse_args()
+    
+    # Create face tracker
+    tracker = PremiumFaceTracker(
+        arduino_port=args.arduino_port,
+        camera_index=args.camera_index
+    )
+    
+    # Initialize systems
+    if not tracker.initialize_camera():
+        print("❌ Failed to initialize camera")
+        return
+        
+    if not tracker.initialize_arduino():
+        print("❌ Failed to initialize Arduino")
+        return
+        
+    # Start tracking
+    try:
+        tracker.run_tracking()
+    except KeyboardInterrupt:
+        print("\n⏹️ Interrupted by user")
+        tracker.cleanup()
 
 if __name__ == "__main__":
-    main() 
+    main()

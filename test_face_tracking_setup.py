@@ -108,15 +108,64 @@ class FaceTrackingSetupTester:
             }
             
     def test_camera_access(self) -> Dict:
-        """Test camera access and functionality"""
+        """Test camera access using the existing CameraHandler system"""
         print("\n📸 Testing Camera Access...")
         print("-" * 40)
         
-        camera_indices = [0, 1, 2]  # Try multiple camera indices
+        # First try using the existing CameraHandler (supports Sony IMX500 AI Camera)
+        try:
+            print("  🤖 Testing with CameraHandler (Sony IMX500 AI Camera support)...")
+            
+            # Import the existing camera handler
+            from camera_handler import CameraHandler
+            
+            # Initialize camera handler with IMX500 preference
+            camera_handler = CameraHandler(camera_index=0, prefer_imx500=True)
+            
+            if camera_handler.is_camera_available():
+                camera_type = "Sony IMX500 AI" if camera_handler.using_imx500 else "USB"
+                print(f"  ✅ {camera_type} camera initialized successfully")
+                
+                # Test frame capture
+                ret, frame = camera_handler.read()
+                if ret and frame is not None:
+                    height, width = frame.shape[:2]
+                    print(f"  ✅ Camera capture working - Resolution: {width}x{height}")
+                    
+                    # Save test frame
+                    cv2.imwrite('camera_test_working.jpg', frame)
+                    print(f"  📸 Test image saved as camera_test_working.jpg")
+                    
+                    # Test AI capabilities if using IMX500
+                    if camera_handler.using_imx500:
+                        ai_status = camera_handler.get_ai_status()
+                        print(f"  🤖 AI Status: {ai_status}")
+                    
+                    camera_handler.release()
+                    
+                    return {
+                        'status': 'success',
+                        'camera_type': camera_type,
+                        'using_imx500': camera_handler.using_imx500,
+                        'resolution': (width, height),
+                        'message': f'{camera_type} camera working properly'
+                    }
+                else:
+                    print(f"  ❌ Camera initialized but can't capture frames")
+                    camera_handler.release()
+            else:
+                print(f"  ❌ CameraHandler reports camera not available")
+                
+        except Exception as e:
+            print(f"  ❌ CameraHandler error: {e}")
+            
+        # Fallback to basic OpenCV test
+        print("  🔄 Falling back to basic OpenCV camera test...")
+        camera_indices = [0, 1, 2]
         
         for index in camera_indices:
             try:
-                print(f"  Trying camera index {index}...")
+                print(f"  Trying basic camera index {index}...")
                 camera = cv2.VideoCapture(index)
                 
                 if not camera.isOpened():
@@ -131,19 +180,21 @@ class FaceTrackingSetupTester:
                     continue
                     
                 height, width = frame.shape[:2]
-                print(f"  ✅ Camera {index} working - Resolution: {width}x{height}")
+                print(f"  ✅ Basic camera {index} working - Resolution: {width}x{height}")
                 
                 # Save test frame
-                cv2.imwrite(f'camera_test_{index}.jpg', frame)
-                print(f"  📸 Test image saved as camera_test_{index}.jpg")
+                cv2.imwrite(f'camera_test_basic_{index}.jpg', frame)
+                print(f"  📸 Test image saved as camera_test_basic_{index}.jpg")
                 
                 camera.release()
                 
                 return {
                     'status': 'success',
+                    'camera_type': 'Basic USB',
+                    'using_imx500': False,
                     'camera_index': index,
                     'resolution': (width, height),
-                    'message': f'Camera {index} working properly'
+                    'message': f'Basic camera {index} working properly'
                 }
                 
             except Exception as e:
@@ -152,7 +203,7 @@ class FaceTrackingSetupTester:
                 
         return {
             'status': 'failed',
-            'message': 'No working camera found'
+            'message': 'No working camera found with any method'
         }
         
     def test_face_recognition_setup(self) -> Dict:
@@ -240,6 +291,13 @@ class FaceTrackingSetupTester:
             except ImportError:
                 print(f"  ❌ {display_name} - Missing")
                 missing_modules.append(display_name)
+                
+        # Test camera handler availability
+        try:
+            from camera_handler import CameraHandler
+            print(f"  ✅ CameraHandler - Available (Sony IMX500 AI support)")
+        except ImportError:
+            print(f"  ⚠️ CameraHandler - Not available (basic camera only)")
                 
         if missing_modules:
             return {
@@ -353,8 +411,8 @@ def main():
     
     # Cleanup test images
     try:
-        for i in range(3):
-            test_file = f'camera_test_{i}.jpg'
+        test_files = ['camera_test_working.jpg'] + [f'camera_test_basic_{i}.jpg' for i in range(3)]
+        for test_file in test_files:
             if os.path.exists(test_file):
                 os.remove(test_file)
     except:
