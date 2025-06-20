@@ -44,18 +44,11 @@ class HandGestureController:
     """
     
     def __init__(self, camera_index=0, use_mediapipe=True, show_debug=False):
-        """
-        Initialize gesture controller with MediaPipe or OpenCV fallback
-        
-        Args:
-            camera_index: Camera device index (default 0)
-            use_mediapipe: Use MediaPipe for better accuracy (default True)
-            show_debug: Show debug window with hand detection (default False)
-        """
+        """Initialize hand gesture controller"""
         self.camera_index = camera_index
         self.use_mediapipe = use_mediapipe and MEDIAPIPE_AVAILABLE
         self.show_debug = show_debug
-            self.enabled = False
+        self.enabled = False
         self.cap = None
         self.camera_handler = None
         self.mp_hands = None
@@ -91,7 +84,7 @@ class HandGestureController:
             else:
                 # Fallback to direct OpenCV access
                 print("[HandGestureController] 📷 Using direct OpenCV camera access")
-        self.cap = cv2.VideoCapture(camera_index)
+                self.cap = cv2.VideoCapture(camera_index)
                 
                 if not self.cap.isOpened():
                     print(f"[HandGestureController] ❌ Camera {camera_index} not available.")
@@ -229,10 +222,10 @@ class HandGestureController:
             if self.camera_handler:
                 ret, frame = self.camera_handler.read()
             else:
-        ret, frame = self.cap.read()
+                ret, frame = self.cap.read()
                 
             if not ret or frame is None:
-            return None
+                return None
                 
             # Flip frame horizontally for mirror effect
             frame = cv2.flip(frame, 1)
@@ -336,7 +329,7 @@ class HandGestureController:
                             self.mp_draw.draw_landmarks(
                                 frame, hand_landmarks, self.mp_hands.HAND_CONNECTIONS)
                             break
-        else:
+                else:
                     finger_count = self.count_fingers_opencv(frame)
                 
                 # Add overlay information
@@ -376,7 +369,7 @@ class HandGestureController:
                 self.camera_handler.release()
                 self.camera_handler = None
             elif self.cap:
-            self.cap.release() 
+                self.cap.release() 
                 self.cap = None
             cv2.destroyAllWindows()
             print("[HandGestureController] 📷 Camera released")
