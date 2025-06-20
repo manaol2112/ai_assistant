@@ -97,7 +97,8 @@ class IMX500CameraHandler:
         except subprocess.TimeoutExpired:
             self.logger.error("❌ Camera detection timeout")
         except FileNotFoundError:
-            self.logger.error("❌ libcamera-hello not found. Install libcamera-apps")
+            # Don't show confusing error - this is expected on non-Raspberry Pi systems
+            self.logger.debug("libcamera-hello not available (expected on non-Raspberry Pi systems)")
         except Exception as e:
             self.logger.error(f"❌ Camera detection error: {e}")
         
