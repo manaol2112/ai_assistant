@@ -233,14 +233,14 @@ class AudioManager:
         self.recognizer = sr.Recognizer()
         
         # Configure recognizer with platform-optimized settings
-        energy_threshold = platform_settings['energy_threshold']
-        self.recognizer.energy_threshold = energy_threshold
+        self.energy_threshold = platform_settings['energy_threshold']
+        self.recognizer.energy_threshold = self.energy_threshold
         self.recognizer.dynamic_energy_threshold = platform_settings['dynamic_energy_threshold']
         self.recognizer.pause_threshold = platform_settings['pause_threshold']
         self.recognizer.operation_timeout = None
         
         self.logger = logging.getLogger(__name__)
-        self.logger.info(f"AudioManager initialized with sample_rate={self.sample_rate}Hz, energy_threshold={energy_threshold} for {self._get_platform_name()}")
+        self.logger.info(f"AudioManager initialized with sample_rate={self.sample_rate}Hz, energy_threshold={self.energy_threshold} for {self._get_platform_name()}")
 
     def _get_platform_audio_settings(self) -> dict:
         """Get platform-optimized audio settings including sample rate and thresholds."""
@@ -366,9 +366,16 @@ class AudioManager:
     def test_microphone(self) -> bool:
         """Test if microphone is working properly."""
         try:
-            # Use platform-optimized microphone settings
-            with sr.Microphone(sample_rate=self.sample_rate, chunk_size=self.chunk_size) as source:
-                self.logger.info("Testing microphone...")
+            # Get the best microphone device for this platform
+            mic_device_index = self._get_best_microphone_device()
+            
+            # Use platform-optimized microphone settings with specific device
+            with sr.Microphone(
+                device_index=mic_device_index,
+                sample_rate=self.sample_rate, 
+                chunk_size=self.chunk_size
+            ) as source:
+                self.logger.info(f"Testing microphone (device index: {mic_device_index})...")
                 self.recognizer.adjust_for_ambient_noise(source, duration=1)
                 self.logger.info("Microphone test successful")
                 return True
@@ -376,50 +383,108 @@ class AudioManager:
             self.logger.error(f"Microphone test failed: {e}")
             return False
 
+    def _get_best_microphone_device(self) -> Optional[int]:
+        """Get the best microphone device index for this platform."""
+        try:
+            # On Raspberry Pi 5, prefer USB PnP Audio Device
+            for i in range(self.audio.get_device_count()):
+                device_info = self.audio.get_device_info_by_index(i)
+                device_name = device_info["name"].lower()
+                
+                # Check for USB audio devices first (Waveshare)
+                if ("usb" in device_name and "audio" in device_name) or "pnp" in device_name:
+                    if device_info["maxInputChannels"] > 0:
+                        self.logger.info(f"Selected USB audio device: {device_info['name']} (index: {i})")
+                        return i
+            
+            # Fallback to default input device
+            default_device = self.audio.get_default_input_device_info()
+            self.logger.info(f"Using default audio device: {default_device['name']} (index: {default_device['index']})")
+            return default_device["index"]
+            
+        except Exception as e:
+            self.logger.error(f"Error selecting microphone device: {e}")
+            return None
+
     def calibrate_audio(self, duration: float = 2.0):
         """Calibrate audio settings for ambient noise."""
         try:
-            # Use platform-optimized microphone settings
-            with sr.Microphone(sample_rate=self.sample_rate, chunk_size=self.chunk_size) as source:
-                self.logger.info(f"Calibrating for ambient noise ({duration}s)...")
+            # Get the best microphone device for this platform
+            mic_device_index = self._get_best_microphone_device()
+            
+            # Use platform-optimized microphone settings with specific device
+            with sr.Microphone(
+                device_index=mic_device_index,
+                sample_rate=self.sample_rate, 
+                chunk_size=self.chunk_size
+            ) as source:
+                self.logger.info(f"Calibrating for ambient noise ({duration}s) using device {mic_device_index}...")
                 self.recognizer.adjust_for_ambient_noise(source, duration=duration)
-                self.logger.info(f"Audio calibrated. Energy threshold: {self.recognizer.energy_threshold}")
+                # Update our stored energy threshold
+                self.energy_threshold = self.recognizer.energy_threshold
+                self.logger.info(f"Audio calibrated. Energy threshold: {self.energy_threshold}")
         except Exception as e:
             self.logger.error(f"Audio calibration failed: {e}")
 
     def listen_for_audio(self, timeout: int = 5, phrase_time_limit: int = 10) -> Optional[sr.AudioData]:
         """Listen for audio input from microphone."""
         try:
-            # Use platform-optimized microphone settings
-            with sr.Microphone(sample_rate=self.sample_rate, chunk_size=self.chunk_size) as source:
+            # Get the best microphone device for this platform
+            mic_device_index = self._get_best_microphone_device()
+            
+            self.logger.info(f"🎤 AUDIO DEBUG: Starting audio capture (timeout={timeout}s, phrase_limit={phrase_time_limit}s)")
+            self.logger.info(f"🎤 AUDIO DEBUG: Using sample_rate={self.sample_rate}Hz, chunk_size={self.chunk_size}, device={mic_device_index}")
+            
+            # Use platform-optimized microphone settings with specific device
+            with sr.Microphone(
+                device_index=mic_device_index,
+                sample_rate=self.sample_rate, 
+                chunk_size=self.chunk_size
+            ) as source:
+                self.logger.info(f"🎤 AUDIO DEBUG: Microphone opened successfully (device: {mic_device_index})")
+                
                 # Quick ambient noise adjustment
+                self.logger.info("🎤 AUDIO DEBUG: Adjusting for ambient noise...")
                 self.recognizer.adjust_for_ambient_noise(source, duration=0.5)
+                # Update our stored energy threshold
+                self.energy_threshold = self.recognizer.energy_threshold
+                self.logger.info(f"🎤 AUDIO DEBUG: Energy threshold after calibration: {self.energy_threshold}")
                 
                 # Listen for audio
+                self.logger.info("🎤 AUDIO DEBUG: Listening for speech...")
                 audio = self.recognizer.listen(
                     source, 
                     timeout=timeout, 
                     phrase_time_limit=phrase_time_limit
                 )
+                self.logger.info("🎤 AUDIO DEBUG: Audio captured successfully!")
                 return audio
         except sr.WaitTimeoutError:
-            self.logger.debug("Audio listening timeout")
+            self.logger.info("🎤 AUDIO DEBUG: Audio listening timeout - no speech detected")
             return None
         except Exception as e:
-            self.logger.error(f"Error listening for audio: {e}")
+            self.logger.error(f"🎤 AUDIO DEBUG: Error listening for audio: {e}")
+            import traceback
+            self.logger.error(f"🎤 AUDIO DEBUG: Traceback: {traceback.format_exc()}")
             return None
 
     def audio_to_text(self, audio_data: sr.AudioData) -> Optional[str]:
         """Convert audio data to text using Google Speech Recognition."""
         try:
+            self.logger.info("🧠 RECOGNITION DEBUG: Starting speech recognition...")
             text = self.recognizer.recognize_google(audio_data)
-            self.logger.info(f"Speech recognized: {text}")
+            self.logger.info(f"🧠 RECOGNITION DEBUG: Speech recognized successfully: '{text}'")
             return text.lower()
         except sr.UnknownValueError:
-            self.logger.debug("Could not understand audio")
+            self.logger.info("🧠 RECOGNITION DEBUG: Could not understand audio - speech was unclear")
             return None
         except sr.RequestError as e:
-            self.logger.error(f"Speech recognition error: {e}")
+            self.logger.error(f"🧠 RECOGNITION DEBUG: Speech recognition service error: {e}")
+            return None
+        except Exception as e:
+            self.logger.error(f"🧠 RECOGNITION DEBUG: Unexpected recognition error: {e}")
+            import traceback
+            self.logger.error(f"🧠 RECOGNITION DEBUG: Traceback: {traceback.format_exc()}")
             return None
 
     def get_audio_level(self, duration: float = 0.1) -> float:
