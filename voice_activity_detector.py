@@ -127,24 +127,24 @@ class VoiceActivityDetector:
                 logger.info("🎤 Smart Voice Detection: Listening for human speech only...")
                 
                 # Enhanced microphone calibration
-                self.recognizer.adjust_for_ambient_noise(source, duration=0.1)  # Ultra-fast ambient noise setup
+                self.recognizer.adjust_for_ambient_noise(source, duration=0.8)  # Longer calibration for macOS
                 
                 # Configure sensitivity based on game mode - OPTIMIZED FOR SPEED
                 if game_mode == 'spelling':
-                    self.recognizer.energy_threshold = max(100, self.recognizer.energy_threshold * 0.3)  # Much more sensitive
+                    self.recognizer.energy_threshold = max(250, self.recognizer.energy_threshold * 0.8)  # More conservative for macOS
                     chunk_duration = 0.3  # Much faster chunks for real-time detection
                     min_silence_gap = 0.2  # Shorter silence gap
                 elif game_mode == 'filipino':
-                    self.recognizer.energy_threshold = max(120, self.recognizer.energy_threshold * 0.4)
+                    self.recognizer.energy_threshold = max(300, self.recognizer.energy_threshold * 0.9)
                     chunk_duration = 0.4  # Faster chunks
                     min_silence_gap = 0.3
                 elif game_mode == 'interrupt':
-                    self.recognizer.energy_threshold = max(80, self.recognizer.energy_threshold * 0.2)  # Very sensitive for interrupts
+                    self.recognizer.energy_threshold = max(200, self.recognizer.energy_threshold * 0.6)  # Less sensitive for interrupts
                     chunk_duration = 0.1  # Ultra-fast chunks for interrupts
                     min_silence_gap = 0.1
                 else:
                     # NORMAL MODE - OPTIMIZED FOR COMPLETE SPEECH CAPTURE
-                    self.recognizer.energy_threshold = max(200, self.recognizer.energy_threshold * 0.5)  # Balanced sensitivity
+                    self.recognizer.energy_threshold = max(300, self.recognizer.energy_threshold * 0.8)  # Higher threshold for macOS
                     chunk_duration = 0.5  # Longer chunks for better sentence capture
                     min_silence_gap = 0.4  # More forgiving silence tolerance
                 

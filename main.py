@@ -1547,10 +1547,10 @@ class AIAssistant:
                 self.recognizer.adjust_for_ambient_noise(source, duration=0.3)  # Faster ambient noise adjustment
                 
                 if self.spelling_game_active:
-                    self.recognizer.energy_threshold = max(200, self.recognizer.energy_threshold * 0.6)
+                    self.recognizer.energy_threshold = max(250, self.recognizer.energy_threshold * 0.8)  # Higher for macOS
                     audio = self.recognizer.listen(source, timeout=timeout, phrase_time_limit=5)  # Faster phrase detection
                 else:
-                    self.recognizer.energy_threshold = max(300, self.recognizer.energy_threshold * 0.8)
+                    self.recognizer.energy_threshold = max(350, self.recognizer.energy_threshold * 0.9)  # Even higher for normal mode
                     audio = self.recognizer.listen(source, timeout=timeout, phrase_time_limit=10)  # Faster phrase detection
                 
                 text = self.recognizer.recognize_google(audio, language='en-US')
