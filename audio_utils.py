@@ -407,27 +407,59 @@ class AudioManager:
             return None
 
     def calibrate_audio(self, duration: float = 2.0):
-        """Calibrate audio settings for ambient noise."""
+        """Calibrate audio settings for ambient noise with robust error handling."""
+        mic_source = None
         try:
             # Get the best microphone device for this platform
             mic_device_index = self._get_best_microphone_device()
             
+            # Try with specific device first
+            try:
+                mic_source = sr.Microphone(
+                    device_index=mic_device_index,
+                    sample_rate=self.sample_rate, 
+                    chunk_size=self.chunk_size
+                )
+                self.logger.info(f"Calibration: Microphone initialized with device {mic_device_index}")
+            except Exception as device_error:
+                self.logger.warning(f"Calibration: Failed to initialize with device {mic_device_index}: {device_error}")
+                # Fallback to default device
+                try:
+                    mic_source = sr.Microphone(
+                        sample_rate=self.sample_rate, 
+                        chunk_size=self.chunk_size
+                    )
+                    self.logger.info("Calibration: Microphone initialized with default device")
+                except Exception as default_error:
+                    self.logger.error(f"Calibration: Failed to initialize default microphone: {default_error}")
+                    # Last resort - basic microphone
+                    mic_source = sr.Microphone()
+                    self.logger.info("Calibration: Microphone initialized with basic settings")
+            
             # Use platform-optimized microphone settings with specific device
-            with sr.Microphone(
-                device_index=mic_device_index,
-                sample_rate=self.sample_rate, 
-                chunk_size=self.chunk_size
-            ) as source:
-                self.logger.info(f"Calibrating for ambient noise ({duration}s) using device {mic_device_index}...")
-                self.recognizer.adjust_for_ambient_noise(source, duration=duration)
-                # Update our stored energy threshold
-                self.energy_threshold = self.recognizer.energy_threshold
-                self.logger.info(f"Audio calibrated. Energy threshold: {self.energy_threshold}")
+            with mic_source as source:
+                try:
+                    self.logger.info(f"Calibrating for ambient noise ({duration}s)...")
+                    self.recognizer.adjust_for_ambient_noise(source, duration=duration)
+                    # Update our stored energy threshold
+                    self.energy_threshold = self.recognizer.energy_threshold
+                    self.logger.info(f"Audio calibrated. Energy threshold: {self.energy_threshold}")
+                except Exception as calibration_error:
+                    self.logger.warning(f"Ambient noise calibration failed: {calibration_error}")
+                    # Use default energy threshold
+                    self.recognizer.energy_threshold = 300
+                    self.energy_threshold = 300
+                    self.logger.info("Using default energy threshold: 300")
         except Exception as e:
             self.logger.error(f"Audio calibration failed: {e}")
+            # Set default values as fallback
+            self.recognizer.energy_threshold = 300
+            self.energy_threshold = 300
+            self.logger.info("Using fallback energy threshold: 300")
 
     def listen_for_audio(self, timeout: int = 5, phrase_time_limit: int = 10) -> Optional[sr.AudioData]:
-        """Listen for audio input from microphone."""
+        """Listen for audio input from microphone with robust error handling."""
+        mic_source = None
         try:
             # Get the best microphone device for this platform
             mic_device_index = self._get_best_microphone_device()
@@ -435,20 +467,46 @@ class AudioManager:
             self.logger.info(f"🎤 AUDIO DEBUG: Starting audio capture (timeout={timeout}s, phrase_limit={phrase_time_limit}s)")
             self.logger.info(f"🎤 AUDIO DEBUG: Using sample_rate={self.sample_rate}Hz, chunk_size={self.chunk_size}, device={mic_device_index}")
             
-            # Use platform-optimized microphone settings with specific device
-            with sr.Microphone(
-                device_index=mic_device_index,
-                sample_rate=self.sample_rate, 
-                chunk_size=self.chunk_size
-            ) as source:
-                self.logger.info(f"🎤 AUDIO DEBUG: Microphone opened successfully (device: {mic_device_index})")
+            # Try with specific device first
+            try:
+                mic_source = sr.Microphone(
+                    device_index=mic_device_index,
+                    sample_rate=self.sample_rate, 
+                    chunk_size=self.chunk_size
+                )
+                self.logger.info(f"🎤 AUDIO DEBUG: Microphone initialized with device {mic_device_index}")
+            except Exception as device_error:
+                self.logger.warning(f"🎤 AUDIO DEBUG: Failed to initialize with device {mic_device_index}: {device_error}")
+                # Fallback to default device
+                try:
+                    mic_source = sr.Microphone(
+                        sample_rate=self.sample_rate, 
+                        chunk_size=self.chunk_size
+                    )
+                    self.logger.info("🎤 AUDIO DEBUG: Microphone initialized with default device")
+                except Exception as default_error:
+                    self.logger.error(f"🎤 AUDIO DEBUG: Failed to initialize default microphone: {default_error}")
+                    # Last resort - basic microphone
+                    mic_source = sr.Microphone()
+                    self.logger.info("🎤 AUDIO DEBUG: Microphone initialized with basic settings")
+            
+            # Use the microphone source
+            with mic_source as source:
+                self.logger.info("🎤 AUDIO DEBUG: Microphone opened successfully")
                 
-                # Quick ambient noise adjustment
-                self.logger.info("🎤 AUDIO DEBUG: Adjusting for ambient noise...")
-                self.recognizer.adjust_for_ambient_noise(source, duration=0.5)
-                # Update our stored energy threshold
-                self.energy_threshold = self.recognizer.energy_threshold
-                self.logger.info(f"🎤 AUDIO DEBUG: Energy threshold after calibration: {self.energy_threshold}")
+                # Quick ambient noise adjustment with error handling
+                try:
+                    self.logger.info("🎤 AUDIO DEBUG: Adjusting for ambient noise...")
+                    self.recognizer.adjust_for_ambient_noise(source, duration=0.5)
+                    # Update our stored energy threshold
+                    self.energy_threshold = self.recognizer.energy_threshold
+                    self.logger.info(f"🎤 AUDIO DEBUG: Energy threshold after calibration: {self.energy_threshold}")
+                except Exception as calibration_error:
+                    self.logger.warning(f"🎤 AUDIO DEBUG: Ambient noise calibration failed: {calibration_error}")
+                    # Use default energy threshold
+                    self.recognizer.energy_threshold = 300
+                    self.energy_threshold = 300
+                    self.logger.info("🎤 AUDIO DEBUG: Using default energy threshold: 300")
                 
                 # Listen for audio
                 self.logger.info("🎤 AUDIO DEBUG: Listening for speech...")
@@ -459,6 +517,7 @@ class AudioManager:
                 )
                 self.logger.info("🎤 AUDIO DEBUG: Audio captured successfully!")
                 return audio
+                
         except sr.WaitTimeoutError:
             self.logger.info("🎤 AUDIO DEBUG: Audio listening timeout - no speech detected")
             return None
@@ -467,6 +526,14 @@ class AudioManager:
             import traceback
             self.logger.error(f"🎤 AUDIO DEBUG: Traceback: {traceback.format_exc()}")
             return None
+        finally:
+            # Ensure proper cleanup
+            if mic_source:
+                try:
+                    # The 'with' statement should handle cleanup, but just in case
+                    pass
+                except:
+                    pass
 
     def audio_to_text(self, audio_data: sr.AudioData) -> Optional[str]:
         """Convert audio data to text using Google Speech Recognition."""
