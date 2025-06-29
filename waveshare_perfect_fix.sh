@@ -299,5 +299,4 @@ echo "2. python3 test_waveshare_ai.py"
 echo "3. python3 main.py"
 echo ""
 echo "💡 Your Waveshare USB Audio device is excellent!"
-echo "⚡ This fix uses the correct 44100Hz sample rate!"
-EOF 
+echo "⚡ This fix uses the correct 44100Hz sample rate!" 
