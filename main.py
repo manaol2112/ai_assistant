@@ -1482,7 +1482,7 @@ class AIAssistant:
             try:
                 text = self.voice_detector.listen_with_speaker_detection(
                     timeout=timeout,
-                    silence_threshold=2.5,  # More generous silence threshold for complete thoughts
+                    silence_threshold=1.8,  # Pi 5 FIX: Reduced from 2.5 to 1.8  # More generous silence threshold for complete thoughts
                     max_total_time=45,  # Longer max time for complex questions
                     game_mode=game_mode
                 )

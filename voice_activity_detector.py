@@ -208,6 +208,19 @@ class VoiceActivityDetector:
                 logger.info("🎤 AI finished speaking - voice detection active")
     
     def is_ai_speech(self, text: str) -> bool:
+        """Check if text is AI speech - less strict for Pi 5."""
+        # Pi 5 SPECIFIC FIX: Be less strict about AI speech detection
+        if self.platform_info['name'] == 'Raspberry Pi 5':
+            # Only filter very obvious AI phrases on Pi 5
+            obvious_ai_phrases = [
+                "automatic conversation mode activated",
+                "i'm listening",
+                "say goodbye to end",
+                "conversation mode"
+            ]
+            text_lower = text.lower().strip()
+            return any(phrase in text_lower for phrase in obvious_ai_phrases)
+
         """Check if the recognized text is likely from the AI itself."""
         if not text:
             return False
@@ -265,20 +278,40 @@ class VoiceActivityDetector:
                 
                 # Configure timing based on game mode and platform
                 if game_mode == 'spelling':
-                    chunk_duration = settings['chunk_duration_base'] * 0.6  # Faster for spelling
+                    # Pi 5 SPECIFIC FIX: Faster chunk processing
+                    if self.platform_info['name'] == 'Raspberry Pi 5':
+                        chunk_duration = settings['chunk_duration_base'] * 0.8  # Faster for Pi 5
+                    else:
+                        chunk_duration = settings['chunk_duration_base'] * 0.6  # Faster for spelling
                     min_silence_gap = 0.2
                 elif game_mode == 'filipino':
-                    chunk_duration = settings['chunk_duration_base'] * 0.8  # Medium speed
+                    # Pi 5 SPECIFIC FIX: Faster chunk processing
+                    if self.platform_info['name'] == 'Raspberry Pi 5':
+                        chunk_duration = settings['chunk_duration_base'] * 0.8  # Faster for Pi 5
+                    else:
+                        chunk_duration = settings['chunk_duration_base'] * 0.8  # Medium speed
                     min_silence_gap = 0.3
                 elif game_mode == 'interrupt':
-                    chunk_duration = settings['chunk_duration_base'] * 0.2  # Ultra-fast
+                    # Pi 5 SPECIFIC FIX: Faster chunk processing
+                    if self.platform_info['name'] == 'Raspberry Pi 5':
+                        chunk_duration = settings['chunk_duration_base'] * 0.8  # Faster for Pi 5
+                    else:
+                        chunk_duration = settings['chunk_duration_base'] * 0.2  # Ultra-fast
                     min_silence_gap = 0.1
                 else:
                     # NORMAL MODE - OPTIMIZED FOR COMPLETE SPEECH CAPTURE
-                    chunk_duration = settings['chunk_duration_base']
+                    # Pi 5 SPECIFIC FIX: Faster chunk processing
+                    if self.platform_info['name'] == 'Raspberry Pi 5':
+                        chunk_duration = settings['chunk_duration_base'] * 0.8  # Faster for Pi 5
+                    else:
+                        chunk_duration = settings['chunk_duration_base']
                     min_silence_gap = 0.4
                 
                 # Apply platform-specific silence tolerance
+                # Pi 5 SPECIFIC FIX: Reduce silence threshold for better responsiveness
+            if self.platform_info['name'] == 'Raspberry Pi 5':
+                silence_threshold = min(1.5, silence_threshold * settings['silence_tolerance_base'] * 0.7)
+            else:
                 silence_threshold = silence_threshold * settings['silence_tolerance_base']
                 
                 self.recognizer.dynamic_energy_threshold = True
