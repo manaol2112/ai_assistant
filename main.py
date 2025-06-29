@@ -1539,38 +1539,51 @@ class AIAssistant:
                 return None
     
     def _fallback_listen_for_speech(self, timeout: int = 15) -> Optional[str]:
-        """Fallback speech recognition method."""
+        """Fallback speech recognition without voice activity detection."""
         try:
-            import speech_recognition as sr
             with sr.Microphone() as source:
-                logger.info("🎤 Using fallback speech recognition...")
-                self.recognizer.adjust_for_ambient_noise(source, duration=0.3)  # Faster ambient noise adjustment
+                logger.info("🎤 Fallback speech recognition - listening for any speech...")
                 
-                if self.spelling_game_active:
-                    self.recognizer.energy_threshold = max(250, self.recognizer.energy_threshold * 0.8)  # Higher for macOS
-                    audio = self.recognizer.listen(source, timeout=timeout, phrase_time_limit=5)  # Faster phrase detection
-                else:
-                    self.recognizer.energy_threshold = max(350, self.recognizer.energy_threshold * 0.9)  # Even higher for normal mode
-                    audio = self.recognizer.listen(source, timeout=timeout, phrase_time_limit=10)  # Faster phrase detection
+                # Get platform-specific settings from voice activity detector
+                platform_settings = self.voice_detector._get_optimal_thresholds()
                 
-                text = self.recognizer.recognize_google(audio, language='en-US')
-                logger.info(f"Fallback recognized: {text}")
-                return text.lower()
+                # Platform-optimized calibration
+                calibration_duration = platform_settings['calibration_duration']
+                self.recognizer.adjust_for_ambient_noise(source, duration=calibration_duration)
+                logger.info(f"🎯 Fallback calibrated for {calibration_duration}s on {self.voice_detector.platform_info['name']}")
+                
+                # Set platform-optimized energy thresholds
+                base_threshold = platform_settings['energy_threshold']
+                fallback_threshold = int(base_threshold * 1.2)  # Slightly higher for fallback
+                self.recognizer.energy_threshold = max(fallback_threshold, self.recognizer.energy_threshold)
+                
+                logger.info(f"🎚️ Fallback energy threshold: {self.recognizer.energy_threshold} (platform: {self.voice_detector.platform_info['name']})")
+                
+                # Listen for speech with platform-optimized timeout
+                platform_timeout = timeout * self.voice_detector.platform_info.get('silence_tolerance_multiplier', 1.0)
+                audio = self.recognizer.listen(source, timeout=platform_timeout, phrase_time_limit=8)
+                
+                # Try recognition with multiple attempts
+                for attempt in range(3):
+                    try:
+                        text = self.recognizer.recognize_google(audio, language='en-US')
+                        if text.strip():
+                            logger.info(f"✅ Fallback recognition successful (attempt {attempt + 1}): '{text}'")
+                            return self._clean_recognized_text(text)
+                    except (sr.UnknownValueError, sr.RequestError) as e:
+                        if attempt < 2:
+                            logger.warning(f"Fallback recognition attempt {attempt + 1} failed: {e}")
+                            time.sleep(0.2)
+                        else:
+                            logger.error(f"All fallback recognition attempts failed: {e}")
+                
+                return None
                 
         except sr.WaitTimeoutError:
-            logger.info("🎤 Fallback speech recognition timeout")
-            return None
-        except sr.UnknownValueError:
-            logger.info("🎤 Fallback speech recognition could not understand audio")
-            return None
-        except sr.RequestError as e:
-            logger.error(f"🎤 Fallback speech recognition request error: {e}")
+            logger.info("⏰ Fallback speech recognition timeout - no speech detected")
             return None
         except Exception as e:
-            logger.error(f"🎤 Fallback speech recognition unexpected error: {e}")
-            logger.error(f"🎤 Fallback error type: {type(e)}")
-            import traceback
-            logger.error(f"🎤 Fallback traceback: {traceback.format_exc()}")
+            logger.error(f"Fallback speech recognition error: {e}")
             return None
 
     def _clean_recognized_text(self, text: str) -> str:

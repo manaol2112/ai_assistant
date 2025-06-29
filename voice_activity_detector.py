@@ -7,6 +7,8 @@ import speech_recognition as sr
 import logging
 import time
 import threading
+import platform
+import os
 from typing import Optional, List, Dict, Any
 import numpy as np
 
@@ -18,6 +20,7 @@ class VoiceActivityDetector:
     def __init__(self, recognizer: sr.Recognizer):
         self.recognizer = recognizer
         self.ai_speaking = False  # Flag to track when AI is speaking
+        self.platform_info = self._detect_platform()
         self.ai_speech_patterns = [
             # Common AI phrases that should be ignored
             "smile brightens up my camera sensors",
@@ -74,7 +77,127 @@ class VoiceActivityDetector:
             "almost there",
         ]
         self.speaker_lock = threading.Lock()
+        logger.info(f"🎤 Voice Activity Detector initialized for {self.platform_info['name']}")
     
+    def _detect_platform(self) -> Dict[str, Any]:
+        """Detect the current platform and return optimized settings."""
+        system = platform.system().lower()
+        machine = platform.machine().lower()
+        
+        # Check if running on Raspberry Pi
+        is_raspberry_pi = False
+        pi_version = None
+        
+        try:
+            if os.path.exists('/proc/device-tree/model'):
+                with open('/proc/device-tree/model', 'r') as f:
+                    model_info = f.read().strip()
+                    if 'raspberry pi' in model_info.lower():
+                        is_raspberry_pi = True
+                        if 'pi 5' in model_info.lower() or '5 model' in model_info.lower():
+                            pi_version = 5
+                        elif 'pi 4' in model_info.lower() or '4 model' in model_info.lower():
+                            pi_version = 4
+                        else:
+                            pi_version = 3  # Assume older Pi
+        except:
+            pass
+        
+        # Determine platform-specific settings
+        if is_raspberry_pi:
+            if pi_version == 5:
+                return {
+                    'name': f'Raspberry Pi {pi_version}',
+                    'type': 'raspberry_pi_5',
+                    'base_energy_threshold': 150,  # Lower for Pi 5 USB mics
+                    'calibration_duration': 1.2,   # Longer calibration for Pi
+                    'energy_multipliers': {
+                        'normal': 1.0,      # 150 base
+                        'spelling': 0.8,    # 120 - more sensitive for spelling
+                        'filipino': 1.1,    # 165 - slightly higher for accents
+                        'interrupt': 0.6    # 90 - very sensitive for interrupts
+                    },
+                    'chunk_duration_multiplier': 1.2,  # Slightly longer chunks for Pi
+                    'silence_tolerance_multiplier': 1.3  # More forgiving silence
+                }
+            else:
+                return {
+                    'name': f'Raspberry Pi {pi_version or "Unknown"}',
+                    'type': 'raspberry_pi_other',
+                    'base_energy_threshold': 120,  # Even lower for older Pi
+                    'calibration_duration': 1.0,
+                    'energy_multipliers': {
+                        'normal': 1.0,
+                        'spelling': 0.7,
+                        'filipino': 1.2,
+                        'interrupt': 0.5
+                    },
+                    'chunk_duration_multiplier': 1.0,
+                    'silence_tolerance_multiplier': 1.2
+                }
+        elif system == 'darwin':  # macOS
+            return {
+                'name': 'macOS',
+                'type': 'macos',
+                'base_energy_threshold': 300,  # Higher for macOS built-in mics
+                'calibration_duration': 0.8,
+                'energy_multipliers': {
+                    'normal': 1.0,      # 300 base
+                    'spelling': 0.83,   # 250
+                    'filipino': 1.0,    # 300
+                    'interrupt': 0.67   # 200
+                },
+                'chunk_duration_multiplier': 1.0,
+                'silence_tolerance_multiplier': 1.0
+            }
+        elif system == 'linux':  # Generic Linux
+            return {
+                'name': 'Linux',
+                'type': 'linux',
+                'base_energy_threshold': 200,  # Middle ground
+                'calibration_duration': 1.0,
+                'energy_multipliers': {
+                    'normal': 1.0,
+                    'spelling': 0.75,
+                    'filipino': 1.15,
+                    'interrupt': 0.6
+                },
+                'chunk_duration_multiplier': 1.1,
+                'silence_tolerance_multiplier': 1.1
+            }
+        else:  # Windows or other
+            return {
+                'name': system.title(),
+                'type': 'other',
+                'base_energy_threshold': 250,
+                'calibration_duration': 0.8,
+                'energy_multipliers': {
+                    'normal': 1.0,
+                    'spelling': 0.8,
+                    'filipino': 1.1,
+                    'interrupt': 0.65
+                },
+                'chunk_duration_multiplier': 1.0,
+                'silence_tolerance_multiplier': 1.0
+            }
+    
+    def _get_optimal_thresholds(self, game_mode: str = None) -> Dict[str, Any]:
+        """Get platform-optimized energy thresholds and timing settings."""
+        base_threshold = self.platform_info['base_energy_threshold']
+        multipliers = self.platform_info['energy_multipliers']
+        
+        mode = game_mode or 'normal'
+        multiplier = multipliers.get(mode, multipliers['normal'])
+        
+        optimal_threshold = int(base_threshold * multiplier)
+        
+        return {
+            'energy_threshold': optimal_threshold,
+            'calibration_duration': self.platform_info['calibration_duration'],
+            'chunk_duration_base': 0.5 * self.platform_info['chunk_duration_multiplier'],
+            'silence_tolerance_base': 1.0 * self.platform_info['silence_tolerance_multiplier']
+        }
+
     def set_ai_speaking(self, speaking: bool):
         """Set the AI speaking flag to prevent self-recognition."""
         with self.speaker_lock:
@@ -124,29 +247,39 @@ class VoiceActivityDetector:
         
         try:
             with sr.Microphone() as source:
-                logger.info("🎤 Smart Voice Detection: Listening for human speech only...")
+                logger.info(f"🎤 Smart Voice Detection ({self.platform_info['name']}): Listening for human speech only...")
                 
-                # Enhanced microphone calibration
-                self.recognizer.adjust_for_ambient_noise(source, duration=0.8)  # Longer calibration for macOS
+                # Get platform-optimized settings
+                settings = self._get_optimal_thresholds(game_mode)
                 
-                # Configure sensitivity based on game mode - OPTIMIZED FOR SPEED
+                # Enhanced microphone calibration with platform-specific duration
+                calibration_duration = settings['calibration_duration']
+                self.recognizer.adjust_for_ambient_noise(source, duration=calibration_duration)
+                logger.info(f"🎯 Calibrated for {calibration_duration}s on {self.platform_info['name']}")
+                
+                # Set platform-optimized energy threshold
+                optimal_threshold = settings['energy_threshold']
+                self.recognizer.energy_threshold = max(optimal_threshold, self.recognizer.energy_threshold * 0.8)
+                
+                logger.info(f"🎚️ Energy threshold set to {self.recognizer.energy_threshold} (optimized for {self.platform_info['name']} {game_mode or 'normal'} mode)")
+                
+                # Configure timing based on game mode and platform
                 if game_mode == 'spelling':
-                    self.recognizer.energy_threshold = max(250, self.recognizer.energy_threshold * 0.8)  # More conservative for macOS
-                    chunk_duration = 0.3  # Much faster chunks for real-time detection
-                    min_silence_gap = 0.2  # Shorter silence gap
+                    chunk_duration = settings['chunk_duration_base'] * 0.6  # Faster for spelling
+                    min_silence_gap = 0.2
                 elif game_mode == 'filipino':
-                    self.recognizer.energy_threshold = max(300, self.recognizer.energy_threshold * 0.9)
-                    chunk_duration = 0.4  # Faster chunks
+                    chunk_duration = settings['chunk_duration_base'] * 0.8  # Medium speed
                     min_silence_gap = 0.3
                 elif game_mode == 'interrupt':
-                    self.recognizer.energy_threshold = max(200, self.recognizer.energy_threshold * 0.6)  # Less sensitive for interrupts
-                    chunk_duration = 0.1  # Ultra-fast chunks for interrupts
+                    chunk_duration = settings['chunk_duration_base'] * 0.2  # Ultra-fast
                     min_silence_gap = 0.1
                 else:
                     # NORMAL MODE - OPTIMIZED FOR COMPLETE SPEECH CAPTURE
-                    self.recognizer.energy_threshold = max(300, self.recognizer.energy_threshold * 0.8)  # Higher threshold for macOS
-                    chunk_duration = 0.5  # Longer chunks for better sentence capture
-                    min_silence_gap = 0.4  # More forgiving silence tolerance
+                    chunk_duration = settings['chunk_duration_base']
+                    min_silence_gap = 0.4
+                
+                # Apply platform-specific silence tolerance
+                silence_threshold = silence_threshold * settings['silence_tolerance_base']
                 
                 self.recognizer.dynamic_energy_threshold = True
                 
@@ -158,7 +291,7 @@ class VoiceActivityDetector:
                 recent_ai_speech = False
                 last_speech_time = 0
                 
-                logger.info(f"👂 Listening for human speech (max {max_total_time}s)...")
+                logger.info(f"👂 Listening for human speech (max {max_total_time}s, silence tolerance: {silence_threshold:.1f}s)...")
                 
                 while total_listening_time < max_total_time:
                     # Check if AI started speaking (should stop listening)
