@@ -213,10 +213,13 @@ class OpenAITTSEngine:
 class AudioManager:
     """Manages audio input/output operations for the AI Assistant."""
     
-    def __init__(self, sample_rate: int = 16000, chunk_size: int = 1024):
+    def __init__(self, sample_rate: int = None, chunk_size: int = None):
         """Initialize audio manager with platform-optimized settings."""
-        self.sample_rate = sample_rate
-        self.chunk_size = chunk_size
+        # Get platform-optimized settings
+        platform_settings = self._get_platform_audio_settings()
+        
+        self.sample_rate = sample_rate or platform_settings['sample_rate']
+        self.chunk_size = chunk_size or platform_settings['chunk_size']
         self.channels = 1
         self.format = pyaudio.paInt16
         
@@ -230,14 +233,77 @@ class AudioManager:
         self.recognizer = sr.Recognizer()
         
         # Configure recognizer with platform-optimized settings
-        energy_threshold = self._get_platform_energy_threshold()
+        energy_threshold = platform_settings['energy_threshold']
         self.recognizer.energy_threshold = energy_threshold
-        self.recognizer.dynamic_energy_threshold = True
-        self.recognizer.pause_threshold = 0.8
+        self.recognizer.dynamic_energy_threshold = platform_settings['dynamic_energy_threshold']
+        self.recognizer.pause_threshold = platform_settings['pause_threshold']
         self.recognizer.operation_timeout = None
         
         self.logger = logging.getLogger(__name__)
-        self.logger.info(f"AudioManager initialized with energy_threshold={energy_threshold} for {self._get_platform_name()}")
+        self.logger.info(f"AudioManager initialized with sample_rate={self.sample_rate}Hz, energy_threshold={energy_threshold} for {self._get_platform_name()}")
+
+    def _get_platform_audio_settings(self) -> dict:
+        """Get platform-optimized audio settings including sample rate and thresholds."""
+        system = platform.system().lower()
+        
+        # Check if running on Raspberry Pi
+        is_raspberry_pi = False
+        pi_version = None
+        
+        if os.path.exists('/proc/device-tree/model'):
+            try:
+                with open('/proc/device-tree/model', 'r') as f:
+                    model_info = f.read().strip()
+                    if 'raspberry pi' in model_info.lower():
+                        is_raspberry_pi = True
+                        if 'pi 5' in model_info.lower() or '5 model' in model_info.lower():
+                            pi_version = 5
+                        elif 'pi 4' in model_info.lower() or '4 model' in model_info.lower():
+                            pi_version = 4
+                        else:
+                            pi_version = 3
+            except:
+                pass
+        
+        # Return platform-specific settings
+        if is_raspberry_pi and pi_version == 5:
+            # Waveshare USB Audio optimized settings for Pi 5
+            return {
+                'sample_rate': 44100,  # Waveshare supports 44100Hz perfectly
+                'chunk_size': 4096,    # Large buffer for stability
+                'energy_threshold': 200,  # Higher threshold for quality USB mics
+                'dynamic_energy_threshold': False,  # Disable for consistent performance
+                'pause_threshold': 0.8,
+                'platform_name': 'Raspberry Pi 5 (Waveshare USB Audio)'
+            }
+        elif is_raspberry_pi:
+            # Other Pi models
+            return {
+                'sample_rate': 16000,
+                'chunk_size': 2048,
+                'energy_threshold': 120,
+                'dynamic_energy_threshold': True,
+                'pause_threshold': 0.8,
+                'platform_name': f'Raspberry Pi {pi_version or "Unknown"}'
+            }
+        elif system == 'darwin':  # macOS
+            return {
+                'sample_rate': 16000,
+                'chunk_size': 1024,
+                'energy_threshold': 300,
+                'dynamic_energy_threshold': True,
+                'pause_threshold': 0.8,
+                'platform_name': 'macOS'
+            }
+        else:  # Linux, Windows, other
+            return {
+                'sample_rate': 16000,
+                'chunk_size': 1024,
+                'energy_threshold': 250,
+                'dynamic_energy_threshold': True,
+                'pause_threshold': 0.8,
+                'platform_name': system.title()
+            }
 
     def _get_platform_name(self) -> str:
         """Get platform name for logging."""
@@ -268,43 +334,6 @@ class AudioManager:
         else:
             return system.title()
     
-    def _get_platform_energy_threshold(self) -> int:
-        """Get platform-optimized energy threshold for speech recognition."""
-        system = platform.system().lower()
-        machine = platform.machine().lower()
-        
-        # Check if running on Raspberry Pi
-        is_raspberry_pi = False
-        pi_version = None
-        
-        if os.path.exists('/proc/device-tree/model'):
-            try:
-                with open('/proc/device-tree/model', 'r') as f:
-                    model_info = f.read().strip()
-                    if 'raspberry pi' in model_info.lower():
-                        is_raspberry_pi = True
-                        if 'pi 5' in model_info.lower() or '5 model' in model_info.lower():
-                            pi_version = 5
-                        elif 'pi 4' in model_info.lower() or '4 model' in model_info.lower():
-                            pi_version = 4
-                        else:
-                            pi_version = 3  # Assume older Pi
-            except:
-                pass
-        
-        # Return platform-specific energy thresholds
-        if is_raspberry_pi:
-            if pi_version == 5:
-                return 150  # Lower threshold for Pi 5 USB microphones
-            else:
-                return 120  # Even lower for older Pi models
-        elif system == 'darwin':  # macOS
-            return 300  # Higher threshold for macOS built-in mics
-        elif system == 'linux':  # Generic Linux
-            return 200  # Middle ground for Linux systems
-        else:  # Windows or other
-            return 250  # Conservative default
-
     def get_microphone_info(self) -> dict:
         """Get information about available microphones."""
         info = {"default_mic": None, "available_mics": []}
@@ -337,7 +366,8 @@ class AudioManager:
     def test_microphone(self) -> bool:
         """Test if microphone is working properly."""
         try:
-            with sr.Microphone() as source:
+            # Use platform-optimized microphone settings
+            with sr.Microphone(sample_rate=self.sample_rate, chunk_size=self.chunk_size) as source:
                 self.logger.info("Testing microphone...")
                 self.recognizer.adjust_for_ambient_noise(source, duration=1)
                 self.logger.info("Microphone test successful")
@@ -349,7 +379,8 @@ class AudioManager:
     def calibrate_audio(self, duration: float = 2.0):
         """Calibrate audio settings for ambient noise."""
         try:
-            with sr.Microphone() as source:
+            # Use platform-optimized microphone settings
+            with sr.Microphone(sample_rate=self.sample_rate, chunk_size=self.chunk_size) as source:
                 self.logger.info(f"Calibrating for ambient noise ({duration}s)...")
                 self.recognizer.adjust_for_ambient_noise(source, duration=duration)
                 self.logger.info(f"Audio calibrated. Energy threshold: {self.recognizer.energy_threshold}")
@@ -359,7 +390,8 @@ class AudioManager:
     def listen_for_audio(self, timeout: int = 5, phrase_time_limit: int = 10) -> Optional[sr.AudioData]:
         """Listen for audio input from microphone."""
         try:
-            with sr.Microphone() as source:
+            # Use platform-optimized microphone settings
+            with sr.Microphone(sample_rate=self.sample_rate, chunk_size=self.chunk_size) as source:
                 # Quick ambient noise adjustment
                 self.recognizer.adjust_for_ambient_noise(source, duration=0.5)
                 
