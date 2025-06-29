@@ -466,7 +466,7 @@ class AudioManager:
             return False
 
     def calibrate_audio(self, duration: float = 2.0):
-        """Calibrate audio settings for ambient noise with robust error handling."""
+        """Calibrate audio settings for ambient noise with robust error handling and threshold management."""
         mic_source = None
         try:
             # Get the best microphone device for this platform
@@ -499,22 +499,60 @@ class AudioManager:
             with mic_source as source:
                 try:
                     self.logger.info(f"Calibrating for ambient noise ({duration}s)...")
+                    
+                    # Store the original threshold for comparison
+                    original_threshold = getattr(self, '_energy_threshold', self.recognizer.energy_threshold)
+                    
                     self.recognizer.adjust_for_ambient_noise(source, duration=duration)
-                    # Update our stored energy threshold
-                    self.energy_threshold = self.recognizer.energy_threshold
-                    self.logger.info(f"Audio calibrated. Energy threshold: {self.energy_threshold}")
+                    new_threshold = self.recognizer.energy_threshold
+                    
+                    # Implement smart threshold management to prevent runaway values
+                    platform_max_threshold = 1000 if 'Raspberry Pi' in self.platform_info['name'] else 800
+                    platform_min_threshold = 100 if 'Raspberry Pi' in self.platform_info['name'] else 150
+                    
+                    # If the new threshold is too high, use a reasonable maximum
+                    if new_threshold > platform_max_threshold:
+                        self.logger.warning(f"Calibrated threshold {new_threshold:.2f} exceeds platform maximum {platform_max_threshold}")
+                        self.recognizer.energy_threshold = platform_max_threshold
+                        self.energy_threshold = platform_max_threshold
+                        self.logger.info(f"Using platform maximum threshold: {platform_max_threshold}")
+                    # If the new threshold is too low, use a reasonable minimum
+                    elif new_threshold < platform_min_threshold:
+                        self.logger.warning(f"Calibrated threshold {new_threshold:.2f} below platform minimum {platform_min_threshold}")
+                        self.recognizer.energy_threshold = platform_min_threshold
+                        self.energy_threshold = platform_min_threshold
+                        self.logger.info(f"Using platform minimum threshold: {platform_min_threshold}")
+                    else:
+                        # Use the calibrated threshold
+                        self.energy_threshold = new_threshold
+                        self.logger.info(f"Audio calibrated. Energy threshold: {new_threshold:.2f}")
+                    
+                    # Log the threshold change for debugging
+                    final_threshold = self.energy_threshold
+                    self.logger.info(f"🔧 THRESHOLD MANAGEMENT: {original_threshold:.2f} → {final_threshold:.2f}")
+                    
                 except Exception as calibration_error:
                     self.logger.warning(f"Ambient noise calibration failed: {calibration_error}")
-                    # Use default energy threshold
-                    self.recognizer.energy_threshold = 300
-                    self.energy_threshold = 300
-                    self.logger.info("Using default energy threshold: 300")
+                    # Use platform-specific default energy threshold
+                    if 'Raspberry Pi' in self.platform_info['name']:
+                        default_threshold = 200  # Good for Pi with USB audio
+                    else:
+                        default_threshold = 300  # Good for other platforms
+                    
+                    self.recognizer.energy_threshold = default_threshold
+                    self.energy_threshold = default_threshold
+                    self.logger.info(f"Using platform default energy threshold: {default_threshold}")
         except Exception as e:
             self.logger.error(f"Audio calibration failed: {e}")
-            # Set default values as fallback
-            self.recognizer.energy_threshold = 300
-            self.energy_threshold = 300
-            self.logger.info("Using fallback energy threshold: 300")
+            # Set platform-specific fallback values
+            if 'Raspberry Pi' in self.platform_info['name']:
+                fallback_threshold = 200
+            else:
+                fallback_threshold = 300
+            
+            self.recognizer.energy_threshold = fallback_threshold
+            self.energy_threshold = fallback_threshold
+            self.logger.info(f"Using fallback energy threshold: {fallback_threshold}")
 
     def listen_for_audio(self, timeout: int = 5, phrase_time_limit: int = 10) -> Optional[sr.AudioData]:
         """Listen for audio input with improved error handling for Raspberry Pi."""
@@ -562,17 +600,37 @@ class AudioManager:
                     # Quick ambient noise adjustment with error handling
                     try:
                         self.logger.info("🎤 AUDIO DEBUG: Adjusting for ambient noise...")
-                        self.recognizer.adjust_for_ambient_noise(source, duration=0.5)
-                        # Update our stored energy threshold
-                        self.energy_threshold = self.recognizer.energy_threshold
-                        self.logger.info(f"🎤 AUDIO DEBUG: Energy threshold after calibration: {self.energy_threshold}")
+                        # Only do full calibration if threshold seems way off, otherwise use quick adjustment
+                        current_threshold = getattr(self, '_energy_threshold', self.recognizer.energy_threshold)
+                        
+                        # Quick calibration (0.5s) to avoid excessive threshold climbing
+                        self.recognizer.adjust_for_ambient_noise(source, duration=0.3)
+                        new_threshold = self.recognizer.energy_threshold
+                        
+                        # Apply the same threshold management as in calibrate_audio
+                        platform_max_threshold = 1000 if 'Raspberry Pi' in self.platform_info['name'] else 800
+                        platform_min_threshold = 100 if 'Raspberry Pi' in self.platform_info['name'] else 150
+                        
+                        # Prevent runaway threshold climbing during conversation
+                        if new_threshold > platform_max_threshold:
+                            self.logger.warning(f"🎤 AUDIO DEBUG: Threshold {new_threshold:.2f} capped at {platform_max_threshold}")
+                            self.recognizer.energy_threshold = platform_max_threshold
+                            self.energy_threshold = platform_max_threshold
+                        elif new_threshold < platform_min_threshold:
+                            self.logger.warning(f"🎤 AUDIO DEBUG: Threshold {new_threshold:.2f} raised to {platform_min_threshold}")
+                            self.recognizer.energy_threshold = platform_min_threshold
+                            self.energy_threshold = platform_min_threshold
+                        else:
+                            self.energy_threshold = new_threshold
+                        
+                        self.logger.info(f"🎤 AUDIO DEBUG: Energy threshold: {current_threshold:.2f} → {self.energy_threshold:.2f}")
                     except Exception as calibration_error:
                         self.logger.warning(f"🎤 AUDIO DEBUG: Ambient noise calibration failed: {calibration_error}")
                         # Use lower energy threshold for Pi to detect quieter speech
                         if 'Raspberry Pi' in self.platform_info['name']:
-                            self.recognizer.energy_threshold = 150  # Lower for Pi
-                            self.energy_threshold = 150
-                            self.logger.info("🎤 AUDIO DEBUG: Using Pi-optimized energy threshold: 150")
+                            self.recognizer.energy_threshold = 200  # Stable threshold for Pi
+                            self.energy_threshold = 200
+                            self.logger.info("🎤 AUDIO DEBUG: Using Pi-optimized energy threshold: 200")
                         else:
                             self.recognizer.energy_threshold = 300
                             self.energy_threshold = 300
