@@ -209,6 +209,9 @@ class VoiceActivityDetector:
     
     def is_ai_speech(self, text: str) -> bool:
         """Check if text is AI speech - less strict for Pi 5."""
+        if not text:
+            return False
+            
         # Pi 5 SPECIFIC FIX: Be less strict about AI speech detection
         if self.platform_info['name'] == 'Raspberry Pi 5':
             # Only filter very obvious AI phrases on Pi 5
@@ -221,10 +224,7 @@ class VoiceActivityDetector:
             text_lower = text.lower().strip()
             return any(phrase in text_lower for phrase in obvious_ai_phrases)
 
-        """Check if the recognized text is likely from the AI itself."""
-        if not text:
-            return False
-        
+        # Original logic for other platforms
         text_lower = text.lower().strip()
         
         # Check against known AI speech patterns
@@ -309,10 +309,10 @@ class VoiceActivityDetector:
                 
                 # Apply platform-specific silence tolerance
                 # Pi 5 SPECIFIC FIX: Reduce silence threshold for better responsiveness
-            if self.platform_info['name'] == 'Raspberry Pi 5':
-                silence_threshold = min(1.5, silence_threshold * settings['silence_tolerance_base'] * 0.7)
-            else:
-                silence_threshold = silence_threshold * settings['silence_tolerance_base']
+                if self.platform_info['name'] == 'Raspberry Pi 5':
+                    silence_threshold = min(1.5, silence_threshold * settings['silence_tolerance_base'] * 0.7)
+                else:
+                    silence_threshold = silence_threshold * settings['silence_tolerance_base']
                 
                 self.recognizer.dynamic_energy_threshold = True
                 
