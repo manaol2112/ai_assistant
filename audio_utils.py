@@ -234,7 +234,6 @@ class AudioManager:
         
         # Configure recognizer with platform-optimized settings
         self.energy_threshold = platform_settings['energy_threshold']
-        self.recognizer.energy_threshold = self.energy_threshold
         self.recognizer.dynamic_energy_threshold = platform_settings['dynamic_energy_threshold']
         self.recognizer.pause_threshold = platform_settings['pause_threshold']
         self.recognizer.operation_timeout = None
@@ -334,6 +333,17 @@ class AudioManager:
         else:
             return system.title()
     
+    @property
+    def energy_threshold(self) -> float:
+        """Get the current energy threshold."""
+        return getattr(self, '_energy_threshold', self.recognizer.energy_threshold)
+    
+    @energy_threshold.setter
+    def energy_threshold(self, value: float):
+        """Set the energy threshold for both internal tracking and recognizer."""
+        self._energy_threshold = value
+        self.recognizer.energy_threshold = value
+
     def get_microphone_info(self) -> dict:
         """Get information about available microphones."""
         info = {"default_mic": None, "available_mics": []}

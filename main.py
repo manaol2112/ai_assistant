@@ -1463,8 +1463,19 @@ class AIAssistant:
             
             logger.info(f"🎤 Listening for speech (timeout={timeout}s)...")
             
+            # Debug: Show current audio settings
+            logger.info(f"🔧 AUDIO SETTINGS DEBUG:")
+            logger.info(f"   Sample Rate: {self.audio_manager.sample_rate}Hz")
+            logger.info(f"   Chunk Size: {self.audio_manager.chunk_size}")
+            logger.info(f"   Energy Threshold: {self.audio_manager.energy_threshold}")
+            logger.info(f"   Recognizer Energy Threshold: {self.audio_manager.recognizer.energy_threshold}")
+            
+            # Use longer timeout for conversation (people need time to think)
+            conversation_timeout = max(timeout, 20)  # At least 20 seconds for conversation
+            logger.info(f"🎤 Using conversation timeout: {conversation_timeout}s")
+            
             # Use the AudioManager directly for reliable speech recognition
-            audio_data = self.audio_manager.listen_for_audio(timeout=timeout, phrase_time_limit=8)
+            audio_data = self.audio_manager.listen_for_audio(timeout=conversation_timeout, phrase_time_limit=15)
             
             if audio_data:
                 logger.info("🎤 Audio captured, converting to text...")
