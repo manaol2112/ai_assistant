@@ -223,6 +223,13 @@ class AudioManager:
         self.channels = 1
         self.format = pyaudio.paInt16
         
+        # Store platform info for later use
+        self.platform_info = {
+            'name': platform_settings['platform_name'],
+            'sample_rate': self.sample_rate,
+            'chunk_size': self.chunk_size
+        }
+        
         # Initialize PyAudio
         self.audio = pyaudio.PyAudio()
         
@@ -396,12 +403,16 @@ class AudioManager:
     def _get_best_microphone_device(self) -> Optional[int]:
         """Get the best microphone device for the current platform with ALSA error handling."""
         try:
-            # Get all microphones
-            mic_list = sr.Microphone.list_microphone_names()
-            self.logger.info(f"🎤 Available microphones: {mic_list}")
+            # Get all microphones with error handling
+            try:
+                mic_list = sr.Microphone.list_microphone_names()
+                self.logger.info(f"🎤 Available microphones: {mic_list}")
+            except Exception as list_error:
+                self.logger.error(f"🎤 Failed to list microphones: {list_error}")
+                return None
             
             # Raspberry Pi specific: Handle ALSA errors gracefully
-            if self.platform_info['name'] == 'Raspberry Pi':
+            if 'Raspberry Pi' in self.platform_info['name']:
                 self.logger.info("🍓 Raspberry Pi detected - using ALSA-compatible audio settings")
                 
                 # Try USB audio devices first (more reliable on Pi)
@@ -557,29 +568,46 @@ class AudioManager:
                         self.logger.info(f"🎤 AUDIO DEBUG: Energy threshold after calibration: {self.energy_threshold}")
                     except Exception as calibration_error:
                         self.logger.warning(f"🎤 AUDIO DEBUG: Ambient noise calibration failed: {calibration_error}")
-                        # Use default energy threshold
-                        self.recognizer.energy_threshold = 300
-                        self.energy_threshold = 300
-                        self.logger.info("🎤 AUDIO DEBUG: Using default energy threshold: 300")
+                        # Use lower energy threshold for Pi to detect quieter speech
+                        if 'Raspberry Pi' in self.platform_info['name']:
+                            self.recognizer.energy_threshold = 150  # Lower for Pi
+                            self.energy_threshold = 150
+                            self.logger.info("🎤 AUDIO DEBUG: Using Pi-optimized energy threshold: 150")
+                        else:
+                            self.recognizer.energy_threshold = 300
+                            self.energy_threshold = 300
+                            self.logger.info("🎤 AUDIO DEBUG: Using default energy threshold: 300")
                     
-                    # Listen for audio
+                    # Listen for audio with improved settings
                     self.logger.info("🎤 AUDIO DEBUG: Listening for speech...")
+                    
+                    # Adjust timeout and phrase limit for better detection
+                    actual_timeout = max(timeout, 2)  # Minimum 2 seconds
+                    actual_phrase_limit = max(phrase_time_limit, 5)  # Minimum 5 seconds
+                    
+                    self.logger.info(f"🎤 AUDIO DEBUG: Using timeout={actual_timeout}s, phrase_limit={actual_phrase_limit}s")
+                    
                     audio = self.recognizer.listen(
                         source, 
-                        timeout=timeout, 
-                        phrase_time_limit=phrase_time_limit
+                        timeout=actual_timeout, 
+                        phrase_time_limit=actual_phrase_limit
                     )
                     self.logger.info("🎤 AUDIO DEBUG: Audio captured successfully!")
                     return audio
                     
             except Exception as stream_error:
-                self.logger.error(f"🎤 AUDIO DEBUG: Error with microphone stream: {stream_error}")
-                import traceback
-                self.logger.error(f"🎤 AUDIO DEBUG: Stream error traceback: {traceback.format_exc()}")
-                return None
+                # Handle timeout errors separately from other errors
+                if isinstance(stream_error, sr.WaitTimeoutError):
+                    self.logger.debug("🎤 AUDIO DEBUG: Listening timeout - no speech detected (this is normal)")
+                    return None
+                else:
+                    self.logger.error(f"🎤 AUDIO DEBUG: Error with microphone stream: {stream_error}")
+                    import traceback
+                    self.logger.error(f"🎤 AUDIO DEBUG: Stream error traceback: {traceback.format_exc()}")
+                    return None
                 
         except sr.WaitTimeoutError:
-            self.logger.info("🎤 AUDIO DEBUG: Audio listening timeout - no speech detected")
+            self.logger.debug("🎤 AUDIO DEBUG: Audio listening timeout - no speech detected (this is normal)")
             return None
         except Exception as e:
             self.logger.error(f"🎤 AUDIO DEBUG: Error listening for audio: {e}")
