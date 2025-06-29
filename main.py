@@ -1445,8 +1445,16 @@ class AIAssistant:
         return False
 
     def listen_for_speech(self, timeout: int = 15) -> Optional[str]:
-        """Listen for speech input using the AudioManager directly (simplified for Pi 5 compatibility)."""
+        """
+        Listen for speech input from the user with comprehensive debugging.
+        Uses AudioManager directly for compatibility with Raspberry Pi 5.
+        """
         try:
+            logger.info(f"🎤 LISTEN_FOR_SPEECH DEBUG: Starting (timeout={timeout}s)")
+            
+            # Set AI speaking flag to false when starting to listen
+            self.ai_speaking = False
+            
             # Show listening state in visual feedback
             if self.visual:
                 self.visual.show_listening("🎤 Listening...")
@@ -1458,7 +1466,7 @@ class AIAssistant:
             import time
             time.sleep(0.3)
             
-            logger.info(f"🎤 Listening for speech (timeout={timeout}s)...")
+            logger.info(f"🎤 LISTEN_FOR_SPEECH DEBUG: Audio setup complete, starting capture...")
             
             # Debug: Show current audio settings
             logger.info(f"🔧 AUDIO SETTINGS DEBUG:")
@@ -1469,19 +1477,34 @@ class AIAssistant:
             
             # Use longer timeout for conversation (people need time to think)
             conversation_timeout = max(timeout, 20)  # At least 20 seconds for conversation
-            logger.info(f"🎤 Using conversation timeout: {conversation_timeout}s")
+            logger.info(f"🎤 LISTEN_FOR_SPEECH DEBUG: Using conversation timeout: {conversation_timeout}s")
+            
+            # Test current audio level before listening
+            current_audio_level = self.audio_manager.get_audio_level(duration=0.1)
+            logger.info(f"🔊 LISTEN_FOR_SPEECH DEBUG: Current audio level: {current_audio_level:.2f}")
             
             # Use the AudioManager directly for reliable speech recognition
+            logger.info(f"🎤 LISTEN_FOR_SPEECH DEBUG: Calling audio_manager.listen_for_audio...")
+            start_time = time.time()
+            
             audio_data = self.audio_manager.listen_for_audio(timeout=conversation_timeout, phrase_time_limit=15)
             
+            end_time = time.time()
+            actual_duration = end_time - start_time
+            logger.info(f"🎤 LISTEN_FOR_SPEECH DEBUG: listen_for_audio returned after {actual_duration:.2f} seconds")
+            
             if audio_data:
-                logger.info("🎤 Audio captured, converting to text...")
+                logger.info("🎤 LISTEN_FOR_SPEECH DEBUG: Audio captured successfully, converting to text...")
                 
                 # Convert audio to text
+                text_start_time = time.time()
                 text = self.audio_manager.audio_to_text(audio_data)
+                text_duration = time.time() - text_start_time
+                
+                logger.info(f"🎤 LISTEN_FOR_SPEECH DEBUG: Text conversion took {text_duration:.2f} seconds")
                 
                 if text:
-                    logger.info(f"🎤 Speech recognized: '{text}'")
+                    logger.info(f"🎤 LISTEN_FOR_SPEECH DEBUG: Speech recognized successfully: '{text}'")
                     
                     # Show thinking state while processing
                     if self.visual:
@@ -1496,22 +1519,28 @@ class AIAssistant:
                     
                     return self._clean_recognized_text(text)
                 else:
-                    logger.info("🎤 Audio captured but no text recognized")
+                    logger.warning("🎤 LISTEN_FOR_SPEECH DEBUG: Audio captured but no text recognized")
                     # Show timeout state in visual feedback
                     if self.visual:
                         self.visual.show_standby("No speech understood")
                     return None
             else:
-                logger.info("🎤 No audio captured (timeout/silence)")
+                logger.warning(f"🎤 LISTEN_FOR_SPEECH DEBUG: No audio captured after {actual_duration:.2f}s (timeout/silence)")
+                
+                # Test audio level again to see if there's ambient noise
+                final_audio_level = self.audio_manager.get_audio_level(duration=0.1)
+                logger.info(f"🔊 LISTEN_FOR_SPEECH DEBUG: Final audio level: {final_audio_level:.2f}")
+                
                 # Show timeout state in visual feedback
                 if self.visual:
                     self.visual.show_standby("No speech detected")
                 return None
                 
         except Exception as e:
-            logger.error(f"🎤 Listen for speech error: {e}")
+            logger.error(f"🎤 LISTEN_FOR_SPEECH ERROR: {e}")
+            logger.error(f"🎤 LISTEN_FOR_SPEECH ERROR TYPE: {type(e)}")
             import traceback
-            logger.error(f"🎤 Listen for speech traceback: {traceback.format_exc()}")
+            logger.error(f"🎤 LISTEN_FOR_SPEECH TRACEBACK: {traceback.format_exc()}")
             
             # Show error state in visual feedback
             if self.visual:
