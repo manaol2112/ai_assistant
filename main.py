@@ -288,10 +288,9 @@ class AIAssistant:
         
         # Setup audio components
         self.audio_manager = AudioManager()
-        self.recognizer = sr.Recognizer()
         
-        # Initialize Voice Activity Detector with speaker differentiation
-        self.voice_detector = VoiceActivityDetector(self.recognizer)
+        # Initialize Voice Activity Detector with the AudioManager's recognizer
+        self.voice_detector = VoiceActivityDetector(self.audio_manager.recognizer)
         
         # Setup wake word detector
         self.wake_word_detector = WakeWordDetector(self.config)
@@ -1549,24 +1548,24 @@ class AIAssistant:
                 
                 # Platform-optimized calibration
                 calibration_duration = platform_settings['calibration_duration']
-                self.recognizer.adjust_for_ambient_noise(source, duration=calibration_duration)
+                self.audio_manager.recognizer.adjust_for_ambient_noise(source, duration=calibration_duration)
                 logger.info(f"🎯 Fallback calibrated for {calibration_duration}s on {self.voice_detector.platform_info['name']}")
                 
                 # Set platform-optimized energy thresholds
                 base_threshold = platform_settings['energy_threshold']
                 fallback_threshold = int(base_threshold * 1.2)  # Slightly higher for fallback
-                self.recognizer.energy_threshold = max(fallback_threshold, self.recognizer.energy_threshold)
+                self.audio_manager.recognizer.energy_threshold = max(fallback_threshold, self.audio_manager.recognizer.energy_threshold)
                 
-                logger.info(f"🎚️ Fallback energy threshold: {self.recognizer.energy_threshold} (platform: {self.voice_detector.platform_info['name']})")
+                logger.info(f"🎚️ Fallback energy threshold: {self.audio_manager.recognizer.energy_threshold} (platform: {self.voice_detector.platform_info['name']})")
                 
                 # Listen for speech with platform-optimized timeout
                 platform_timeout = timeout * self.voice_detector.platform_info.get('silence_tolerance_multiplier', 1.0)
-                audio = self.recognizer.listen(source, timeout=platform_timeout, phrase_time_limit=8)
+                audio = self.audio_manager.recognizer.listen(source, timeout=platform_timeout, phrase_time_limit=8)
                 
                 # Try recognition with multiple attempts
                 for attempt in range(3):
                     try:
-                        text = self.recognizer.recognize_google(audio, language='en-US')
+                        text = self.audio_manager.recognizer.recognize_google(audio, language='en-US')
                         if text.strip():
                             logger.info(f"✅ Fallback recognition successful (attempt {attempt + 1}): '{text}'")
                             return self._clean_recognized_text(text)
