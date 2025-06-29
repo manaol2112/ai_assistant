@@ -2789,13 +2789,17 @@ Everything looks good for when the children wake up!"""
             
             def main_loop():
                 try:
+                    wake_word_attempt_count = 0
                     while self.running:
                         # Listen for wake words (only when no one is in conversation)
                         if not self.current_user:
+                            wake_word_attempt_count += 1
+                            logger.info(f"🔄 MAIN LOOP DEBUG: Wake word attempt #{wake_word_attempt_count}")
+                            
                             detected_user = self.wake_word_detector.listen_for_wake_word()
                             
                             if detected_user:
-                                logger.info(f"Wake word detected for: {detected_user}")
+                                logger.info(f"🎉 MAIN LOOP DEBUG: Wake word detected for: {detected_user}")
                                 print(f"👋 Hello {detected_user.title()}! Starting voice-activated conversation...")
                                 
                                 # Play wake word confirmation sound
@@ -2807,8 +2811,11 @@ Everything looks good for when the children wake up!"""
                                 
                                 # Handle the user interaction with conversation mode
                                 self.handle_user_interaction(detected_user)
+                            else:
+                                logger.debug(f"🔄 MAIN LOOP DEBUG: No wake word detected (attempt #{wake_word_attempt_count})")
                         else:
                             # Someone is in conversation, just wait
+                            logger.debug(f"🔄 MAIN LOOP DEBUG: User {self.current_user} in conversation, waiting...")
                             time.sleep(0.5)
                         
                         time.sleep(0.1)  # Small delay to prevent excessive CPU usage
@@ -2839,13 +2846,18 @@ Everything looks good for when the children wake up!"""
     def _run_non_gui_mode(self):
         """Run the assistant in non-GUI mode."""
         try:
+            wake_word_attempt_count = 0  # Debug counter
+            
             while self.running:
                 # Listen for wake words (only when no one is in conversation)
                 if not self.current_user:
+                    wake_word_attempt_count += 1
+                    logger.info(f"🔍 Wake word detection attempt #{wake_word_attempt_count}")
+                    
                     detected_user = self.wake_word_detector.listen_for_wake_word()
                     
                     if detected_user:
-                        logger.info(f"Wake word detected for: {detected_user}")
+                        logger.info(f"✅ Wake word detected for: {detected_user} (after {wake_word_attempt_count} attempts)")
                         print(f"👋 Hello {detected_user.title()}! Starting voice-activated conversation...")
                         
                         # Play wake word confirmation sound
@@ -2853,6 +2865,8 @@ Everything looks good for when the children wake up!"""
                         
                         # Handle the user interaction with conversation mode
                         self.handle_user_interaction(detected_user)
+                    else:
+                        logger.info(f"❌ No wake word detected (attempt #{wake_word_attempt_count})")
                 else:
                     # Someone is in conversation, just wait
                     time.sleep(0.5)
