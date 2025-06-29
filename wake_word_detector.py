@@ -29,6 +29,9 @@ class WakeWordDetector:
         self.current_user = None
         self.conversation_active = False
         
+        # Initialize logger FIRST before using it
+        self.logger = logging.getLogger(__name__)
+        
         # Use shared AudioManager or create new one if none provided
         if audio_manager:
             self.audio_manager = audio_manager
