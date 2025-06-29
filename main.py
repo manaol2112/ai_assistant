@@ -1448,79 +1448,60 @@ class AIAssistant:
         return False
 
     def listen_for_speech(self, timeout: int = 15) -> Optional[str]:
-        """Listen for speech input using intelligent voice activity detection with speaker differentiation."""
+        """Listen for speech input using the AudioManager directly (simplified for Pi 5 compatibility)."""
         try:
             # Show listening state in visual feedback
             if self.visual:
                 self.visual.show_listening("🎤 Listening...")
             
-            # Set AI speaking flag to false to allow listening
-            self.voice_detector.set_ai_speaking(False)
-            
-            # CRITICAL: Additional delay before starting to listen to prevent audio feedback
-            # This ensures any residual audio output is completely finished
-            import time
-            time.sleep(0.5)  # Extra 0.5 second safety buffer before listening
-            
             # Play listening sound to indicate AI is ready to hear
             self.play_listening_sound()
             
             # Brief pause after listening sound to let it finish completely
+            import time
             time.sleep(0.3)
             
-            # Determine game mode for optimal sensitivity
-            game_mode = None
-            if self.spelling_game_active:
-                game_mode = 'spelling'
-            elif hasattr(self, 'filipino_translator') and self.filipino_translator.game_active:
-                game_mode = 'filipino'
+            logger.info(f"🎤 Listening for speech (timeout={timeout}s)...")
             
-            # Use the new voice activity detector with speaker differentiation
-            logger.info("🎤 Using Smart Voice Detection with Speaker Differentiation...")
+            # Use the AudioManager directly for reliable speech recognition
+            audio_data = self.audio_manager.listen_for_audio(timeout=timeout, phrase_time_limit=8)
             
-            try:
-                text = self.voice_detector.listen_with_speaker_detection(
-                    timeout=timeout,
-                    silence_threshold=1.8,  # Pi 5 FIX: Reduced from 2.5 to 1.8  # More generous silence threshold for complete thoughts
-                    max_total_time=45,  # Longer max time for complex questions
-                    game_mode=game_mode
-                )
-            except Exception as voice_error:
-                logger.error(f"🎤 Voice detector error: {voice_error}")
-                logger.error(f"🎤 Voice detector error type: {type(voice_error)}")
-                import traceback
-                logger.error(f"🎤 Voice detector traceback: {traceback.format_exc()}")
+            if audio_data:
+                logger.info("🎤 Audio captured, converting to text...")
                 
-                # Show error state in visual feedback
-                if self.visual:
-                    self.visual.show_error("Voice Detection Error")
+                # Convert audio to text
+                text = self.audio_manager.audio_to_text(audio_data)
                 
-                # Fallback to basic recognition if smart detection fails
-                logger.info("🎤 Falling back to basic speech recognition...")
-                return self._fallback_listen_for_speech(timeout)
-            
-            if text is None:
+                if text:
+                    logger.info(f"🎤 Speech recognized: '{text}'")
+                    
+                    # Show thinking state while processing
+                    if self.visual:
+                        self.visual.show_thinking("Processing...")
+                    
+                    # Special handling for "ready" detection in spelling game
+                    if self.spelling_game_active:
+                        detected_ready = self.detect_ready_command(text)
+                        if detected_ready:
+                            logger.info(f"Ready command detected: '{text}' -> '{detected_ready}'")
+                            return detected_ready
+                    
+                    return self._clean_recognized_text(text)
+                else:
+                    logger.info("🎤 Audio captured but no text recognized")
+                    # Show timeout state in visual feedback
+                    if self.visual:
+                        self.visual.show_standby("No speech understood")
+                    return None
+            else:
+                logger.info("🎤 No audio captured (timeout/silence)")
                 # Show timeout state in visual feedback
                 if self.visual:
                     self.visual.show_standby("No speech detected")
                 return None
-            
-            # Show thinking state while processing
-            if self.visual:
-                self.visual.show_thinking("Processing...")
-            
-            # Special handling for "ready" detection in spelling game
-            if self.spelling_game_active:
-                detected_ready = self.detect_ready_command(text)
-                if detected_ready:
-                    logger.info(f"Ready command detected: '{text}' -> '{detected_ready}'")
-                    return detected_ready
-            
-            return text
                 
         except Exception as e:
             logger.error(f"🎤 Listen for speech error: {e}")
-            logger.error(f"🎤 Listen for speech error type: {type(e)}")
             import traceback
             logger.error(f"🎤 Listen for speech traceback: {traceback.format_exc()}")
             
@@ -1528,15 +1509,8 @@ class AIAssistant:
             if self.visual:
                 self.visual.show_error("Listening Error")
             
-            # Fallback to basic recognition if smart detection fails
-            try:
-                logger.info("🎤 Attempting fallback speech recognition...")
-                return self._fallback_listen_for_speech(timeout)
-            except Exception as fallback_error:
-                logger.error(f"🎤 Fallback speech recognition also failed: {fallback_error}")
-                # If both methods fail, return None instead of crashing
-                return None
-    
+            return None
+
     def _fallback_listen_for_speech(self, timeout: int = 15) -> Optional[str]:
         """Fallback speech recognition without voice activity detection."""
         try:
@@ -2592,6 +2566,12 @@ Everything looks good for when the children wake up!"""
         """Handle the complete interaction flow with natural conversation mode."""
         self.current_user = user
         user_info = self.users[user]
+        
+        # IMPORTANT: End any active wake word detector conversation state
+        # This prevents conflicts between wake word detection and user interaction
+        if hasattr(self, 'wake_word_detector'):
+            self.wake_word_detector.end_conversation()
+            logger.info(f"🔄 Wake word detector conversation state cleared for {user}")
         
         # Show active user in visual feedback
         if self.visual:
