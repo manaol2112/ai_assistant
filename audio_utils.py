@@ -394,27 +394,65 @@ class AudioManager:
             return False
 
     def _get_best_microphone_device(self) -> Optional[int]:
-        """Get the best microphone device index for this platform."""
+        """Get the best microphone device for the current platform with ALSA error handling."""
         try:
-            # On Raspberry Pi 5, prefer USB PnP Audio Device
-            for i in range(self.audio.get_device_count()):
-                device_info = self.audio.get_device_info_by_index(i)
-                device_name = device_info["name"].lower()
-                
-                # Check for USB audio devices first (Waveshare)
-                if ("usb" in device_name and "audio" in device_name) or "pnp" in device_name:
-                    if device_info["maxInputChannels"] > 0:
-                        self.logger.info(f"Selected USB audio device: {device_info['name']} (index: {i})")
-                        return i
+            # Get all microphones
+            mic_list = sr.Microphone.list_microphone_names()
+            self.logger.info(f"🎤 Available microphones: {mic_list}")
             
-            # Fallback to default input device
-            default_device = self.audio.get_default_input_device_info()
-            self.logger.info(f"Using default audio device: {default_device['name']} (index: {default_device['index']})")
-            return default_device["index"]
+            # Raspberry Pi specific: Handle ALSA errors gracefully
+            if self.platform_info['name'] == 'Raspberry Pi':
+                self.logger.info("🍓 Raspberry Pi detected - using ALSA-compatible audio settings")
+                
+                # Try USB audio devices first (more reliable on Pi)
+                for i, name in enumerate(mic_list):
+                    if any(usb_indicator in name.lower() for usb_indicator in ['usb', 'webcam', 'logitech', 'creative', 'blue']):
+                        # Test if this device actually works
+                        if self._test_microphone_device(i):
+                            self.logger.info(f"🎤 Selected USB microphone: {name} (index {i})")
+                            return i
+                
+                # If no USB device works, try built-in audio with special handling
+                for i, name in enumerate(mic_list):
+                    if any(builtin_indicator in name.lower() for builtin_indicator in ['bcm', 'alsa', 'default', 'pulse']):
+                        if self._test_microphone_device(i):
+                            self.logger.info(f"🎤 Selected built-in microphone: {name} (index {i})")
+                            return i
+                
+                # Last resort: return None to use basic microphone
+                self.logger.warning("🍓 No working microphone devices found on Raspberry Pi")
+                return None
+            
+            # For other platforms, use existing logic
+            for i, name in enumerate(mic_list):
+                if any(usb_indicator in name.lower() for usb_indicator in ['usb', 'webcam', 'logitech', 'creative', 'blue']):
+                    self.logger.info(f"🎤 Selected USB microphone: {name} (index {i})")
+                    return i
+            
+            # Default to first available microphone
+            if mic_list:
+                self.logger.info(f"🎤 Using default microphone: {mic_list[0]} (index 0)")
+                return 0
+            
+            return None
             
         except Exception as e:
-            self.logger.error(f"Error selecting microphone device: {e}")
+            self.logger.error(f"🎤 Error detecting microphones: {e}")
             return None
+
+    def _test_microphone_device(self, device_index: int) -> bool:
+        """Test if a specific microphone device actually works."""
+        try:
+            # Quick test to see if device can be opened
+            test_mic = sr.Microphone(device_index=device_index)
+            with test_mic as source:
+                # If we can open it, it's probably working
+                if hasattr(source, 'stream') and source.stream is not None:
+                    return True
+            return False
+        except Exception as e:
+            self.logger.debug(f"🎤 Device {device_index} test failed: {e}")
+            return False
 
     def calibrate_audio(self, duration: float = 2.0):
         """Calibrate audio settings for ambient noise with robust error handling."""
@@ -468,65 +506,77 @@ class AudioManager:
             self.logger.info("Using fallback energy threshold: 300")
 
     def listen_for_audio(self, timeout: int = 5, phrase_time_limit: int = 10) -> Optional[sr.AudioData]:
-        """Listen for audio input from microphone with robust error handling."""
+        """Listen for audio input with improved error handling for Raspberry Pi."""
         mic_source = None
         try:
-            # Get the best microphone device for this platform
-            mic_device_index = self._get_best_microphone_device()
-            
             self.logger.info(f"🎤 AUDIO DEBUG: Starting audio capture (timeout={timeout}s, phrase_limit={phrase_time_limit}s)")
-            self.logger.info(f"🎤 AUDIO DEBUG: Using sample_rate={self.sample_rate}Hz, chunk_size={self.chunk_size}, device={mic_device_index}")
             
-            # Try with specific device first
-            try:
-                mic_source = sr.Microphone(
-                    device_index=mic_device_index,
-                    sample_rate=self.sample_rate, 
-                    chunk_size=self.chunk_size
-                )
-                self.logger.info(f"🎤 AUDIO DEBUG: Microphone initialized with device {mic_device_index}")
-            except Exception as device_error:
-                self.logger.warning(f"🎤 AUDIO DEBUG: Failed to initialize with device {mic_device_index}: {device_error}")
-                # Fallback to default device
+            # Try to get the best microphone with proper error handling
+            best_device_index = self._get_best_microphone_device()
+            
+            # Initialize microphone with robust error handling
+            if best_device_index is not None:
                 try:
-                    mic_source = sr.Microphone(
-                        sample_rate=self.sample_rate, 
-                        chunk_size=self.chunk_size
-                    )
-                    self.logger.info("🎤 AUDIO DEBUG: Microphone initialized with default device")
+                    mic_source = sr.Microphone(device_index=best_device_index, sample_rate=self.sample_rate, chunk_size=self.chunk_size)
+                    self.logger.info(f"🎤 AUDIO DEBUG: Using microphone device {best_device_index}")
+                except Exception as device_error:
+                    self.logger.warning(f"🎤 AUDIO DEBUG: Failed to use device {best_device_index}: {device_error}")
+                    mic_source = None
+            
+            # Fallback to default microphone if specific device failed
+            if mic_source is None:
+                try:
+                    mic_source = sr.Microphone(sample_rate=self.sample_rate, chunk_size=self.chunk_size)
+                    self.logger.info("🎤 AUDIO DEBUG: Using default microphone with custom settings")
                 except Exception as default_error:
                     self.logger.error(f"🎤 AUDIO DEBUG: Failed to initialize default microphone: {default_error}")
                     # Last resort - basic microphone
-                    mic_source = sr.Microphone()
-                    self.logger.info("🎤 AUDIO DEBUG: Microphone initialized with basic settings")
+                    try:
+                        mic_source = sr.Microphone()
+                        self.logger.info("🎤 AUDIO DEBUG: Using basic microphone settings")
+                    except Exception as basic_error:
+                        self.logger.error(f"🎤 AUDIO DEBUG: Failed to initialize any microphone: {basic_error}")
+                        return None
             
-            # Use the microphone source
-            with mic_source as source:
-                self.logger.info("🎤 AUDIO DEBUG: Microphone opened successfully")
-                
-                # Quick ambient noise adjustment with error handling
-                try:
-                    self.logger.info("🎤 AUDIO DEBUG: Adjusting for ambient noise...")
-                    self.recognizer.adjust_for_ambient_noise(source, duration=0.5)
-                    # Update our stored energy threshold
-                    self.energy_threshold = self.recognizer.energy_threshold
-                    self.logger.info(f"🎤 AUDIO DEBUG: Energy threshold after calibration: {self.energy_threshold}")
-                except Exception as calibration_error:
-                    self.logger.warning(f"🎤 AUDIO DEBUG: Ambient noise calibration failed: {calibration_error}")
-                    # Use default energy threshold
-                    self.recognizer.energy_threshold = 300
-                    self.energy_threshold = 300
-                    self.logger.info("🎤 AUDIO DEBUG: Using default energy threshold: 300")
-                
-                # Listen for audio
-                self.logger.info("🎤 AUDIO DEBUG: Listening for speech...")
-                audio = self.recognizer.listen(
-                    source, 
-                    timeout=timeout, 
-                    phrase_time_limit=phrase_time_limit
-                )
-                self.logger.info("🎤 AUDIO DEBUG: Audio captured successfully!")
-                return audio
+            # Test if microphone can be opened before using it
+            try:
+                with mic_source as source:
+                    # Test if the stream actually opened
+                    if not hasattr(source, 'stream') or source.stream is None:
+                        self.logger.error("🎤 AUDIO DEBUG: Microphone stream failed to initialize")
+                        return None
+                    
+                    self.logger.info("🎤 AUDIO DEBUG: Microphone opened successfully")
+                    
+                    # Quick ambient noise adjustment with error handling
+                    try:
+                        self.logger.info("🎤 AUDIO DEBUG: Adjusting for ambient noise...")
+                        self.recognizer.adjust_for_ambient_noise(source, duration=0.5)
+                        # Update our stored energy threshold
+                        self.energy_threshold = self.recognizer.energy_threshold
+                        self.logger.info(f"🎤 AUDIO DEBUG: Energy threshold after calibration: {self.energy_threshold}")
+                    except Exception as calibration_error:
+                        self.logger.warning(f"🎤 AUDIO DEBUG: Ambient noise calibration failed: {calibration_error}")
+                        # Use default energy threshold
+                        self.recognizer.energy_threshold = 300
+                        self.energy_threshold = 300
+                        self.logger.info("🎤 AUDIO DEBUG: Using default energy threshold: 300")
+                    
+                    # Listen for audio
+                    self.logger.info("🎤 AUDIO DEBUG: Listening for speech...")
+                    audio = self.recognizer.listen(
+                        source, 
+                        timeout=timeout, 
+                        phrase_time_limit=phrase_time_limit
+                    )
+                    self.logger.info("🎤 AUDIO DEBUG: Audio captured successfully!")
+                    return audio
+                    
+            except Exception as stream_error:
+                self.logger.error(f"🎤 AUDIO DEBUG: Error with microphone stream: {stream_error}")
+                import traceback
+                self.logger.error(f"🎤 AUDIO DEBUG: Stream error traceback: {traceback.format_exc()}")
+                return None
                 
         except sr.WaitTimeoutError:
             self.logger.info("🎤 AUDIO DEBUG: Audio listening timeout - no speech detected")
@@ -536,14 +586,6 @@ class AudioManager:
             import traceback
             self.logger.error(f"🎤 AUDIO DEBUG: Traceback: {traceback.format_exc()}")
             return None
-        finally:
-            # Ensure proper cleanup
-            if mic_source:
-                try:
-                    # The 'with' statement should handle cleanup, but just in case
-                    pass
-                except:
-                    pass
 
     def audio_to_text(self, audio_data: sr.AudioData) -> Optional[str]:
         """Convert audio data to text using Google Speech Recognition."""
