@@ -17,6 +17,7 @@ import os
 from pathlib import Path
 import threading
 import time
+import platform
 
 
 class OpenAITTSEngine:
@@ -213,26 +214,96 @@ class AudioManager:
     """Manages audio input/output operations for the AI Assistant."""
     
     def __init__(self, sample_rate: int = 16000, chunk_size: int = 1024):
-        """Initialize audio manager with specified parameters."""
+        """Initialize audio manager with platform-optimized settings."""
         self.sample_rate = sample_rate
         self.chunk_size = chunk_size
-        self.format = pyaudio.paInt16
         self.channels = 1
+        self.format = pyaudio.paInt16
         
         # Initialize PyAudio
         self.audio = pyaudio.PyAudio()
         
+        # Initialize pygame mixer for sound effects
+        pygame.mixer.init(frequency=22050, size=-16, channels=2, buffer=512)
+        
         # Initialize speech recognizer
         self.recognizer = sr.Recognizer()
         
-        # Configure recognizer for better performance
-        self.recognizer.energy_threshold = 300
+        # Configure recognizer with platform-optimized settings
+        energy_threshold = self._get_platform_energy_threshold()
+        self.recognizer.energy_threshold = energy_threshold
         self.recognizer.dynamic_energy_threshold = True
         self.recognizer.pause_threshold = 0.8
         self.recognizer.operation_timeout = None
         
         self.logger = logging.getLogger(__name__)
-        self.logger.info("AudioManager initialized")
+        self.logger.info(f"AudioManager initialized with energy_threshold={energy_threshold} for {self._get_platform_name()}")
+
+    def _get_platform_name(self) -> str:
+        """Get platform name for logging."""
+        system = platform.system().lower()
+        machine = platform.machine().lower()
+        
+        # Check if running on Raspberry Pi
+        if os.path.exists('/proc/device-tree/model'):
+            try:
+                with open('/proc/device-tree/model', 'r') as f:
+                    model_info = f.read().strip()
+                    if 'raspberry pi' in model_info.lower():
+                        if 'pi 5' in model_info.lower() or '5 model' in model_info.lower():
+                            return 'Raspberry Pi 5'
+                        elif 'pi 4' in model_info.lower() or '4 model' in model_info.lower():
+                            return 'Raspberry Pi 4'
+                        else:
+                            return 'Raspberry Pi (older)'
+            except:
+                pass
+        
+        if system == 'darwin':
+            return 'macOS'
+        elif system == 'linux':
+            return 'Linux'
+        elif system == 'windows':
+            return 'Windows'
+        else:
+            return system.title()
+    
+    def _get_platform_energy_threshold(self) -> int:
+        """Get platform-optimized energy threshold for speech recognition."""
+        system = platform.system().lower()
+        machine = platform.machine().lower()
+        
+        # Check if running on Raspberry Pi
+        is_raspberry_pi = False
+        pi_version = None
+        
+        if os.path.exists('/proc/device-tree/model'):
+            try:
+                with open('/proc/device-tree/model', 'r') as f:
+                    model_info = f.read().strip()
+                    if 'raspberry pi' in model_info.lower():
+                        is_raspberry_pi = True
+                        if 'pi 5' in model_info.lower() or '5 model' in model_info.lower():
+                            pi_version = 5
+                        elif 'pi 4' in model_info.lower() or '4 model' in model_info.lower():
+                            pi_version = 4
+                        else:
+                            pi_version = 3  # Assume older Pi
+            except:
+                pass
+        
+        # Return platform-specific energy thresholds
+        if is_raspberry_pi:
+            if pi_version == 5:
+                return 150  # Lower threshold for Pi 5 USB microphones
+            else:
+                return 120  # Even lower for older Pi models
+        elif system == 'darwin':  # macOS
+            return 300  # Higher threshold for macOS built-in mics
+        elif system == 'linux':  # Generic Linux
+            return 200  # Middle ground for Linux systems
+        else:  # Windows or other
+            return 250  # Conservative default
 
     def get_microphone_info(self) -> dict:
         """Get information about available microphones."""
