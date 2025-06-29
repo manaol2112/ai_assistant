@@ -286,14 +286,11 @@ class AIAssistant:
         logger.info("🎙️ Setting up premium OpenAI text-to-speech voices...")
         self.sophia_tts, self.eladriel_tts = setup_premium_tts_engines(self.client)
         
-        # Setup audio components
+        # Initialize audio manager with platform-optimized settings
         self.audio_manager = AudioManager()
         
-        # Initialize Voice Activity Detector with the AudioManager's recognizer
-        self.voice_detector = VoiceActivityDetector(self.audio_manager.recognizer)
-        
-        # Setup wake word detector
-        self.wake_word_detector = WakeWordDetector(self.config)
+        # Initialize wake word detector with shared AudioManager to prevent resource conflicts
+        self.wake_word_detector = WakeWordDetector(self.config, audio_manager=self.audio_manager)
         
         # Initialize Filipino translator (after OpenAI client is set up)
         self.filipino_translator = FilipinoTranslator(self.client, self)
