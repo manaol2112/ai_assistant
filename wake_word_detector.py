@@ -48,10 +48,8 @@ class WakeWordDetector:
         self.last_interaction_time = 0
         self.conversation_timeout = 30  # 30 seconds of inactivity ends conversation
         
-        self.audio_manager = AudioManager(
-            sample_rate=config.audio_sample_rate,
-            chunk_size=config.audio_chunk_size
-        )
+        # Use platform-optimized AudioManager (auto-detects Pi 5 + Waveshare settings)
+        self.audio_manager = AudioManager()
         
         self.is_listening = False
         self.porcupine = None
@@ -223,7 +221,8 @@ class WakeWordDetector:
             "porcupine_available": PORCUPINE_AVAILABLE,
             "using_advanced_detection": self.porcupine is not None,
             "microphone_info": mic_info,
-            "audio_sample_rate": self.config.audio_sample_rate,
+            "audio_sample_rate": self.audio_manager.sample_rate,
+            "audio_chunk_size": self.audio_manager.chunk_size,
             "wake_word_sensitivity": self.config.wake_word_sensitivity,
             "conversation_active": self.conversation_active,
             "current_user": self.current_user,
