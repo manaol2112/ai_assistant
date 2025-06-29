@@ -1297,9 +1297,9 @@ class AIAssistant:
             self.visual.show_speaking(text[:50] + "..." if len(text) > 50 else text)
         
         try:
-            # CRITICAL: Set AI speaking flag to prevent voice detector from listening to AI
-            self.voice_detector.set_ai_speaking(True)
-            logger.info("🗣️ SPEAK: AI speaking flag set to True")
+            # CRITICAL: Set AI speaking flag - removed voice_detector dependency
+            # self.voice_detector.set_ai_speaking(True)  # REMOVED - no longer needed
+            logger.info("🗣️ SPEAK: Starting AI speech")
             
             # Use personalized TTS engine for each user
             if user and user in self.users:
@@ -1351,9 +1351,9 @@ class AIAssistant:
             import time
             time.sleep(0.3)  # Reduced from 1.5 to 0.3 seconds
         finally:
-            # CRITICAL: Always reset AI speaking flag when done
-            logger.info("🗣️ SPEAK: Resetting AI speaking flag to False")
-            self.voice_detector.set_ai_speaking(False)
+            # CRITICAL: AI speaking complete - removed voice_detector dependency
+            # self.voice_detector.set_ai_speaking(False)  # REMOVED - no longer needed
+            logger.info("🗣️ SPEAK: AI speech completed")
             
             # Return to standby state in visual feedback (but don't stop mouth animation here anymore)
             if self.visual:
@@ -1369,8 +1369,8 @@ class AIAssistant:
             self.visual.show_speaking(text[:50] + "..." if len(text) > 50 else text)
         
         try:
-            # CRITICAL: Set AI speaking flag to prevent voice detector from listening to AI
-            self.voice_detector.set_ai_speaking(True)
+            # CRITICAL: Set AI speaking flag - removed voice_detector dependency
+            # self.voice_detector.set_ai_speaking(True)  # REMOVED - no longer needed
             
             # Use personalized TTS engine for each user
             if user and user in self.users:
@@ -1410,8 +1410,8 @@ class AIAssistant:
             import time
             time.sleep(0.3)  # Reduced from 1.5 to 0.3 seconds
         finally:
-            # CRITICAL: Always reset AI speaking flag when done
-            self.voice_detector.set_ai_speaking(False)
+            # CRITICAL: AI speaking complete - removed voice_detector dependency
+            # self.voice_detector.set_ai_speaking(False)  # REMOVED - no longer needed
             
             # Return to standby state
             if self.visual:
@@ -1525,23 +1525,24 @@ class AIAssistant:
             with sr.Microphone() as source:
                 logger.info("🎤 Fallback speech recognition - listening for any speech...")
                 
+                # Use audio_manager's settings instead of voice_detector
                 # Get platform-specific settings from voice activity detector
-                platform_settings = self.voice_detector._get_optimal_thresholds()
+                # platform_settings = self.voice_detector._get_optimal_thresholds()  # REMOVED
                 
-                # Platform-optimized calibration
-                calibration_duration = platform_settings['calibration_duration']
+                # Platform-optimized calibration - use audio_manager defaults
+                calibration_duration = 2.0  # Standard calibration duration
                 self.audio_manager.recognizer.adjust_for_ambient_noise(source, duration=calibration_duration)
-                logger.info(f"🎯 Fallback calibrated for {calibration_duration}s on {self.voice_detector.platform_info['name']}")
+                logger.info(f"🎯 Fallback calibrated for {calibration_duration}s")
                 
-                # Set platform-optimized energy thresholds
-                base_threshold = platform_settings['energy_threshold']
-                fallback_threshold = int(base_threshold * 1.2)  # Slightly higher for fallback
-                self.audio_manager.recognizer.energy_threshold = max(fallback_threshold, self.audio_manager.recognizer.energy_threshold)
+                # Set platform-optimized energy thresholds - use audio_manager settings
+                # base_threshold = platform_settings['energy_threshold']  # REMOVED
+                # fallback_threshold = int(base_threshold * 1.2)  # REMOVED
+                # Use existing audio_manager threshold
+                logger.info(f"🎚️ Fallback energy threshold: {self.audio_manager.recognizer.energy_threshold}")
                 
-                logger.info(f"🎚️ Fallback energy threshold: {self.audio_manager.recognizer.energy_threshold} (platform: {self.voice_detector.platform_info['name']})")
-                
-                # Listen for speech with platform-optimized timeout
-                platform_timeout = timeout * self.voice_detector.platform_info.get('silence_tolerance_multiplier', 1.0)
+                # Listen for speech with standard timeout
+                # platform_timeout = timeout * self.voice_detector.platform_info.get('silence_tolerance_multiplier', 1.0)  # REMOVED
+                platform_timeout = timeout  # Use standard timeout
                 audio = self.audio_manager.recognizer.listen(source, timeout=platform_timeout, phrase_time_limit=8)
                 
                 # Try recognition with multiple attempts
@@ -2126,7 +2127,7 @@ class AIAssistant:
 • Say "Hey Miley Come" to call your personal robot assistant! 🤖✨
 • Miley-bot will respond with dance moves and personality!
 • Control with hand gestures for 30 seconds of fun
-• 🖐️ 5 fingers = Dance forward with style!
+• ��️ 5 fingers = Dance forward with style!
 • ✊ Fist = Graceful step backward!
 • ✌️ 2 fingers = Spin left like a pop star!
 • 🤟 3 fingers = Twirl right with flair!
