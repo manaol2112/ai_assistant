@@ -21,7 +21,7 @@ except ImportError:
     print("⚠️ Face recognition not available. Install with: pip install face-recognition")
 
 class SmartCameraDetector:
-    def __init__(self, model_size='n', confidence_threshold=0.5):
+    def __init__(self, model_size='n', confidence_threshold=0.5, headless=False):
         """
         Initialize smart camera detector with YOLOv8 and face recognition
         Enhanced for AITRIOS AI Camera support
@@ -29,6 +29,7 @@ class SmartCameraDetector:
         Args:
             model_size: 'n' (nano), 's' (small), 'm' (medium), 'l' (large), 'x' (extra large)
             confidence_threshold: Minimum confidence for detections
+            headless: Hide camera display when True
         """
         self.logger = logging.getLogger(__name__)
         
@@ -42,25 +43,24 @@ class SmartCameraDetector:
             self.logger.info("📷 Using standard camera detection")
         
         # Load YOLOv8 model for non-AITRIOS cameras
-        model_path = f'yolov8{model_size}.pt'
-        print(f"🤖 Loading YOLOv8 model: {model_path}")
-        self.model = YOLO(model_path)
-        
+        self.model_size = model_size
         self.confidence_threshold = confidence_threshold
+        self.headless = headless  # Hide camera display when True
+        self.model = None
+        self.device = 'cpu'  # Default to CPU for compatibility
+        self.model_path = f'yolov8{model_size}.pt'
+        print(f"🤖 Loading YOLOv8 model: {self.model_path}")
+        self.model = YOLO(self.model_path)
         
         # Face recognition setup
+        self.face_recognition_enabled = FACE_RECOGNITION_AVAILABLE
         self.known_face_encodings = []
         self.known_face_names = []
-        self.face_recognition_enabled = FACE_RECOGNITION_AVAILABLE
-        
-        # Load known faces
-        if self.face_recognition_enabled:
-            self.load_known_faces()
+        self.face_detection_threshold = 0.6
         
         # Greeting system
         self.last_greeting_time = {}
         self.greeting_cooldown = 10  # seconds between greetings for same person
-        self.face_detection_threshold = 0.6
         
         # Enhanced target classes for better detection
         self.target_classes = {
@@ -77,6 +77,14 @@ class SmartCameraDetector:
         self.cap = None
         self.shared_camera = None  # NEW: for shared camera mode
         self.is_running = False
+        
+        # Performance tracking
+        self.detection_count = 0
+        self.last_fps_time = time.time()
+        
+        # Load known faces
+        if self.face_recognition_enabled:
+            self.load_known_faces()
         
     def load_known_faces(self):
         """Load known faces from the people directory."""
@@ -482,24 +490,29 @@ class SmartCameraDetector:
                 if save_video and video_writer:
                     video_writer.write(annotated_frame)
                 
-                # Display frame
-                cv2.imshow('Smart Camera Detector', annotated_frame)
+                # Display frame only if not in headless mode
+                if not self.headless:
+                    cv2.imshow('Smart Camera Detector', annotated_frame)
                 
-                # Handle key presses
-                key = cv2.waitKey(1) & 0xFF
-                if key == ord('q'):
-                    break
-                elif key == ord('s'):
-                    timestamp = int(time.time())
-                    screenshot_name = f"smart_detection_screenshot_{timestamp}.jpg"
-                    cv2.imwrite(screenshot_name, annotated_frame)
-                    print(f"📸 Screenshot saved: {screenshot_name}")
-                elif key == ord('g'):
-                    # Force greet all detected known faces
-                    for face in face_detections:
-                        if face['name'] != "Unknown":
-                            greeting = self.generate_greeting(face['name'])
-                            print(f"👋 {greeting}")
+                # Handle key presses only if not in headless mode
+                if not self.headless:
+                    key = cv2.waitKey(1) & 0xFF
+                    if key == ord('q'):
+                        break
+                    elif key == ord('s'):
+                        timestamp = int(time.time())
+                        screenshot_name = f"smart_detection_screenshot_{timestamp}.jpg"
+                        cv2.imwrite(screenshot_name, annotated_frame)
+                        print(f"📸 Screenshot saved: {screenshot_name}")
+                    elif key == ord('g'):
+                        # Force greet all detected known faces
+                        for face in face_detections:
+                            if face['name'] != "Unknown":
+                                greeting = self.generate_greeting(face['name'])
+                                print(f"👋 {greeting}")
+                else:
+                    # In headless mode, just add a small delay
+                    time.sleep(0.03)  # ~30 FPS timing
         
         except KeyboardInterrupt:
             print("\n⚠️ Detection stopped by user")

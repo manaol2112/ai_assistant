@@ -98,15 +98,16 @@ class RealTimeIntelligentFaceTracker:
         self.search_direction = 1
         self.search_position = 90
         
-        # Servo control parameters - OPTIMIZED FOR SPEED
+        # Servo control parameters - OPTIMIZED FOR SMOOTH, SLOW MOVEMENT
         self.pan_center = 90
         self.tilt_center = 90
         self.pan_current = self.pan_center
         self.tilt_current = self.tilt_center
         self.servo_min = 20
         self.servo_max = 160
-        self.search_step = 3  # Faster search movements
-        self.tracking_smoothing = 0.8  # More responsive tracking
+        self.search_step = 2  # Slower search movements (reduced from 3)
+        self.tracking_smoothing = 0.4  # Much more gradual tracking (reduced from 0.8)
+        self.movement_dampening = 0.6  # Additional dampening factor for ultra-smooth movement
         
         # REAL-TIME Detection parameters
         self.face_lost_timeout = 1.0  # Faster search activation
@@ -117,7 +118,9 @@ class RealTimeIntelligentFaceTracker:
         
         # Initialize components with headless mode (no camera display)
         self.face_tracker = PremiumFaceTracker(arduino_port, camera_index, headless=headless)
-        self.camera_detector = None
+        self.camera_detector = SmartCameraDetector(headless=True)  # Always headless for integration
+        if hasattr(self.face_tracker, 'camera_handler'):
+            self.camera_detector.shared_camera = self.face_tracker.camera_handler
         
         # Multi-threading for performance
         self.tracking_thread = None
@@ -145,11 +148,6 @@ class RealTimeIntelligentFaceTracker:
             if not camera_ok:
                 self.logger.error("❌ Camera initialization failed")
                 return False
-            
-            # Initialize smart camera detector for enhanced face recognition
-            self.camera_detector = SmartCameraDetector()
-            if hasattr(self.face_tracker, 'camera_handler'):
-                self.camera_detector.shared_camera = self.face_tracker.camera_handler
             
             # Initialize OpenCV face detection for fast tracking
             try:
@@ -417,22 +415,26 @@ class RealTimeIntelligentFaceTracker:
         error_x = target_x - frame_center_x
         error_y = target_y - frame_center_y
         
-        # Convert to servo adjustments with optimized sensitivity
-        pan_adjustment = -(error_x / frame_width) * 100  # Increased sensitivity
-        tilt_adjustment = (error_y / frame_height) * 70   # Increased sensitivity
+        # Convert to servo adjustments with REDUCED sensitivity for smoother movement
+        pan_adjustment = -(error_x / frame_width) * 25   # Reduced from 100 to 25 for slower movement
+        tilt_adjustment = (error_y / frame_height) * 20  # Reduced from 70 to 20 for slower movement
         
         # Apply enhanced smoothing for real-time response
         target_pan = self.pan_center + pan_adjustment
         target_tilt = self.tilt_center + tilt_adjustment
         
-        # More responsive movement toward target
+        # More responsive movement toward target with dampening
         smoothing = self.tracking_smoothing
-        # Increase responsiveness during conversation mode
+        # Increase responsiveness during conversation mode (but still keep it smooth)
         if self.conversation_mode:
-            smoothing = min(0.9, smoothing + 0.1)
+            smoothing = min(0.6, smoothing + 0.2)  # Less aggressive increase
         
-        self.pan_current += (target_pan - self.pan_current) * smoothing
-        self.tilt_current += (target_tilt - self.tilt_current) * smoothing
+        # Apply smoothing with additional dampening for ultra-smooth movement
+        pan_delta = (target_pan - self.pan_current) * smoothing * self.movement_dampening
+        tilt_delta = (target_tilt - self.tilt_current) * smoothing * self.movement_dampening
+        
+        self.pan_current += pan_delta
+        self.tilt_current += tilt_delta
         
         # Clamp to servo limits
         self.pan_current = max(self.servo_min, min(self.servo_max, self.pan_current))
