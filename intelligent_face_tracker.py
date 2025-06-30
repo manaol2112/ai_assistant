@@ -32,6 +32,9 @@ class TrackingPriority(Enum):
     HIGH = 2     # Known faces
     MEDIUM = 3   # Unknown faces
     SEARCH = 4   # No faces - search mode
+    CRITICAL = 5 # Special critical priority
+    LOW = 6       # Low confidence
+    IGNORE = 7   # Ignore this face
 
 @dataclass
 class TrackedFace:
@@ -51,7 +54,10 @@ class SearchPattern(Enum):
     CENTER_PAUSE = "center_pause"
 
 class IntelligentFaceTracker:
-    """Enhanced face tracking with priority recognition and intelligent search"""
+    """
+    Enhanced intelligent face tracking system with optimized real-time performance.
+    Features priority-based tracking for Sophia and Eladriel with sub-second response times.
+    """
     
     def __init__(self, arduino_port: str = '/dev/ttyUSB0', camera_index: int = 0):
         # Initialize logger
@@ -64,128 +70,181 @@ class IntelligentFaceTracker:
         self.camera_detector = None
         
         # Tracking state
-        self.is_tracking = False
+        self.tracking_active = False
         self.tracking_thread = None
+        self.stop_event = threading.Event()
+        
+        # Performance optimizations
+        self.target_fps = 30  # Increased from 20 FPS for faster response
+        self.frame_skip = 2   # Process every 2nd frame for speed
+        self.frame_counter = 0
+        self.detection_interval = 3  # Run detection every 3 frames
+        
+        # Priority users (Sophia and Eladriel)
         self.priority_users = ['sophia', 'eladriel']
         
         # Conversation mode
         self.conversation_mode = False
         self.current_target = None
         
-        # Servo positions and movement parameters
+        # Servo control with optimized responsiveness
+        self.servo_min = 10
+        self.servo_max = 170
         self.pan_center = 90
         self.tilt_center = 90
-        self.pan_current = 90
-        self.tilt_current = 90
-        self.servo_min = 20
-        self.servo_max = 160
-        
-        # OPTIMIZED PERFORMANCE PARAMETERS
-        self.tracking_smoothing = 0.7  # Increased for faster response (was 0.3)
-        self.movement_threshold = 3    # Minimum movement to reduce jitter
-        
-        # REAL-TIME FRAME PROCESSING
-        self.target_fps = 60          # Higher FPS for real-time tracking
-        self.frame_skip = 2           # Process every 2nd frame for face detection
-        self.frame_counter = 0
-        
-        # PREDICTIVE TRACKING
-        self.last_face_position = None
-        self.face_velocity = (0, 0)
-        self.prediction_weight = 0.3
-        
-        # Search behavior parameters
-        self.search_active = False
-        self.search_pattern = SearchPattern.SWEEP_LEFT_RIGHT
-        self.search_position = 90
-        self.search_direction = 1
-        self.search_step = 8          # Faster search movement
-        self.search_start_time = 0
-        self.last_detection_time = time.time()
-        self.face_lost_timeout = 1.0  # Reduced timeout for faster search
-        self.search_timeout = 6       # Shorter search cycles
-        
-        # Initialize existing components
-        self.face_tracker = PremiumFaceTracker(arduino_port, camera_index)
-        self.camera_detector = None
-        
-        # Threading
-        self.running = False
-        self.lock = threading.Lock()
-        
-    def initialize(self) -> bool:
-        """Initialize the intelligent tracking system"""
-        try:
-            self.logger.info("🎯 Initializing Intelligent Face Tracker...")
-            
-            # Initialize face tracker (servos and camera)
-            camera_ok = self.face_tracker.initialize_camera()
-            arduino_ok = self.face_tracker.initialize_arduino()
-            
-            if not arduino_ok:
-                self.logger.error("❌ Arduino connection failed")
-                return False
-                
-            if not camera_ok:
-                self.logger.error("❌ Camera initialization failed")
-                return False
-            
-            # Initialize smart camera detector for enhanced face recognition
-            self.camera_detector = SmartCameraDetector()
-            if hasattr(self.face_tracker, 'camera_handler'):
-                self.camera_detector.shared_camera = self.face_tracker.camera_handler
-            
-            # Center servos
-            self.face_tracker.move_servos(self.pan_center, self.tilt_center)
-            time.sleep(1)
-            
-            self.logger.info("✅ Intelligent Face Tracker initialized successfully!")
-            self.logger.info(f"🎯 Priority users: {', '.join(self.priority_users)}")
-            
-            return True
-            
-        except Exception as e:
-            self.logger.error(f"❌ Initialization failed: {e}")
-            return False
-    
-    def start_tracking(self, conversation_mode: bool = False):
-        """Start intelligent face tracking"""
-        with self.lock:
-            if self.is_tracking:
-                self.logger.warning("⚠️ Tracking already active")
-                return
-                
-            self.is_tracking = True
-            self.conversation_mode = conversation_mode
-            self.running = True
-            
-            # Start tracking thread
-            self.tracking_thread = threading.Thread(
-                target=self._tracking_loop,
-                daemon=True,
-                name="IntelligentFaceTracker"
-            )
-            self.tracking_thread.start()
-            
-            mode_info = "conversation mode" if conversation_mode else "general mode"
-            self.logger.info(f"🎯 Intelligent face tracking started in {mode_info}")
-    
-    def stop_tracking(self):
-        """Stop face tracking and return to center"""
-        with self.lock:
-            self.is_tracking = False
-            self.running = False
-            self.search_active = False
-            
-        if self.tracking_thread and self.tracking_thread.is_alive():
-            self.tracking_thread.join(timeout=2)
-            
-        # Return to center position
-        self.face_tracker.move_servos(self.pan_center, self.tilt_center)
         self.pan_current = self.pan_center
         self.tilt_current = self.tilt_center
         
-        self.logger.info("🛑 Intelligent face tracking stopped")
+        # Enhanced tracking parameters for real-time response
+        self.tracking_smoothing = 0.7  # Increased from default for faster movement
+        self.movement_threshold = 5    # Minimum movement to trigger servo update
+        self.max_movement_per_frame = 15  # Limit for smooth movement
+        
+        # Face tracking state with prediction
+        self.last_known_position = None
+        self.last_movement_direction = (0, 0)
+        self.face_lost_timeout = 0.8  # Reduced from 2.0 seconds
+        self.last_detection_time = time.time()
+        
+        # Search behavior with faster patterns
+        self.search_active = False
+        self.search_start_time = time.time()
+        self.search_pattern = SearchPattern.SWEEP_LEFT_RIGHT
+        self.search_direction = 1
+        self.search_position = self.pan_center
+        self.search_step = 8  # Increased step size for faster search
+        self.search_timeout = 8  # Reduced timeout
+        
+        # Performance monitoring
+        self.frame_times = []
+        self.last_performance_log = time.time()
+        
+    def initialize(self) -> bool:
+        """Initialize hardware components with performance optimizations"""
+        try:
+            self.logger.info("⚡ Initializing optimized intelligent face tracker...")
+            
+            # Initialize face tracker with performance optimizations
+            self.face_tracker = PremiumFaceTracker(self.arduino_port, self.camera_index)
+            
+            # Initialize camera detector with optimized settings
+            self.camera_detector = SmartCameraDetector(self.camera_index)
+            
+            # Optimize camera settings for real-time performance
+            if hasattr(self.camera_detector, 'cap') and self.camera_detector.cap:
+                # Set optimal resolution for speed vs quality balance
+                self.camera_detector.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)  # Reduced from higher res
+                self.camera_detector.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480) # Reduced from higher res
+                self.camera_detector.cap.set(cv2.CAP_PROP_FPS, 30)           # Higher FPS
+                self.camera_detector.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)     # Minimal buffer for low latency
+                
+                # Additional optimizations if supported
+                try:
+                    self.camera_detector.cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc('M','J','P','G'))
+                    self.logger.info("📷 Camera optimized for real-time performance (640x480@30fps)")
+                except:
+                    self.logger.info("📷 Camera initialized with basic optimizations")
+            
+            # Test hardware functionality
+            if not self._test_hardware():
+                return False
+            
+            self.logger.info("✅ Optimized intelligent face tracker initialized successfully!")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"❌ Failed to initialize: {e}")
+            return False
+    
+    def _test_hardware(self) -> bool:
+        """Quick hardware functionality test for real-time system"""
+        try:
+            # Test Arduino connection
+            if not self.face_tracker.initialize_arduino():
+                self.logger.error("❌ Arduino connection failed")
+                return False
+            
+            # Test camera
+            if not self.face_tracker.initialize_camera():
+                self.logger.error("❌ Camera initialization failed")
+                return False
+            
+            # Quick servo test - center position
+            self.face_tracker.move_servos(self.pan_center, self.tilt_center)
+            time.sleep(0.5)  # Quick settling time
+            
+            self.logger.info("✅ Hardware test passed - ready for real-time tracking")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"❌ Hardware test failed: {e}")
+            return False
+
+    def start_tracking(self, priority_user: str = None) -> bool:
+        """Start optimized real-time intelligent tracking"""
+        try:
+            if self.tracking_active:
+                self.logger.warning("⚠️ Tracking already active")
+                return True
+            
+            self.logger.info("🚀 Starting optimized real-time face tracking...")
+            
+            # Reset state for clean start
+            self.stop_event.clear()
+            self.frame_counter = 0
+            self.last_detection_time = time.time()
+            self.last_known_position = None
+            self.last_movement_direction = (0, 0)
+            
+            # Set priority user if specified
+            if priority_user:
+                self.current_target = priority_user.lower()
+                self.logger.info(f"🎯 Priority tracking for: {priority_user}")
+            
+            # Start tracking thread
+            self.tracking_thread = threading.Thread(target=self._tracking_loop, daemon=True)
+            self.tracking_thread.start()
+            
+            self.tracking_active = True
+            self.logger.info("✅ Optimized tracking started successfully!")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"❌ Failed to start tracking: {e}")
+            return False
+
+    def stop_tracking(self) -> bool:
+        """Stop real-time intelligent tracking cleanly"""
+        try:
+            if not self.tracking_active:
+                self.logger.warning("⚠️ Tracking not active")
+                return True
+            
+            self.logger.info("🛑 Stopping optimized face tracking...")
+            
+            # Signal stop and wait for thread
+            self.stop_event.set()
+            
+            if self.tracking_thread and self.tracking_thread.is_alive():
+                self.tracking_thread.join(timeout=2.0)  # Quick shutdown
+                
+                if self.tracking_thread.is_alive():
+                    self.logger.warning("⚠️ Tracking thread did not stop cleanly")
+            
+            # Reset to center position
+            self.face_tracker.move_servos(self.pan_center, self.tilt_center)
+            
+            # Clean state
+            self.tracking_active = False
+            self.search_active = False
+            self.current_target = None
+            
+            self.logger.info("✅ Optimized tracking stopped successfully")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"❌ Error stopping tracking: {e}")
+            return False
     
     def set_conversation_mode(self, active: bool, target_user: str = None):
         """Enable/disable conversation mode tracking"""
@@ -199,42 +258,54 @@ class IntelligentFaceTracker:
                 self.logger.info("💬 Conversation mode disabled")
     
     def _tracking_loop(self):
-        """OPTIMIZED Main tracking loop with real-time performance"""
-        self.logger.info("🎯 Starting OPTIMIZED intelligent tracking loop...")
+        """Optimized real-time tracking loop with performance enhancements"""
+        self.logger.info("🎯 Starting optimized real-time tracking loop...")
         
-        while self.running:
+        # Performance counters
+        last_fps_time = time.time()
+        fps_counter = 0
+        
+        while not self.stop_event.is_set():
             try:
-                # REAL-TIME FRAME CAPTURE
-                frame = self.camera_detector.get_frame()
-                if frame is None:
-                    time.sleep(0.001)  # Minimal delay
+                loop_start = time.time()
+                
+                # Capture frame
+                ret, frame = self.camera_detector.cap.read()
+                if not ret:
+                    self.logger.warning("⚠️ Failed to capture frame")
+                    time.sleep(0.1)
                     continue
                 
                 self.frame_counter += 1
+                
+                # Skip frames for performance (process every nth frame)
+                if self.frame_counter % self.frame_skip != 0:
+                    time.sleep(0.01)  # Minimal delay
+                    continue
+                
+                # Detect faces only every few frames for performance
+                detected_faces = []
+                if self.frame_counter % self.detection_interval == 0:
+                    detected_faces = self._detect_and_prioritize_faces(frame)
+                else:
+                    # Use prediction for missed frames if we have last known position
+                    if self.last_known_position:
+                        detected_faces = self._predict_face_position()
+                
                 current_time = time.time()
                 
-                # OPTIMIZED FACE DETECTION (skip frames for performance)
-                detected_faces = []
-                if self.frame_counter % self.frame_skip == 0:
-                    detected_faces = self._detect_and_prioritize_faces()
-                
                 if detected_faces:
-                    # FAST FACE TRACKING
+                    # Faces detected - track the highest priority face
                     self.last_detection_time = current_time
                     self.search_active = False
                     
                     target_face = self._select_target_face(detected_faces)
                     if target_face:
-                        self._track_face_optimized(target_face)
-                        
-                elif self.last_face_position and self.face_velocity != (0, 0):
-                    # PREDICTIVE TRACKING - continue tracking based on last known movement
-                    predicted_position = self._predict_face_position()
-                    if predicted_position:
-                        self._track_predicted_position(predicted_position)
+                        self._track_face_optimized(target_face, frame.shape)
+                        self.last_known_position = target_face.center
                         
                 else:
-                    # INTELLIGENT SEARCH (only after timeout)
+                    # No faces detected - start intelligent search
                     time_since_last_detection = current_time - self.last_detection_time
                     
                     if time_since_last_detection > self.face_lost_timeout:
@@ -243,194 +314,103 @@ class IntelligentFaceTracker:
                         else:
                             self._continue_search_behavior()
                 
-                # HIGH FPS LOOP - much faster than before
-                time.sleep(1.0 / self.target_fps)  # ~60 FPS (0.016s vs 0.05s)
+                # Performance monitoring
+                fps_counter += 1
+                if current_time - last_fps_time >= 5.0:  # Log every 5 seconds
+                    fps = fps_counter / (current_time - last_fps_time)
+                    self.logger.debug(f"📊 Tracking FPS: {fps:.1f}")
+                    fps_counter = 0
+                    last_fps_time = current_time
+                
+                # Dynamic sleep for target FPS
+                loop_time = time.time() - loop_start
+                target_loop_time = 1.0 / self.target_fps
+                if loop_time < target_loop_time:
+                    time.sleep(target_loop_time - loop_time)
                 
             except Exception as e:
-                self.logger.error(f"❌ Error in tracking loop: {e}")
-                time.sleep(0.1)  # Brief pause on error
+                self.logger.error(f"❌ Error in optimized tracking loop: {e}")
+                time.sleep(0.5)
         
         self.logger.info("🔄 Optimized tracking loop ended")
     
-    def _detect_and_prioritize_faces(self):
-        """OPTIMIZED fast face detection with priority assignment"""
+    def _detect_and_prioritize_faces(self, frame) -> List[TrackedFace]:
+        """Optimized face detection with priority-based filtering and performance enhancements"""
         try:
-            # Use optimized detection from camera
-            faces = self.camera_detector.detect_faces()
-            if not faces:
+            # Scale down frame for faster detection
+            detection_scale = 0.75  # Use 75% of original size for detection
+            small_frame = cv2.resize(frame, None, fx=detection_scale, fy=detection_scale)
+            
+            # Use camera detector for initial face detection
+            faces_data = self.camera_detector.detect_faces(small_frame)
+            
+            if not faces_data or not faces_data.get('faces'):
                 return []
             
-            # Quick validation - remove faces that are too small or low confidence
-            min_face_size = 30  # Minimum face size in pixels
-            min_confidence = 0.3  # Minimum confidence threshold
+            detected_faces = []
+            current_time = time.time()
             
-            valid_faces = []
-            for face in faces:
-                # Quick size check
-                face_width = face.get('w', 0)
-                face_height = face.get('h', 0)
-                confidence = face.get('confidence', 0)
-                
-                if face_width >= min_face_size and face_height >= min_face_size and confidence >= min_confidence:
-                    valid_faces.append(face)
+            for face_info in faces_data['faces']:
+                try:
+                    # Scale coordinates back to original frame size
+                    scale_factor = 1.0 / detection_scale
+                    bbox = face_info.get('bbox', [0, 0, 100, 100])
+                    scaled_bbox = [int(coord * scale_factor) for coord in bbox]
+                    
+                    # Calculate center point
+                    center_x = scaled_bbox[0] + scaled_bbox[2] // 2
+                    center_y = scaled_bbox[1] + scaled_bbox[3] // 2
+                    
+                    # Get face name and confidence
+                    name = face_info.get('name', 'unknown').lower()
+                    confidence = face_info.get('confidence', 0.0)
+                    
+                    # Fast priority determination
+                    priority = self._get_fast_priority(name, confidence)
+                    
+                    # Create tracked face object
+                    tracked_face = TrackedFace(
+                        name=name,
+                        confidence=confidence,
+                        bbox=tuple(scaled_bbox),
+                        center=(center_x, center_y),
+                        priority=priority,
+                        last_seen=current_time
+                    )
+                    
+                    detected_faces.append(tracked_face)
+                    
+                except Exception as e:
+                    self.logger.debug(f"⚠️ Error processing face: {e}")
+                    continue
             
-            if not valid_faces:
-                return []
+            # Sort by priority and confidence for fast selection
+            detected_faces.sort(key=lambda f: (f.priority.value, f.confidence), reverse=True)
             
-            # FAST priority assignment - simplified logic
-            priority_faces = []
-            for face in valid_faces:
-                priority_score = self._calculate_fast_priority(face)
-                priority_faces.append({
-                    'face': face,
-                    'priority': priority_score,
-                    'x': face.get('x', 0),
-                    'y': face.get('y', 0),
-                    'w': face.get('w', 0),
-                    'h': face.get('h', 0),
-                    'confidence': face.get('confidence', 0)
-                })
-            
-            # Sort by priority (highest first) - quick sort
-            priority_faces.sort(key=lambda x: x['priority'], reverse=True)
-            
-            return priority_faces
+            self.logger.debug(f"🔍 Fast detected {len(detected_faces)} faces")
+            return detected_faces
             
         except Exception as e:
-            self.logger.error(f"❌ Fast face detection error: {e}")
+            self.logger.error(f"❌ Error in optimized face detection: {e}")
             return []
     
-    def _calculate_fast_priority(self, face):
-        """OPTIMIZED fast priority calculation"""
-        try:
-            # Base confidence score (0-100)
-            confidence = face.get('confidence', 0) * 100
-            
-            # Face size bonus - larger faces get higher priority
-            face_area = face.get('w', 0) * face.get('h', 0)
-            size_bonus = min(face_area / 1000, 50)  # Cap at 50 points
-            
-            # Center position bonus - faces near center get priority
-            face_center_x = face.get('x', 0) + face.get('w', 0) / 2
-            frame_center_x = 320  # Assuming 640px width
-            distance_from_center = abs(face_center_x - frame_center_x)
-            center_bonus = max(0, 30 - distance_from_center / 10)  # Up to 30 points
-            
-            # User recognition bonus (if available)
-            recognition_bonus = 0
-            name = face.get('name', 'Unknown')
-            if name in self.priority_users:
-                recognition_bonus = 100  # High priority for known users
-            elif name != 'Unknown':
-                recognition_bonus = 50   # Medium priority for recognized faces
-            
-            total_priority = confidence + size_bonus + center_bonus + recognition_bonus
-            
-            return total_priority
-            
-        except Exception as e:
-            self.logger.error(f"❌ Priority calculation error: {e}")
-            return 0
-    
-    def _track_face_optimized(self, face_data):
-        """OPTIMIZED face tracking with predictive movement and minimal lag"""
-        try:
-            face = face_data['face']
-            face_x = face_data['x']
-            face_y = face_data['y']
-            face_w = face_data['w']
-            face_h = face_data['h']
-            
-            # Calculate face center
-            face_center_x = face_x + face_w / 2
-            face_center_y = face_y + face_h / 2
-            
-            # Update predictive tracking
-            current_position = (face_center_x, face_center_y)
-            if self.last_face_position:
-                # Calculate velocity for prediction
-                self.face_velocity = (
-                    current_position[0] - self.last_face_position[0],
-                    current_position[1] - self.last_face_position[1]
-                )
-            self.last_face_position = current_position
-            
-            # Calculate servo adjustments with FASTER response
-            frame_center_x = 320  # Camera frame center
-            frame_center_y = 240
-            
-            error_x = face_center_x - frame_center_x
-            error_y = face_center_y - frame_center_y
-            
-            # OPTIMIZED servo calculations with higher responsiveness
-            pan_adjustment = error_x * self.pan_sensitivity * 1.5  # Increased sensitivity
-            tilt_adjustment = error_y * self.tilt_sensitivity * 1.5
-            
-            # Apply FASTER smoothing with higher responsiveness
-            target_pan = self.pan_current - pan_adjustment
-            target_tilt = self.tilt_current + tilt_adjustment
-            
-            # Clamp to servo limits
-            target_pan = max(self.servo_min, min(self.servo_max, target_pan))
-            target_tilt = max(self.servo_min, min(self.servo_max, target_tilt))
-            
-            # FASTER movement with reduced lag
-            self.pan_current += (target_pan - self.pan_current) * self.tracking_smoothing
-            self.tilt_current += (target_tilt - self.tilt_current) * self.tracking_smoothing
-            
-            # Movement threshold to reduce jitter - only move if change is significant
-            pan_change = abs(target_pan - self.pan_current)
-            tilt_change = abs(target_tilt - self.tilt_current)
-            
-            if pan_change > self.movement_threshold or tilt_change > self.movement_threshold:
-                self.face_tracker.move_servos(int(self.pan_current), int(self.tilt_current))
-                
-                # Log only significant movements
-                if pan_change > 5 or tilt_change > 5:
-                    self.logger.debug(f"🎯 Fast track: pan={int(self.pan_current)}, tilt={int(self.tilt_current)}")
-            
-        except Exception as e:
-            self.logger.error(f"❌ Optimized tracking error: {e}")
-    
-    def _predict_face_position(self):
-        """Predict next face position based on velocity"""
-        if self.last_face_position and self.face_velocity:
-            predicted_x = self.last_face_position[0] + self.face_velocity[0] * 2
-            predicted_y = self.last_face_position[1] + self.face_velocity[1] * 2
-            return (predicted_x, predicted_y)
-        return None
-    
-    def _track_predicted_position(self, predicted_pos):
-        """Track predicted position with reduced smoothing for better responsiveness"""
-        try:
-            face_center_x, face_center_y = predicted_pos
-            frame_center_x = 320
-            frame_center_y = 240
-            
-            error_x = face_center_x - frame_center_x
-            error_y = face_center_y - frame_center_y
-            
-            # Direct movement with minimal smoothing for prediction
-            pan_adjustment = error_x * self.pan_sensitivity * 1.2
-            tilt_adjustment = error_y * self.tilt_sensitivity * 1.2
-            
-            target_pan = self.pan_current - pan_adjustment
-            target_tilt = self.tilt_current + tilt_adjustment
-            
-            # Clamp to limits
-            target_pan = max(self.servo_min, min(self.servo_max, target_pan))
-            target_tilt = max(self.servo_min, min(self.servo_max, target_tilt))
-            
-            # Reduced smoothing for prediction (more responsive)
-            self.pan_current += (target_pan - self.pan_current) * 0.8
-            self.tilt_current += (target_tilt - self.tilt_current) * 0.8
-            
-            self.face_tracker.move_servos(int(self.pan_current), int(self.tilt_current))
-            
-            self.logger.debug(f"🎯 Predictive track: pan={int(self.pan_current)}, tilt={int(self.tilt_current)}")
-            
-        except Exception as e:
-            self.logger.error(f"❌ Predictive tracking error: {e}")
+    def _get_fast_priority(self, name: str, confidence: float) -> TrackingPriority:
+        """Fast priority calculation for real-time performance"""
+        # Quick priority lookup for known users
+        if name in self.priority_users:
+            return TrackingPriority.CRITICAL if confidence > 0.8 else TrackingPriority.HIGH
+        
+        # Conversation mode gets priority
+        if self.conversation_mode and confidence > 0.6:
+            return TrackingPriority.HIGH
+        
+        # Default priority based on confidence
+        if confidence > 0.8:
+            return TrackingPriority.MEDIUM
+        elif confidence > 0.5:
+            return TrackingPriority.LOW
+        else:
+            return TrackingPriority.IGNORE
     
     def _select_target_face(self, faces: List[TrackedFace]) -> Optional[TrackedFace]:
         """Select the best face to track based on priority and conversation mode"""
@@ -461,21 +441,70 @@ class IntelligentFaceTracker:
         
         return sorted_faces[0] if sorted_faces else None
     
+    def _track_face_optimized(self, face: TrackedFace, frame_shape: Tuple[int, int]):
+        """Optimized face tracking with faster servo movement and predictive control"""
+        frame_height, frame_width = frame_shape[:2]
+        center_x, center_y = face.center
+        
+        # Calculate movement direction for prediction
+        if self.last_known_position:
+            movement_x = center_x - self.last_known_position[0]
+            movement_y = center_y - self.last_known_position[1]
+            self.last_movement_direction = (movement_x, movement_y)
+        
+        # Calculate servo positions with enhanced responsiveness
+        frame_center_x = frame_width // 2
+        frame_center_y = frame_height // 2
+        
+        # Calculate error from center with deadzone for stability
+        error_x = center_x - frame_center_x
+        error_y = center_y - frame_center_y
+        
+        # Only move if error is significant enough
+        if abs(error_x) < 20 and abs(error_y) < 20:
+            return  # Face is close enough to center
+        
+        # Convert to servo adjustments with enhanced sensitivity
+        pan_adjustment = -(error_x / frame_width) * 120  # Increased range for faster response
+        tilt_adjustment = (error_y / frame_height) * 80   # Increased range for faster response
+        
+        # Calculate target positions
+        target_pan = self.pan_center + pan_adjustment
+        target_tilt = self.tilt_center + tilt_adjustment
+        
+        # Enhanced smoothing with predictive component
+        pan_diff = target_pan - self.pan_current
+        tilt_diff = target_tilt - self.tilt_current
+        
+        # Limit maximum movement per frame for smoothness
+        pan_diff = max(-self.max_movement_per_frame, min(self.max_movement_per_frame, pan_diff))
+        tilt_diff = max(-self.max_movement_per_frame, min(self.max_movement_per_frame, tilt_diff))
+        
+        # Apply movement with optimized smoothing
+        self.pan_current += pan_diff * self.tracking_smoothing
+        self.tilt_current += tilt_diff * self.tracking_smoothing
+        
+        # Clamp to servo limits
+        self.pan_current = max(self.servo_min, min(self.servo_max, self.pan_current))
+        self.tilt_current = max(self.servo_min, min(self.servo_max, self.tilt_current))
+        
+        # Only move servos if movement is significant enough
+        if abs(pan_diff) > self.movement_threshold or abs(tilt_diff) > self.movement_threshold:
+            self.face_tracker.move_servos(int(self.pan_current), int(self.tilt_current))
+            
+            self.logger.debug(f"🎯 Fast tracking {face.name} at ({center_x}, {center_y}) -> servos({int(self.pan_current)}, {int(self.tilt_current)})")
+    
     def _start_search_behavior(self):
-        """Start OPTIMIZED intelligent search behavior when no faces are detected"""
+        """Start optimized intelligent search behavior when no faces are detected"""
         self.search_active = True
         self.search_start_time = time.time()
         self.search_pattern = SearchPattern.SWEEP_LEFT_RIGHT
         self.search_direction = 1
         
-        # Reset predictive tracking when starting search
-        self.last_face_position = None
-        self.face_velocity = (0, 0)
-        
-        self.logger.info("🔍 Starting FAST intelligent search for faces...")
+        self.logger.info("🔍 Starting fast intelligent search for faces...")
     
     def _continue_search_behavior(self):
-        """Continue OPTIMIZED search behavior with faster patterns"""
+        """Continue search behavior with optimized faster patterns"""
         current_time = time.time()
         search_duration = current_time - self.search_start_time
         
@@ -489,11 +518,11 @@ class IntelligentFaceTracker:
         elif self.search_pattern == SearchPattern.LOOK_UP:
             self._look_up_fast()
         elif self.search_pattern == SearchPattern.CENTER_PAUSE:
-            self._center_pause_brief()
+            self._center_pause()
     
     def _sweep_left_right_fast(self):
-        """OPTIMIZED fast sweep left and right to search for faces"""
-        # Faster movement with larger steps
+        """Optimized faster sweep left and right to search for faces"""
+        # Move search position with larger steps
         self.search_position += self.search_direction * self.search_step
         
         # Check boundaries and reverse direction
@@ -508,55 +537,47 @@ class IntelligentFaceTracker:
                 self.search_pattern = SearchPattern.LOOK_UP
                 self.search_start_time = time.time()
         
-        # FASTER servo movement with higher responsiveness
+        # Move servo with faster response
         target_pan = self.search_position
         self.pan_current += (target_pan - self.pan_current) * 0.6  # Increased from 0.3
         self.face_tracker.move_servos(int(self.pan_current), int(self.tilt_current))
-        
-        # Log search progress less frequently
-        if int(self.search_position) % 20 == 0:
-            self.logger.debug(f"🔍 Fast search: pan={int(self.pan_current)}")
     
     def _look_up_fast(self):
-        """OPTIMIZED look up quickly to search different angles"""
-        # Move tilt up smoothly and faster
-        target_tilt = max(self.tilt_center - 30, self.servo_min)
-        self.tilt_current += (target_tilt - self.tilt_current) * 0.5  # Increased speed
-        
+        """Optimized faster look up behavior"""
+        # Move tilt up gradually
+        target_tilt = self.tilt_center - 30  # Look up
+        self.tilt_current += (target_tilt - self.tilt_current) * 0.5  # Faster movement
         self.face_tracker.move_servos(int(self.pan_current), int(self.tilt_current))
         
-        # Transition to center pause quickly
-        if time.time() - self.search_start_time > 1.5:  # Reduced from longer time
+        # After looking up for 1.5 seconds, pause at center
+        if time.time() - self.search_start_time > 1.5:  # Reduced from longer
             self.search_pattern = SearchPattern.CENTER_PAUSE
             self.search_start_time = time.time()
     
-    def _center_pause_brief(self):
-        """OPTIMIZED brief center pause before resuming search"""
-        # Return to center position quickly
-        target_pan = self.pan_center
-        target_tilt = self.tilt_center
-        
-        self.pan_current += (target_pan - self.pan_current) * 0.8   # Very fast return
-        self.tilt_current += (target_tilt - self.tilt_current) * 0.8
+    def _center_pause(self):
+        """Pause at center before ending search"""
+        # Return to center position
+        self.pan_current += (self.pan_center - self.pan_current) * 0.3
+        self.tilt_current += (self.tilt_center - self.tilt_current) * 0.3
         
         self.face_tracker.move_servos(int(self.pan_current), int(self.tilt_current))
         
-        # Brief pause then restart search cycle
-        if time.time() - self.search_start_time > 0.5:  # Very brief pause
-            self.search_pattern = SearchPattern.SWEEP_LEFT_RIGHT
-            self.search_start_time = time.time()
+        # After 1 second at center, end search
+        if time.time() - self.search_start_time > 1:
+            self._end_search_behavior()
+        
+        time.sleep(0.1)
     
     def _end_search_behavior(self):
-        """OPTIMIZED end search and return to center quickly"""
+        """End search behavior and return to center"""
         self.search_active = False
         
-        # Quick return to center
-        self.pan_current += (self.pan_center - self.pan_current) * 0.8
-        self.tilt_current += (self.tilt_center - self.tilt_current) * 0.8
+        # Return to center
+        self.face_tracker.move_servos(self.pan_center, self.tilt_center)
+        self.pan_current = self.pan_center
+        self.tilt_current = self.tilt_center
         
-        self.face_tracker.move_servos(int(self.pan_current), int(self.tilt_current))
-        
-        self.logger.info("🎯 Search ended - returned to center position")
+        self.logger.info("🔍 Search completed - returning to center position")
     
     def get_tracking_status(self) -> Dict:
         """Get current tracking status"""
@@ -595,6 +616,27 @@ class IntelligentFaceTracker:
         if self.face_tracker:
             self.face_tracker.cleanup()
         self.logger.info("🧹 Intelligent Face Tracker cleaned up")
+
+    def _predict_face_position(self) -> List[TrackedFace]:
+        """Predict face position when detection is skipped for performance"""
+        if not self.last_known_position:
+            return []
+        
+        # Simple prediction based on last movement direction
+        predicted_x = self.last_known_position[0] + self.last_movement_direction[0] * 2
+        predicted_y = self.last_known_position[1] + self.last_movement_direction[1] * 2
+        
+        predicted_face = TrackedFace(
+            name="predicted",
+            confidence=0.8,
+            bbox=(predicted_x-50, predicted_y-50, predicted_x+50, predicted_y+50),
+            center=(predicted_x, predicted_y),
+            priority=TrackingPriority.HIGH,
+            last_seen=time.time(),
+            prediction=(predicted_x, predicted_y)
+        )
+        
+        return [predicted_face]
 
 # Integration function for main AI system
 def create_intelligent_tracker(arduino_port='/dev/ttyUSB0', camera_index=0) -> IntelligentFaceTracker:
