@@ -333,7 +333,7 @@ class AIAssistant:
         
         # Setup face recognition system - SHARE camera instead of creating new one
         logger.info("🎭 Setting up face recognition system...")
-        self.face_detector = SmartCameraDetector(model_size='n', confidence_threshold=0.4)
+        self.face_detector = SmartCameraDetector(model_size='n', confidence_threshold=0.4, headless=True)
         # IMPORTANT: Pass the shared camera handler to prevent conflicts
         self.face_detector.shared_camera = self.camera_handler
         self.face_recognition_thread = None
@@ -2141,13 +2141,20 @@ class AIAssistant:
     def handle_camera_preview(self) -> str:
         """Show camera preview for users."""
         try:
-            self.speak("Let me show you what I can see through my camera!", self.current_user)
-            success = self.object_identifier.show_camera_preview(duration=5)
-            
-            if success:
-                return "Did you see the camera window? That's what I can see! Now you know where to hold your objects!"
+            # Check if we should show camera in headless mode
+            if hasattr(self, 'enhanced_face_tracking') and self.enhanced_face_tracking:
+                # We're in headless mode - explain instead of showing
+                self.speak("I'm currently running in headless mode, so I can't show you a camera window. But I can still see everything through my camera! My intelligent face tracking system is already monitoring what I can see.", self.current_user)
+                return "I'm running in headless mode, so no camera window will appear. But my camera is active and I can see you!"
             else:
-                return "Sorry, I couldn't show you the camera preview. Maybe the camera isn't working right now."
+                # Normal mode - show camera preview
+                self.speak("Let me show you what I can see through my camera!", self.current_user)
+                success = self.object_identifier.show_camera_preview(duration=5)
+                
+                if success:
+                    return "Did you see the camera window? That's what I can see! Now you know where to hold your objects!"
+                else:
+                    return "Sorry, I couldn't show you the camera preview. Maybe the camera isn't working right now."
                 
         except Exception as e:
             logger.error(f"Error showing camera preview: {e}")

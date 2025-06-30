@@ -98,7 +98,7 @@ class RealTimeIntelligentFaceTracker:
         self.search_direction = 1
         self.search_position = 90
         
-        # Servo control parameters - OPTIMIZED FOR SMOOTH, SLOW MOVEMENT
+        # Servo control parameters - OPTIMIZED FOR BALANCED, RESPONSIVE MOVEMENT
         self.pan_center = 90
         self.tilt_center = 90
         self.pan_current = self.pan_center
@@ -106,8 +106,8 @@ class RealTimeIntelligentFaceTracker:
         self.servo_min = 20
         self.servo_max = 160
         self.search_step = 2  # Slower search movements (reduced from 3)
-        self.tracking_smoothing = 0.4  # Much more gradual tracking (reduced from 0.8)
-        self.movement_dampening = 0.6  # Additional dampening factor for ultra-smooth movement
+        self.tracking_smoothing = 0.6  # Balanced tracking (increased from 0.4, less than 0.8)
+        self.movement_dampening = 0.8  # Less dampening for more responsiveness (increased from 0.6)
         
         # REAL-TIME Detection parameters
         self.face_lost_timeout = 1.0  # Faster search activation
@@ -415,9 +415,9 @@ class RealTimeIntelligentFaceTracker:
         error_x = target_x - frame_center_x
         error_y = target_y - frame_center_y
         
-        # Convert to servo adjustments with REDUCED sensitivity for smoother movement
-        pan_adjustment = -(error_x / frame_width) * 25   # Reduced from 100 to 25 for slower movement
-        tilt_adjustment = (error_y / frame_height) * 20  # Reduced from 70 to 20 for slower movement
+        # Convert to servo adjustments with BALANCED sensitivity for smooth but responsive movement
+        pan_adjustment = -(error_x / frame_width) * 50   # Balanced - increased from 25, less than 100
+        tilt_adjustment = (error_y / frame_height) * 35  # Balanced - increased from 20, less than 70
         
         # Apply enhanced smoothing for real-time response
         target_pan = self.pan_center + pan_adjustment

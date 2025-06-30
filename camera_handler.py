@@ -157,7 +157,7 @@ class CameraHandler:
         else:
             return []
     
-    def show_preview(self, duration: int = 5) -> bool:
+    def show_preview(self, duration: int = 5, headless: bool = False) -> bool:
         """Show camera preview with AI overlays if available"""
         if not self.is_opened:
             return False
@@ -167,6 +167,11 @@ class CameraHandler:
                 return self.imx500_handler.show_preview(duration)
             else:
                 # Fallback preview for USB camera
+                if headless:
+                    logger.info(f"📷 USB Camera running in headless mode for {duration}s")
+                    time.sleep(duration)  # Just wait without showing window
+                    return True
+                
                 logger.info(f"📷 USB Camera Preview - {duration}s (Press 'q' to quit)")
                 start_time = time.time()
                 
