@@ -113,7 +113,7 @@ class IMX500CameraHandler:
                 temp_path = temp_file.name
             
             # Quick test with minimal parameters
-            cmd = ['libcamera-still', '-o', temp_path, '--timeout', '1000']
+            cmd = ['libcamera-still', '-o', temp_path, '--timeout', '1000', '--nopreview']
             
             self.logger.debug("🧪 Testing camera with quick capture...")
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=8)
@@ -299,7 +299,8 @@ class IMX500CameraHandler:
             cmd = [
                 'libcamera-still',
                 '--output', temp_path,
-                '--timeout', '1000'  # Shorter timeout
+                '--timeout', '1000',  # Shorter timeout
+                '--nopreview'
             ]
             
             self.logger.debug(f"Running minimal: {' '.join(cmd)}")
@@ -329,7 +330,7 @@ class IMX500CameraHandler:
         
         try:
             # Most basic command possible
-            cmd = ['libcamera-still', '-o', temp_path]
+            cmd = ['libcamera-still', '-o', temp_path, '--nopreview']
             
             self.logger.debug(f"Running fallback: {' '.join(cmd)}")
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=8)
@@ -437,7 +438,7 @@ class IMX500CameraHandler:
     def _capture_image_minimal(self, filepath: str) -> bool:
         """Minimal image capture with shortest parameters"""
         try:
-            cmd = ['libcamera-still', '-o', filepath]
+            cmd = ['libcamera-still', '-o', filepath, '--nopreview']
             
             self.logger.debug(f"Running minimal capture: {' '.join(cmd)}")
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
