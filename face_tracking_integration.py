@@ -1,48 +1,52 @@
 #!/usr/bin/env python3
 """
-Face Tracking Integration for AI Assistant
-Integrates the face tracking servo controller with the main AI assistant system.
+Enhanced Face Tracking Integration for AI Assistant
+Integrates the intelligent face tracking system with priority recognition
+for Sophia and Eladriel, automatic conversation mode tracking, and search behavior.
 
 Voice Commands:
-- "look at me" / "track my face" - Start face tracking
+- "look at me" / "track my face" - Start intelligent face tracking
 - "stop looking" / "stop tracking" - Stop face tracking  
 - "look left/right/up/down" - Manual servo control
 - "center your eyes" / "look forward" - Center servos
 - "who are you looking at" - Get current tracking status
+- "search for faces" - Start search behavior when no faces detected
 """
 
-from face_tracking_servo_controller import PremiumFaceTracker
+from intelligent_face_tracker import IntelligentFaceTracker, TrackingPriority
 import threading
 import time
 import logging
 from typing import Dict, Optional
 
-class FaceTrackingIntegration:
+class EnhancedFaceTrackingIntegration:
     """
-    Integration class for face tracking with AI Assistant
-    Handles voice commands and system integration
+    Enhanced integration class for intelligent face tracking with AI Assistant
+    Handles voice commands, conversation mode integration, and priority tracking
     """
     
     def __init__(self, main_ai_assistant=None):
         self.ai_assistant = main_ai_assistant
-        self.face_tracker = None
+        self.intelligent_tracker = None
         self.is_initialized = False
         
         # Setup logging
-        self.logger = logging.getLogger('FaceTrackingIntegration')
+        self.logger = logging.getLogger('EnhancedFaceTrackingIntegration')
         
         # Voice command mappings
         self.voice_commands = {
             # Start tracking commands
             'start_tracking': [
                 'look at me', 'track my face', 'follow me', 'watch me',
-                'start face tracking', 'begin tracking', 'look for me'
+                'start face tracking', 'begin tracking', 'look for me',
+                'track faces', 'start intelligent tracking'
             ],
             
             # Stop tracking commands  
             'stop_tracking': [
                 'stop looking', 'stop tracking', 'stop following',
-                'stop face tracking', 'look away', 'stop watching'
+                'stop face tracking', 'look away', 'stop watching',
+                'stop intelligent tracking'
             ],
             
             # Manual control commands
@@ -57,46 +61,44 @@ class FaceTrackingIntegration:
                 'center view', 'look ahead', 'face forward'
             ],
             
+            # Search commands
+            'search_faces': [
+                'search for faces', 'look for people', 'find faces',
+                'scan for faces', 'search around'
+            ],
+            
             # Status commands
             'tracking_status': [
                 'who are you looking at', 'who are you tracking',
-                'what are you looking at', 'tracking status'
+                'what are you looking at', 'tracking status',
+                'where are you looking'
             ]
         }
         
     def initialize(self, arduino_port='/dev/ttyUSB0', camera_index=0):
-        """Initialize the face tracking system"""
+        """Initialize the enhanced face tracking system"""
         try:
-            self.logger.info("🔄 Initializing face tracking integration...")
+            self.logger.info("🎯 Initializing Enhanced Face Tracking Integration...")
             
-            # Initialize face tracker
-            self.face_tracker = PremiumFaceTracker(
+            # Initialize intelligent face tracker
+            self.intelligent_tracker = IntelligentFaceTracker(
                 arduino_port=arduino_port,
                 camera_index=camera_index
             )
             
-            # Initialize camera and Arduino
-            camera_ok = self.face_tracker.initialize_camera()
-            arduino_ok = self.face_tracker.initialize_arduino()
+            # Initialize the tracker
+            if not self.intelligent_tracker.initialize():
+                self.logger.error("❌ Intelligent tracker initialization failed")
+                return False
             
-            if not arduino_ok:
-                self.logger.error("❌ Arduino not connected")
-                return False
-                
-            if not camera_ok:
-                self.logger.error("❌ Camera not available") 
-                return False
-                
-            # Check face encodings
-            if len(self.face_tracker.known_face_names) == 0:
-                self.logger.warning("⚠️ No face encodings loaded - will track any face")
-                
             self.is_initialized = True
-            self.logger.info("✅ Face tracking integration initialized successfully!")
+            self.logger.info("✅ Enhanced Face Tracking Integration initialized successfully!")
+            self.logger.info("🎯 Priority users: Sophia and Eladriel")
+            self.logger.info("🔍 Intelligent search behavior enabled")
             return True
             
         except Exception as e:
-            self.logger.error(f"❌ Face tracking initialization failed: {e}")
+            self.logger.error(f"❌ Enhanced face tracking initialization failed: {e}")
             return False
             
     def process_voice_command(self, command_text: str) -> Optional[Dict]:
@@ -138,6 +140,9 @@ class FaceTrackingIntegration:
             elif command_type == 'center_view':
                 return self._center_view()
                 
+            elif command_type == 'search_faces':
+                return self._start_search()
+                
             elif command_type == 'tracking_status':
                 return self._get_tracking_status()
                 
@@ -150,315 +155,396 @@ class FaceTrackingIntegration:
             }
             
     def _start_tracking(self) -> Dict:
-        """Start face tracking"""
-        if not self.face_tracker:
+        """Start intelligent face tracking"""
+        if not self.intelligent_tracker:
             return {
                 'status': 'error', 
-                'message': 'Face tracker not initialized',
-                'response': "I'm sorry, my face tracking system isn't ready yet."
+                'message': 'Intelligent tracker not initialized',
+                'response': "I'm sorry, my intelligent tracking system isn't ready yet."
             }
             
         try:
-            self.face_tracker.tracking_active = True
-            self.logger.info("👁️ Face tracking started via voice command")
+            # Determine if we're in conversation mode
+            conversation_mode = False
+            if self.ai_assistant and hasattr(self.ai_assistant, 'current_user') and self.ai_assistant.current_user:
+                conversation_mode = True
+                
+            self.intelligent_tracker.start_tracking(conversation_mode=conversation_mode)
+            self.logger.info("🎯 Intelligent face tracking started via voice command")
             
+            mode_text = "conversation mode" if conversation_mode else "general mode"
             return {
                 'status': 'success',
-                'message': 'Face tracking started',
-                'response': "I'm now looking for familiar faces to follow. I'll track Sophia or Eladriel when I see them!"
+                'message': f'Intelligent face tracking started in {mode_text}',
+                'response': f"I'm now using my intelligent tracking system in {mode_text}! I'll prioritize Sophia and Eladriel, and search for faces when I don't see anyone."
             }
             
         except Exception as e:
             return {
                 'status': 'error',
                 'message': f'Failed to start tracking: {e}',
-                'response': "I had trouble starting my face tracking. Let me try to fix that."
+                'response': "I had trouble starting my intelligent tracking system. Let me try to fix that."
             }
             
     def _stop_tracking(self) -> Dict:
-        """Stop face tracking"""
-        if not self.face_tracker:
+        """Stop intelligent face tracking"""
+        if not self.intelligent_tracker:
             return {
                 'status': 'error',
-                'message': 'Face tracker not initialized', 
-                'response': "My face tracking system isn't available right now."
+                'message': 'Intelligent tracker not initialized', 
+                'response': "My intelligent tracking system isn't available right now."
             }
             
         try:
-            self.face_tracker.tracking_active = False
-            # Center servos when stopping
-            self.face_tracker.move_servos(
-                self.face_tracker.servo1_center, 
-                self.face_tracker.servo2_center
-            )
-            self.logger.info("🛑 Face tracking stopped via voice command")
+            self.intelligent_tracker.stop_tracking()
+            self.logger.info("🛑 Intelligent face tracking stopped via voice command")
             
             return {
                 'status': 'success',
-                'message': 'Face tracking stopped',
-                'response': "I've stopped tracking faces and returned to center position."
+                'message': 'Intelligent face tracking stopped',
+                'response': "I've stopped intelligent tracking and returned to center position."
             }
             
         except Exception as e:
             return {
-                'status': 'error', 
+                'status': 'error',
                 'message': f'Failed to stop tracking: {e}',
-                'response': "I had trouble stopping the face tracking."
+                'response': "I had trouble stopping the intelligent tracking."
             }
             
     def _manual_look(self, direction: str) -> Dict:
-        """Manual servo control for looking in specific directions"""
-        if not self.face_tracker:
+        """Manual look command with intelligent tracking pause"""
+        if not self.intelligent_tracker:
             return {
                 'status': 'error',
-                'message': 'Face tracker not initialized',
-                'response': "My servo control system isn't available right now."
+                'message': 'Intelligent tracker not initialized',
+                'response': "My tracking system isn't available right now."
             }
             
         try:
-            # Temporarily stop tracking for manual control
-            was_tracking = self.face_tracker.tracking_active
-            self.face_tracker.tracking_active = False
+            # Temporarily pause tracking for manual control
+            was_tracking = self.intelligent_tracker.is_tracking
+            if was_tracking:
+                self.intelligent_tracker.stop_tracking()
             
-            # Get current positions
-            current_pan = self.face_tracker.servo1_current
-            current_tilt = self.face_tracker.servo2_current
+            # Execute manual movement
+            self.intelligent_tracker.manual_look(direction, amount=25)
             
-            # Calculate new positions based on direction
-            movement_step = 30  # degrees
+            # Resume tracking if it was active
+            if was_tracking:
+                time.sleep(0.5)  # Brief pause
+                conversation_mode = False
+                if self.ai_assistant and hasattr(self.ai_assistant, 'current_user') and self.ai_assistant.current_user:
+                    conversation_mode = True
+                self.intelligent_tracker.start_tracking(conversation_mode=conversation_mode)
             
-            if direction == 'left':
-                new_pan = max(self.face_tracker.servo_min, current_pan - movement_step)
-                new_tilt = current_tilt
-                response = "Looking left now."
-                
-            elif direction == 'right':
-                new_pan = min(self.face_tracker.servo_max, current_pan + movement_step)
-                new_tilt = current_tilt
-                response = "Looking right now."
-                
-            elif direction == 'up':
-                new_pan = current_pan
-                new_tilt = max(self.face_tracker.servo_min, current_tilt - movement_step)
-                response = "Looking up now."
-                
-            elif direction == 'down':
-                new_pan = current_pan
-                new_tilt = min(self.face_tracker.servo_max, current_tilt + movement_step)
-                response = "Looking down now."
-                
-            else:
-                return {
-                    'status': 'error',
-                    'message': f'Invalid direction: {direction}',
-                    'response': "I don't understand that direction."
-                }
-                
-            # Move servos
-            self.face_tracker.move_servos(new_pan, new_tilt)
-            
-            # Brief pause, then restore tracking state
-            time.sleep(0.5)
-            self.face_tracker.tracking_active = was_tracking
-            
-            self.logger.info(f"👁️ Manual look command: {direction}")
+            self.logger.info(f"👁️ Manual look {direction} executed")
             
             return {
                 'status': 'success',
                 'message': f'Looked {direction}',
-                'response': response
+                'response': f"I'm now looking {direction}."
             }
             
         except Exception as e:
             return {
                 'status': 'error',
-                'message': f'Failed to look {direction}: {e}',
+                'message': f'Manual look failed: {e}',
                 'response': f"I had trouble looking {direction}."
             }
             
     def _center_view(self) -> Dict:
-        """Center the servo positions"""
-        if not self.face_tracker:
+        """Center view and pause tracking"""
+        if not self.intelligent_tracker:
             return {
                 'status': 'error',
-                'message': 'Face tracker not initialized',
-                'response': "My servo control system isn't available right now."
+                'message': 'Intelligent tracker not initialized',
+                'response': "My tracking system isn't available right now."
             }
             
         try:
-            # Center servos
-            self.face_tracker.move_servos(
-                self.face_tracker.servo1_center,
-                self.face_tracker.servo2_center
-            )
-            
-            self.logger.info("🎯 Servos centered via voice command")
+            # Stop tracking and center
+            self.intelligent_tracker.stop_tracking()
+            self.logger.info("👁️ View centered via voice command")
             
             return {
-                'status': 'success', 
+                'status': 'success',
                 'message': 'View centered',
-                'response': "I'm now looking straight ahead."
+                'response': "I'm now looking straight ahead in center position."
             }
             
         except Exception as e:
             return {
                 'status': 'error',
-                'message': f'Failed to center view: {e}',
+                'message': f'Center view failed: {e}',
                 'response': "I had trouble centering my view."
+            }
+            
+    def _start_search(self) -> Dict:
+        """Start search behavior manually"""
+        if not self.intelligent_tracker:
+            return {
+                'status': 'error',
+                'message': 'Intelligent tracker not initialized',
+                'response': "My tracking system isn't available right now."
+            }
+            
+        try:
+            # Start tracking which will activate search if no faces
+            conversation_mode = False
+            if self.ai_assistant and hasattr(self.ai_assistant, 'current_user') and self.ai_assistant.current_user:
+                conversation_mode = True
+                
+            self.intelligent_tracker.start_tracking(conversation_mode=conversation_mode)
+            
+            # Force search behavior by resetting last detection time
+            self.intelligent_tracker.last_detection_time = 0
+            
+            self.logger.info("🔍 Manual search behavior activated")
+            
+            return {
+                'status': 'success',
+                'message': 'Search behavior started',
+                'response': "I'm now searching for faces by looking left, right, and up. I'll track anyone I find!"
+            }
+            
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Search start failed: {e}',
+                'response': "I had trouble starting my search behavior."
             }
             
     def _get_tracking_status(self) -> Dict:
         """Get current tracking status"""
-        if not self.face_tracker:
+        if not self.intelligent_tracker:
             return {
                 'status': 'error',
-                'message': 'Face tracker not initialized',
-                'response': "My face tracking system isn't available right now."
+                'message': 'Intelligent tracker not initialized',
+                'response': "My tracking system isn't available right now."
             }
             
         try:
-            tracking_active = self.face_tracker.tracking_active
-            current_target = getattr(self.face_tracker, 'target_person', None)
-            known_faces = self.face_tracker.known_face_names
+            status = self.intelligent_tracker.get_tracking_status()
             
-            # Build status response
-            if not tracking_active:
+            if not status['tracking_active']:
                 response = "I'm not currently tracking any faces. I'm looking straight ahead."
-            elif current_target:
-                response = f"I'm actively tracking {current_target}."
-            elif known_faces:
-                response = f"I'm looking for familiar faces. I can recognize: {', '.join(known_faces)}."
+            elif status['search_active']:
+                response = "I'm searching for faces by looking around slowly."
+            elif status['conversation_mode'] and status['current_target']:
+                response = f"I'm in conversation mode, prioritizing {status['current_target'].title()}."
             else:
-                response = "I'm looking for any faces to track."
-                
+                response = "I'm tracking faces with priority for Sophia and Eladriel."
+            
             return {
                 'status': 'success',
                 'message': 'Status retrieved',
                 'response': response,
-                'details': {
-                    'tracking_active': tracking_active,
-                    'current_target': current_target,
-                    'known_faces': known_faces,
-                    'servo_positions': {
-                        'pan': self.face_tracker.servo1_current,
-                        'tilt': self.face_tracker.servo2_current
-                    }
-                }
+                'data': status
             }
             
         except Exception as e:
             return {
                 'status': 'error',
-                'message': f'Failed to get status: {e}',
+                'message': f'Status check failed: {e}',
                 'response': "I had trouble checking my tracking status."
             }
+    
+    def enable_conversation_mode(self, user: str):
+        """Enable conversation mode tracking for specific user"""
+        if not self.is_initialized or not self.intelligent_tracker:
+            return
             
+        try:
+            # Set conversation mode with the specific user
+            self.intelligent_tracker.set_conversation_mode(True, user)
+            
+            # Start tracking if not already active
+            if not self.intelligent_tracker.is_tracking:
+                self.intelligent_tracker.start_tracking(conversation_mode=True)
+                
+            self.logger.info(f"💬 Conversation mode enabled for {user}")
+            
+        except Exception as e:
+            self.logger.error(f"❌ Failed to enable conversation mode: {e}")
+    
+    def disable_conversation_mode(self):
+        """Disable conversation mode tracking"""
+        if not self.is_initialized or not self.intelligent_tracker:
+            return
+            
+        try:
+            self.intelligent_tracker.set_conversation_mode(False)
+            self.logger.info("💬 Conversation mode disabled")
+            
+        except Exception as e:
+            self.logger.error(f"❌ Failed to disable conversation mode: {e}")
+    
     def get_system_status(self) -> Dict:
         """Get comprehensive system status"""
-        if not self.is_initialized or not self.face_tracker:
+        if not self.is_initialized:
             return {
                 'initialized': False,
-                'camera_available': False,
-                'arduino_connected': False,
-                'tracking_active': False,
-                'face_encodings_loaded': 0,
                 'error': 'System not initialized'
             }
             
         try:
+            tracker_status = self.intelligent_tracker.get_tracking_status()
+            
             return {
                 'initialized': True,
-                'camera_available': self.face_tracker.camera is not None or self.face_tracker.camera_handler is not None,
-                'arduino_connected': self.face_tracker.arduino is not None,
-                'tracking_active': self.face_tracker.tracking_active,
-                'face_encodings_loaded': len(self.face_tracker.known_face_names),
-                'known_faces': self.face_tracker.known_face_names,
-                'current_target': getattr(self.face_tracker, 'target_person', None),
-                'servo_positions': {
-                    'pan': self.face_tracker.servo1_current,
-                    'tilt': self.face_tracker.servo2_current
-                },
-                'using_imx500': getattr(self.face_tracker, 'using_imx500', False)
+                'intelligent_tracking': tracker_status,
+                'voice_commands_available': len(sum(self.voice_commands.values(), [])),
+                'priority_users': ['sophia', 'eladriel'],
+                'features': [
+                    'Priority face tracking',
+                    'Conversation mode integration', 
+                    'Intelligent search behavior',
+                    'Smooth servo movements',
+                    'Voice command control'
+                ]
             }
             
         except Exception as e:
             return {
                 'initialized': True,
-                'error': f'Status check failed: {e}'
+                'error': f'Status error: {e}'
             }
-            
+    
     def cleanup(self):
-        """Clean up face tracking resources"""
-        if self.face_tracker:
-            try:
-                self.face_tracker.cleanup()
-            except:
-                pass
-            self.face_tracker = None
-        self.is_initialized = False
-
-# Example integration with main AI assistant
-def integrate_with_main_ai(main_ai_instance):
-    """
-    Example function showing how to integrate with the main AI assistant
-    This should be called from your main.py file
-    """
-    
-    # Initialize face tracking integration
-    face_integration = FaceTrackingIntegration(main_ai_instance)
-    
-    if not face_integration.initialize():
-        print("⚠️ Face tracking integration failed to initialize")
-        return None
-        
-    # Add to AI assistant's command processors
-    def enhanced_command_processor(text):
-        """Enhanced command processor that includes face tracking"""
-        
-        # First try face tracking commands
-        face_result = face_integration.process_voice_command(text)
-        if face_result:
-            return face_result['response']
+        """Clean up resources"""
+        try:
+            if self.intelligent_tracker:
+                self.intelligent_tracker.cleanup()
+            self.is_initialized = False
+            self.logger.info("🧹 Enhanced Face Tracking Integration cleaned up")
             
-        # Fall back to original AI processing
-        return main_ai_instance.original_process_command(text)
+        except Exception as e:
+            self.logger.error(f"❌ Cleanup error: {e}")
+
+# Integration function for main AI system
+def integrate_enhanced_face_tracking(main_ai_instance):
+    """
+    Enhanced integration function for main AI system
+    Replaces the old face tracking with intelligent tracking
+    """
+    print("🎯 Integrating Enhanced Face Tracking with AI Assistant...")
     
-    # Replace or enhance the main AI's command processing
-    main_ai_instance.face_tracking = face_integration
-    main_ai_instance.enhanced_process_command = enhanced_command_processor
+    # Create enhanced face tracking integration
+    enhanced_integration = EnhancedFaceTrackingIntegration(main_ai_instance)
     
-    print("✅ Face tracking integration completed!")
-    return face_integration
+    # Initialize the system
+    if enhanced_integration.initialize():
+        print("✅ Enhanced Face Tracking integrated successfully!")
+        
+        # Add to main AI system
+        main_ai_instance.enhanced_face_tracking = enhanced_integration
+        
+        # Hook into conversation mode
+        original_handle_automatic_conversation = main_ai_instance.handle_automatic_conversation
+        
+        def enhanced_handle_automatic_conversation(user: str):
+            """Enhanced conversation handler with intelligent tracking"""
+            # Enable conversation mode tracking
+            enhanced_integration.enable_conversation_mode(user)
+            
+            try:
+                # Call original conversation handler
+                result = original_handle_automatic_conversation(user)
+                return result
+            finally:
+                # Disable conversation mode when done
+                enhanced_integration.disable_conversation_mode()
+        
+        # Replace the method
+        main_ai_instance.handle_automatic_conversation = enhanced_handle_automatic_conversation
+        
+        # Enhanced command processor that includes face tracking
+        original_command_processor = getattr(main_ai_instance, 'handle_special_commands', None)
+        
+        def enhanced_command_processor(text, user):
+            """Enhanced command processor with face tracking commands"""
+            # First check for face tracking commands
+            face_tracking_result = enhanced_integration.process_voice_command(text)
+            
+            if face_tracking_result:
+                return face_tracking_result.get('response', 'Face tracking command processed.')
+            
+            # Fall back to original command processor
+            if original_command_processor:
+                return original_command_processor(text, user)
+            
+            return None
+        
+        # Add enhanced command processor
+        main_ai_instance.enhanced_command_processor = enhanced_command_processor
+        
+        print("🎯 Enhanced face tracking commands available:")
+        print("   • 'Look at me' - Start intelligent tracking")
+        print("   • 'Stop looking' - Stop tracking") 
+        print("   • 'Search for faces' - Start search behavior")
+        print("   • 'Who are you looking at?' - Get status")
+        print("   • Manual direction commands: left, right, up, down")
+        print("🎭 Features enabled:")
+        print("   • Priority tracking for Sophia and Eladriel")
+        print("   • Automatic conversation mode tracking")
+        print("   • Intelligent search when no faces detected")
+        print("   • Smooth servo movements with prediction")
+        
+        return enhanced_integration
+        
+    else:
+        print("❌ Enhanced Face Tracking integration failed")
+        return None
 
 if __name__ == "__main__":
-    # Standalone testing
-    print("🤖 Face Tracking Integration Test")
-    print("=" * 40)
+    # Test the enhanced integration
+    import argparse
     
-    integration = FaceTrackingIntegration()
+    parser = argparse.ArgumentParser(description='Enhanced Face Tracking Integration Test')
+    parser.add_argument('--arduino-port', default='/dev/ttyUSB0', help='Arduino port')
+    parser.add_argument('--camera-index', type=int, default=0, help='Camera index')
     
-    if integration.initialize():
-        print("✅ Integration initialized successfully!")
+    args = parser.parse_args()
+    
+    # Setup logging
+    logging.basicConfig(level=logging.INFO)
+    
+    print("🎯 ENHANCED FACE TRACKING INTEGRATION TEST")
+    print("=" * 60)
+    
+    try:
+        integration = EnhancedFaceTrackingIntegration()
         
-        # Test voice commands
-        test_commands = [
-            "look at me",
-            "look left", 
-            "center your eyes",
-            "who are you looking at",
-            "stop tracking"
-        ]
-        
-        for cmd in test_commands:
-            print(f"\n🗣️ Testing command: '{cmd}'")
-            result = integration.process_voice_command(cmd)
-            if result:
-                print(f"📝 Response: {result['response']}")
-            else:
-                print("❓ Command not recognized")
-            time.sleep(2)
+        if integration.initialize(args.arduino_port, args.camera_index):
+            print("✅ Integration initialized successfully!")
             
-    else:
-        print("❌ Integration failed to initialize")
-        
-    integration.cleanup() 
+            # Test voice commands
+            test_commands = [
+                "look at me",
+                "who are you looking at",
+                "search for faces", 
+                "look left",
+                "center your eyes",
+                "stop tracking"
+            ]
+            
+            for command in test_commands:
+                print(f"\n🎤 Testing command: '{command}'")
+                result = integration.process_voice_command(command)
+                if result:
+                    print(f"   ✅ {result.get('response', 'Command processed')}")
+                else:
+                    print(f"   ❌ Command not recognized")
+                time.sleep(2)
+            
+            print("\n✅ All tests completed!")
+            integration.cleanup()
+            
+        else:
+            print("❌ Integration initialization failed")
+            
+    except Exception as e:
+        print(f"❌ Test failed: {e}")
+        import traceback
+        traceback.print_exc() 
