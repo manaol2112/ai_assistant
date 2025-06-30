@@ -55,6 +55,11 @@ try:
         from gesture_control import HandGestureController
     except ImportError:
         HandGestureController = None
+    # Import existing components
+    from face_tracking_servo_controller import PremiumFaceTracker
+    from smart_camera_detector import SmartCameraDetector
+    # Enhanced face tracking integration
+    from face_tracking_integration import EnhancedFaceTrackingIntegration
 except ImportError as e:
     print(f"❌ Import error: {e}")
     print("Please install required packages: pip install -r requirements.txt")
@@ -428,10 +433,11 @@ class AIAssistant:
                 'greeting': self.get_dynamic_greeting('sophia'),
                 'face_greeting': self.get_dynamic_face_greeting('sophia'),
                 'tts_engine': self.sophia_tts,
-                'special_commands': ['help', 'what can you do', 'identify this', 'what is this', 'tell me about this', 'spelling game', 'play spelling', 'ready', 'end game', 'teach me filipino', 'filipino game', 'math game', 'math quiz', 'word problems', 'animal game', 'guess the animal', 'animal guessing', 'letter game', 'letter word game', 'word guessing', 'guess the word']
+                'special_commands': ['help', 'what can you do', 'identify this', 'what is this', 'tell me about this', 'spelling game', 'play spelling', 'ready', 'end game', 'teach me filipino', 'filipino game', 'math game', 'math quiz', 'word problems', 'animal game', 'guess the animal', 'animal guessing', 'letter game', 'letter word game', 'word guessing', 'guess the word', 'look at me', 'track my face', 'stop looking', 'stop tracking', 'who are you looking at', 'search for faces', 'look left', 'look right', 'look up', 'look down', 'center your eyes']
             },
             'eladriel': {
                 'name': 'Eladriel',
+                'age': 3,
                 'birthday': '2020-08-12',  # August 12, 2020
                 'gender': 'boy',
                 'wake_word': 'dino',
@@ -439,7 +445,7 @@ class AIAssistant:
                 'greeting': self.get_dynamic_greeting('eladriel'),
                 'face_greeting': self.get_dynamic_face_greeting('eladriel'),
                 'tts_engine': self.eladriel_tts,
-                'special_commands': ['identify dinosaur', 'identify this', 'what is this', 'tell me about this', 'show me camera', 'dinosaur tips', 'help', 'spelling game', 'play spelling', 'ready', 'end game', 'teach me filipino', 'filipino game', 'math game', 'math quiz', 'word problems', 'animal game', 'guess the animal', 'animal guessing', 'letter game', 'letter word game', 'word guessing', 'guess the word']
+                'special_commands': ['identify dinosaur', 'identify this', 'what is this', 'tell me about this', 'show me camera', 'dinosaur tips', 'help', 'spelling game', 'play spelling', 'ready', 'end game', 'teach me filipino', 'filipino game', 'math game', 'math quiz', 'word problems', 'animal game', 'guess the animal', 'animal guessing', 'letter game', 'letter word game', 'word guessing', 'guess the word', 'look at me', 'track my face', 'stop looking', 'stop tracking', 'who are you looking at', 'search for faces', 'look left', 'look right', 'look up', 'look down', 'center your eyes']
             },
             'parent': {
                 'name': 'Parent',
@@ -452,7 +458,7 @@ class AIAssistant:
                     'help', 'status report', 'system check', 'quiet mode on', 'quiet mode off',
                     'identify this', 'what is this', 'tell me about this', 'show me camera',
                     'check on kids', 'home automation', 'schedule reminder', 'weather',
-                    'news update', 'shopping list', 'calendar', 'notes', 'spelling game', 'play spelling', 'ready', 'end game', 'teach me filipino', 'filipino game', 'math game', 'math quiz', 'word problems', 'animal game', 'guess the animal', 'animal guessing', 'letter game', 'letter word game', 'word guessing', 'guess the word'
+                    'news update', 'shopping list', 'calendar', 'notes', 'spelling game', 'play spelling', 'ready', 'end game', 'teach me filipino', 'filipino game', 'math game', 'math quiz', 'word problems', 'animal game', 'guess the animal', 'animal guessing', 'letter game', 'letter word game', 'word guessing', 'guess the word', 'look at me', 'track my face', 'stop looking', 'stop tracking', 'who are you looking at', 'search for faces', 'look left', 'look right', 'look up', 'look down', 'center your eyes'
                 ]
             }
         }
@@ -463,6 +469,21 @@ class AIAssistant:
         self.gesture_control_active = False
         self.gesture_control_thread = None
         self.gesture_stop_event = threading.Event()
+        
+        # Initialize Enhanced Face Tracking System
+        logger.info("🎯 Setting up Enhanced Face Tracking System...")
+        try:
+            self.enhanced_face_tracking = EnhancedFaceTrackingIntegration(main_ai_assistant=self)
+            if self.enhanced_face_tracking.initialize():
+                logger.info("✅ Enhanced Face Tracking System initialized successfully!")
+                logger.info("🎯 Priority tracking enabled for Sophia and Eladriel")
+                logger.info("🔍 Intelligent search behavior activated")
+            else:
+                logger.warning("⚠️ Enhanced Face Tracking initialization failed - will run without tracking")
+                self.enhanced_face_tracking = None
+        except Exception as e:
+            logger.error(f"❌ Enhanced Face Tracking setup failed: {e}")
+            self.enhanced_face_tracking = None
 
     def setup_audio_feedback(self):
         """Setup audio feedback system for interaction cues."""
@@ -1136,6 +1157,14 @@ class AIAssistant:
         print(f"💬 Automatic conversation mode activated for {user.title()}!")
         print("🎤 I'm listening... (say 'goodbye' to end, or I'll timeout after 1 minute of silence)")
         
+        # Enable enhanced face tracking conversation mode
+        if self.enhanced_face_tracking:
+            try:
+                self.enhanced_face_tracking.enable_conversation_mode(user)
+                logger.info(f"🎯 Enhanced face tracking conversation mode enabled for {user}")
+            except Exception as e:
+                logger.error(f"❌ Failed to enable conversation mode tracking: {e}")
+        
         # Start conversation loop - keep listening until user says goodbye or timeout
         conversation_active = True
         conversation_timeout_count = 0
@@ -1263,6 +1292,14 @@ class AIAssistant:
         # Show goodbye state in visual feedback
         if self.visual:
             self.visual.show_standby("👋 Goodbye! Say wake word to chat again")
+        
+        # Disable enhanced face tracking conversation mode
+        if self.enhanced_face_tracking:
+            try:
+                self.enhanced_face_tracking.disable_conversation_mode()
+                logger.info("🎯 Enhanced face tracking conversation mode disabled")
+            except Exception as e:
+                logger.error(f"❌ Failed to disable conversation mode tracking: {e}")
         
         self.current_user = None
         print("🎤 Conversation ended. Listening for wake words again...")
@@ -1987,6 +2024,12 @@ class AIAssistant:
         if any(phrase in user_input_lower for phrase in ['gesture control', 'hand control', 'hand gesture']):
             return self.start_gesture_motor_control()
         
+        # Enhanced Face Tracking Commands (for all users) - ADD BEFORE OTHER COMMANDS
+        if self.enhanced_face_tracking:
+            face_tracking_result = self.enhanced_face_tracking.process_voice_command(user_input)
+            if face_tracking_result:
+                return face_tracking_result.get('response', 'Face tracking command processed.')
+        
         return None
     
     def handle_object_identification(self, user: str) -> str:
@@ -2172,6 +2215,17 @@ class AIAssistant:
 • Also works with: "Miley move forward", "go left", "turn right", etc.
 • TWO WAYS TO CONTROL: Voice commands OR hand gestures - your choice! 🎵✨
 
+🎯 INTELLIGENT FACE TRACKING (NEW!):
+• Say "Look at me" or "Track my face" - I'll intelligently follow you! 👁️
+• I'll automatically prioritize you and Eladriel over everyone else! 🌟
+• Smart search: I'll look around if I don't see anyone 🔍
+• Say "Stop looking" or "Stop tracking" - I'll stop and center my view
+• Say "Who are you looking at?" - I'll tell you my tracking status
+• Say "Search for faces" - I'll actively look for people
+• Manual control: "Look left", "Look right", "Look up", "Look down"
+• Say "Center your eyes" - I'll return to center position
+• Perfect for staying connected during conversations! 💬✨
+
 Ask me anything, show me any object, or play any of the games to practice your skills!"""
         
         elif user == 'eladriel':
@@ -2305,6 +2359,17 @@ Ask me anything, show me any object, or play any of the games to practice your s
 • Also works with: "Dino move forward", "go left", "turn right", etc.
 • TWO WAYS TO CONTROL: Voice commands OR hand gestures - roar your choice! 🦕✨
 
+🎯 INTELLIGENT FACE TRACKING (NEW!):
+• Say "Look at me" or "Track my face" - I'll intelligently follow you! 👁️
+• I'll automatically prioritize you and Sophia over everyone else! 🌟
+• Smart search: I'll look around if I don't see anyone 🔍
+• Say "Stop looking" or "Stop tracking" - I'll stop and center my view
+• Say "Who are you looking at?" - I'll tell you my tracking status
+• Say "Search for faces" - I'll actively look for people
+• Manual control: "Look left", "Look right", "Look up", "Look down"
+• Say "Center your eyes" - I'll return to center position
+• Perfect for dinosaur adventures and staying connected! 🦕💬✨
+
 What do you want to explore today? Show me anything you've discovered, or let's practice with games! 🚀"""
         
         elif user == 'parent':
@@ -2408,6 +2473,17 @@ What do you want to explore today? Show me anything you've discovered, or let's 
 • Listening confirmation sounds
 • Speech completion indicators
 • "turn off sounds" / "turn on sounds" controls
+
+🎯 INTELLIGENT FACE TRACKING (NEW!):
+• Say "Look at me" or "Track my face" - Advanced intelligent tracking system! 👁️
+• Automatic priority tracking for Sophia and Eladriel when they're in view
+• Smart search behavior when no faces are detected
+• Say "Stop looking" or "Stop tracking" - Stop tracking and center view
+• Say "Who are you looking at?" - Get current tracking status and metrics
+• Say "Search for faces" - Activate face search mode
+• Manual control: "Look left", "Look right", "Look up", "Look down"
+• Say "Center your eyes" - Return to default center position
+• Perfect for monitoring and interaction during conversations! 👁️✨
 
 All standard features available with enhanced capabilities for household management."""
         
@@ -2763,6 +2839,14 @@ Everything looks good for when the children wake up!"""
         # Show goodbye state in visual feedback
         if self.visual:
             self.visual.show_standby("👋 Goodbye! Say wake word to chat again")
+        
+        # Disable enhanced face tracking conversation mode
+        if self.enhanced_face_tracking:
+            try:
+                self.enhanced_face_tracking.disable_conversation_mode()
+                logger.info("🎯 Enhanced face tracking conversation mode disabled")
+            except Exception as e:
+                logger.error(f"❌ Failed to disable conversation mode tracking: {e}")
         
         self.current_user = None
         print("🎤 Conversation ended. Listening for wake words again...")
