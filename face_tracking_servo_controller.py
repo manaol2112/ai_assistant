@@ -19,28 +19,32 @@ from datetime import datetime
 class PremiumFaceTracker:
     """Premium face tracking controller with servo integration"""
     
-    def __init__(self, arduino_port: str = '/dev/ttyUSB0', camera_index: int = 0):
+    def __init__(self, arduino_port: str = '/dev/ttyUSB0', camera_index: int = 0, headless: bool = False):
         # Camera setup with CameraHandler support
         self.camera_index = camera_index
         self.camera = None
         self.camera_handler = None
         self.using_imx500 = False
         
-        # Arduino setup
+        # Tracking configuration
+        self.headless = headless  # Hide camera display when True
+        
+        # Arduino servo setup
         self.arduino_port = arduino_port
         self.arduino_baud = 9600
         self.arduino = None
         
         # Servo configuration
-        self.servo1_center = 90  # Pan servo (horizontal)
-        self.servo2_center = 90  # Tilt servo (vertical)
+        self.servo1_center = 90  # Pan servo center
+        self.servo2_center = 90  # Tilt servo center
         self.servo1_current = self.servo1_center
         self.servo2_current = self.servo2_center
         self.servo_min = 0
         self.servo_max = 180
-        self.movement_threshold = 5  # Minimum movement in pixels to trigger servo
+        self.movement_threshold = 20  # pixels
+        self.servo_step = 2  # degrees per movement
         
-        # Face tracking parameters
+        # Face recognition setup
         self.face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
         self.known_face_encodings = []
         self.known_face_names = []
@@ -55,7 +59,7 @@ class PremiumFaceTracker:
         self.last_face_center = None
         self.smoothing_factor = 0.3  # For smooth servo movement
         
-        # Performance tracking
+        # Performance optimization
         self.frame_count = 0
         self.fps = 0
         self.last_fps_time = time.time()
@@ -381,20 +385,24 @@ class PremiumFaceTracker:
             
     def run_tracking(self):
         """Main tracking loop"""
-        print("\n🎯 Starting Premium Face Tracking System")
-        print("=" * 50)
-        print("Controls:")
-        print("  SPACE - Toggle tracking on/off")
-        print("  R - Reset servos to center")
-        print("  Q - Quit")
-        print("  1-9 - Set target person (if multiple faces)")
-        print("=" * 50)
+        if not self.headless:
+            print("\n🎯 Starting Premium Face Tracking System")
+            print("=" * 50)
+            print("Controls:")
+            print("  SPACE - Toggle tracking on/off")
+            print("  R - Reset servos to center")
+            print("  Q - Quit")
+            print("  1-9 - Set target person (if multiple faces)")
+            print("=" * 50)
+        else:
+            print("🎯 Starting Face Tracking in Headless Mode (No Display)")
         
         while True:
             # Read frame
             ret, frame = self.read_frame()
             if not ret:
-                print("Failed to read frame")
+                if not self.headless:
+                    print("Failed to read frame")
                 break
                 
             # Update FPS
@@ -446,32 +454,35 @@ class PremiumFaceTracker:
                         
                     self.last_face_center = face_center
                     
-            # Draw tracking information
-            display_frame = self.draw_tracking_info(frame, self.face_locations, self.face_names)
-            
-            # Display frame
-            cv2.imshow('Premium Face Tracking', display_frame)
-            
-            # Handle keyboard input
-            key = cv2.waitKey(1) & 0xFF
-            
-            if key == ord('q'):
-                break
-            elif key == ord(' '):
-                self.tracking_active = not self.tracking_active
-                status = "ACTIVE" if self.tracking_active else "PAUSED"
-                print(f"🎯 Tracking {status}")
-            elif key == ord('r'):
-                self.move_servos(self.servo1_center, self.servo2_center)
-                print("🔄 Servos reset to center")
-            elif key >= ord('1') and key <= ord('9'):
-                person_idx = key - ord('1')
-                if person_idx < len(self.known_face_names):
-                    self.target_person = self.known_face_names[person_idx]
-                    print(f"🎯 Targeting: {self.target_person}")
-                else:
-                    self.target_person = None
-                    print("🎯 Targeting: Any face")
+            # Display frame only if not in headless mode
+            if not self.headless:
+                # Draw tracking information
+                display_frame = self.draw_tracking_info(frame, self.face_locations, self.face_names)
+                cv2.imshow('Premium Face Tracking', display_frame)
+                
+                # Handle keyboard input
+                key = cv2.waitKey(1) & 0xFF
+                
+                if key == ord('q'):
+                    break
+                elif key == ord(' '):
+                    self.tracking_active = not self.tracking_active
+                    status = "ACTIVE" if self.tracking_active else "PAUSED"
+                    print(f"🎯 Tracking {status}")
+                elif key == ord('r'):
+                    self.move_servos(self.servo1_center, self.servo2_center)
+                    print("🔄 Servos reset to center")
+                elif key >= ord('1') and key <= ord('9'):
+                    person_idx = key - ord('1')
+                    if person_idx < len(self.known_face_names):
+                        self.target_person = self.known_face_names[person_idx]
+                        print(f"🎯 Targeting: {self.target_person}")
+                    else:
+                        self.target_person = None
+                        print("🎯 Targeting: Any face")
+            else:
+                # In headless mode, just add a small delay
+                time.sleep(0.03)  # ~30 FPS
                     
         # Cleanup
         self.cleanup()
@@ -488,7 +499,8 @@ class PremiumFaceTracker:
             
         # Release camera
         self.release_camera()
-        cv2.destroyAllWindows()
+        if not self.headless:
+            cv2.destroyAllWindows()
         
         print("✅ Cleanup complete")
 
@@ -501,13 +513,15 @@ def main():
                        help='Arduino serial port (default: /dev/ttyUSB0)')
     parser.add_argument('--camera-index', type=int, default=0,
                        help='Camera index (default: 0)')
+    parser.add_argument('--headless', action='store_true', help='Run in headless mode')
     
     args = parser.parse_args()
     
     # Create face tracker
     tracker = PremiumFaceTracker(
         arduino_port=args.arduino_port,
-        camera_index=args.camera_index
+        camera_index=args.camera_index,
+        headless=args.headless
     )
     
     # Initialize systems

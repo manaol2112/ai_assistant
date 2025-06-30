@@ -70,7 +70,7 @@ class ConversationStage(Enum):
 class RealTimeIntelligentFaceTracker:
     """REAL-TIME Enhanced face tracking with sub-second response and continuous conversation tracking"""
     
-    def __init__(self, arduino_port: str = '/dev/ttyUSB0', camera_index: int = 0):
+    def __init__(self, arduino_port: str = '/dev/ttyUSB0', camera_index: int = 0, headless: bool = True):
         # Initialize logger
         self.logger = logging.getLogger('RealTimeIntelligentFaceTracker')
         
@@ -115,8 +115,8 @@ class RealTimeIntelligentFaceTracker:
         self.max_tracking_fps = 60    # Target 60 FPS tracking
         self.min_loop_time = 1.0 / self.max_tracking_fps
         
-        # Initialize components
-        self.face_tracker = PremiumFaceTracker(arduino_port, camera_index)
+        # Initialize components with headless mode (no camera display)
+        self.face_tracker = PremiumFaceTracker(arduino_port, camera_index, headless=headless)
         self.camera_detector = None
         
         # Multi-threading for performance
@@ -715,9 +715,9 @@ class RealTimeIntelligentFaceTracker:
         self.logger.info("🧹 REAL-TIME Intelligent Face Tracker cleaned up")
 
 # Integration function for main AI system
-def create_intelligent_tracker(arduino_port='/dev/ttyUSB0', camera_index=0) -> RealTimeIntelligentFaceTracker:
+def create_intelligent_tracker(arduino_port='/dev/ttyUSB0', camera_index=0, headless=True) -> RealTimeIntelligentFaceTracker:
     """Create and initialize the REAL-TIME intelligent face tracker"""
-    tracker = RealTimeIntelligentFaceTracker(arduino_port, camera_index)
+    tracker = RealTimeIntelligentFaceTracker(arduino_port, camera_index, headless=headless)
     
     if tracker.initialize():
         return tracker
@@ -732,6 +732,7 @@ if __name__ == "__main__":
     parser.add_argument('--arduino-port', default='/dev/ttyUSB0', help='Arduino port')
     parser.add_argument('--camera-index', type=int, default=0, help='Camera index')
     parser.add_argument('--fps-target', type=int, default=60, help='Target FPS')
+    parser.add_argument('--show-camera', action='store_true', help='Show camera display (not headless)')
     args = parser.parse_args()
     
     # Setup logging for performance monitoring
@@ -740,14 +741,17 @@ if __name__ == "__main__":
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
     
+    headless_mode = not args.show_camera  # Headless by default, unless --show-camera is used
+    
     print("🚀 REAL-TIME Intelligent Face Tracker Performance Test")
     print(f"🎯 Target FPS: {args.fps_target}")
+    print(f"📹 Display Mode: {'Visible' if not headless_mode else 'Headless (No Window)'}")
     print(f"⚡ Performance optimizations: Frame skipping, predictive tracking, OpenCV fallback")
     print(f"🎪 Testing with Arduino port: {args.arduino_port}, Camera: {args.camera_index}")
     
     try:
         # Create and initialize tracker
-        tracker = RealTimeIntelligentFaceTracker(args.arduino_port, args.camera_index)
+        tracker = RealTimeIntelligentFaceTracker(args.arduino_port, args.camera_index, headless=headless_mode)
         tracker.max_tracking_fps = args.fps_target
         tracker.min_loop_time = 1.0 / args.fps_target
         
@@ -792,6 +796,7 @@ if __name__ == "__main__":
         
         # Start real-time tracking test
         print(f"\n⚡ Starting {args.fps_target} FPS tracking test for 10 seconds...")
+        print("💡 TIP: If using --show-camera, position yourself in front of the camera!")
         tracker.start_tracking(conversation_mode=True)
         
         time.sleep(10)  # Run for 10 seconds

@@ -26,8 +26,8 @@ class RealTimeEnhancedFaceTrackingIntegration:
     def __init__(self, arduino_port: str = '/dev/ttyUSB0', camera_index: int = 0):
         self.logger = logging.getLogger('RealTimeEnhancedFaceTrackingIntegration')
         
-        # Initialize real-time intelligent tracker
-        self.intelligent_tracker = RealTimeIntelligentFaceTracker(arduino_port, camera_index)
+        # Initialize real-time intelligent tracker in headless mode (no camera display)
+        self.intelligent_tracker = RealTimeIntelligentFaceTracker(arduino_port, camera_index, headless=True)
         
         # Integration state
         self.is_integrated = False
