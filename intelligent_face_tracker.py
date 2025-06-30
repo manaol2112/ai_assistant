@@ -231,6 +231,17 @@ class RealTimeIntelligentFaceTracker:
     def set_conversation_stage(self, stage: ConversationStage):
         """Update conversation stage for continuous tracking"""
         with self.lock:
+            # Handle both string and enum inputs
+            if isinstance(stage, str):
+                # Convert string to enum
+                stage_mapping = {
+                    'listening': ConversationStage.LISTENING,
+                    'processing': ConversationStage.PROCESSING,
+                    'responding': ConversationStage.RESPONDING,
+                    'idle': ConversationStage.IDLE
+                }
+                stage = stage_mapping.get(stage.lower(), ConversationStage.IDLE)
+            
             self.conversation_stage = stage
             stage_names = {
                 ConversationStage.LISTENING: "👂 Listening",
@@ -238,7 +249,7 @@ class RealTimeIntelligentFaceTracker:
                 ConversationStage.RESPONDING: "🗣️ Responding",
                 ConversationStage.IDLE: "😴 Idle"
             }
-            self.logger.debug(f"Stage: {stage_names.get(stage, stage.value)}")
+            self.logger.debug(f"Stage: {stage_names.get(stage, stage.name if hasattr(stage, 'name') else str(stage))}")
     
     def _realtime_tracking_loop(self):
         """ULTRA-FAST tracking loop optimized for real-time performance"""
@@ -458,7 +469,7 @@ class RealTimeIntelligentFaceTracker:
         try:
             # Use smart camera detector for face recognition
             if self.camera_detector:
-                faces_info = self.camera_detector.detect_people_in_frame(frame)
+                faces_info = self.camera_detector.detect_faces(frame)
                 
                 for face_info in faces_info:
                     name = face_info.get('name', 'unknown').lower()

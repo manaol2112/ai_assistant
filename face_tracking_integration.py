@@ -305,6 +305,47 @@ def create_enhanced_face_tracking_integration(arduino_port='/dev/ttyUSB0', camer
     else:
         raise Exception("Failed to initialize REAL-TIME Enhanced Face Tracking Integration")
 
+# Integration function for main AI system
+def integrate_enhanced_face_tracking(ai_assistant, arduino_port='/dev/ttyUSB0', camera_index=0):
+    """Integrate enhanced face tracking with the main AI assistant"""
+    try:
+        # Create the enhanced face tracking integration
+        integration = RealTimeEnhancedFaceTrackingIntegration(arduino_port, camera_index)
+        
+        if integration.initialize():
+            # Add to AI assistant
+            ai_assistant.enhanced_face_tracking = integration
+            
+            # Enable conversation mode hooks
+            def enable_tracking_conversation_mode(user_name):
+                if ai_assistant.enhanced_face_tracking:
+                    ai_assistant.enhanced_face_tracking.enable_conversation_mode(user_name)
+            
+            def disable_tracking_conversation_mode():
+                if ai_assistant.enhanced_face_tracking:
+                    ai_assistant.enhanced_face_tracking.disable_conversation_mode()
+            
+            def set_tracking_conversation_stage(stage):
+                if ai_assistant.enhanced_face_tracking:
+                    ai_assistant.enhanced_face_tracking.set_conversation_stage(stage)
+            
+            # Add methods to AI assistant
+            ai_assistant.enable_face_tracking_conversation = enable_tracking_conversation_mode
+            ai_assistant.disable_face_tracking_conversation = disable_tracking_conversation_mode
+            ai_assistant.set_face_tracking_stage = set_tracking_conversation_stage
+            
+            print("✅ Enhanced Face Tracking integrated with AI Assistant")
+            print("🎯 Features enabled: Priority tracking, conversation mode, real-time performance")
+            
+            return integration
+        else:
+            print("❌ Failed to initialize enhanced face tracking")
+            return None
+            
+    except Exception as e:
+        print(f"❌ Integration error: {e}")
+        return None
+
 if __name__ == "__main__":
     # Test the real-time enhanced integration
     import argparse

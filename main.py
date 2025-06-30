@@ -279,6 +279,9 @@ class ImageGenerator:
 class AIAssistant:
     def __init__(self):
         """Initialize the AI Assistant with Face Recognition and Universal Object Identification"""
+        # Initialize logger first
+        self.logger = logging.getLogger('AIAssistant')
+        
         self.config = Config()
         self.visual_config = VisualConfig()  # Add visual config
         self.running = False
@@ -482,13 +485,14 @@ class AIAssistant:
                 
                 # Start initial tracking if hardware is available
                 try:
-                    self.enhanced_face_tracking.start_tracking(conversation_mode=False)
+                    self.enhanced_face_tracking.start_tracking()
                     self.logger.info("🚀 REAL-TIME face tracking started")
                 except Exception as tracking_start_error:
                     self.logger.warning(f"⚠️ Could not start initial tracking: {tracking_start_error}")
             else:
                 self.logger.warning("⚠️ REAL-TIME Enhanced Face Tracking initialization failed")
                 self.enhanced_face_tracking = None
+                
         except Exception as face_tracking_error:
             self.logger.error(f"❌ Enhanced Face Tracking setup failed: {face_tracking_error}")
             self.enhanced_face_tracking = None
