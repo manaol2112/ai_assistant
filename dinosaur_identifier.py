@@ -247,10 +247,14 @@ If it's not a dinosaur, still be enthusiastic and educational!"""
         """Test if camera is working for dinosaur identification."""
         return self.camera_manager.test_camera()
     
-    def show_camera_preview(self, duration: int = 5) -> bool:
+    def show_camera_preview(self, duration: int = 5, headless: bool = False) -> bool:
         """Show camera preview so Eladriel can see what the camera sees."""
+        if headless:
+            print("🦕 Running in headless mode - camera is active but no window will show!")
+            return True
+        
         print("📸 Eladriel, look at the camera window to see what I can see!")
-        return self.camera_manager.show_preview(duration)
+        return self.camera_manager.show_preview(duration, headless=headless)
     
     def get_dinosaur_tips(self) -> str:
         """Get tips for better dinosaur identification."""

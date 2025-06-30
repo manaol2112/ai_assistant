@@ -164,7 +164,7 @@ class CameraHandler:
             
         try:
             if self.using_imx500 and self.imx500_handler:
-                return self.imx500_handler.show_preview(duration)
+                return self.imx500_handler.show_preview(duration, headless=headless)
             else:
                 # Fallback preview for USB camera
                 if headless:

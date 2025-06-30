@@ -460,10 +460,15 @@ class IMX500CameraHandler:
         # This would need to be implemented based on the specific AI model output format
         return []
     
-    def show_preview(self, duration: int = 5) -> bool:
+    def show_preview(self, duration: int = 5, headless: bool = False) -> bool:
         """Show camera preview using libcamera-hello"""
         if not self.is_opened:
             return False
+            
+        if headless:
+            self.logger.info(f"🖥️ IMX500 Camera running in headless mode for {duration} seconds...")
+            time.sleep(duration)  # Just wait without showing preview
+            return True
             
         try:
             self.logger.info(f"🖥️ Starting IMX500 preview for {duration} seconds...")

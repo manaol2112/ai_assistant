@@ -466,16 +466,20 @@ Ready for some object identification adventures? Show me what you've discovered!
 
 I love helping you learn about the world around you! Show me anything you're curious about! 📚✨"""
     
-    def show_camera_preview(self, duration: int = 5) -> bool:
+    def show_camera_preview(self, duration: int = 5, headless: bool = False) -> bool:
         """Show camera preview to help users position objects."""
         try:
+            if headless:
+                logger.info(f"Object Identifier running in headless mode for {duration} seconds...")
+                return True  # Skip preview in headless mode
+                
             logger.info(f"Showing camera preview for {duration} seconds...")
             if self.using_shared_camera:
                 # For shared camera, we can't show preview as it would conflict
                 logger.info("Using shared camera - preview not available in shared mode")
                 return True  # Return success but don't actually show preview
             else:
-                return self.camera_manager.show_preview(duration)
+                return self.camera_manager.show_preview(duration, headless=headless)
         except Exception as e:
             logger.error(f"Error showing camera preview: {e}")
             return False

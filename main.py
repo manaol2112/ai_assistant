@@ -2141,15 +2141,17 @@ class AIAssistant:
     def handle_camera_preview(self) -> str:
         """Show camera preview for users."""
         try:
-            # Check if we should show camera in headless mode
-            if hasattr(self, 'enhanced_face_tracking') and self.enhanced_face_tracking:
+            # Check if we're running in headless mode
+            is_headless = hasattr(self, 'enhanced_face_tracking') and self.enhanced_face_tracking is not None
+            
+            if is_headless:
                 # We're in headless mode - explain instead of showing
                 self.speak("I'm currently running in headless mode, so I can't show you a camera window. But I can still see everything through my camera! My intelligent face tracking system is already monitoring what I can see.", self.current_user)
                 return "I'm running in headless mode, so no camera window will appear. But my camera is active and I can see you!"
             else:
                 # Normal mode - show camera preview
                 self.speak("Let me show you what I can see through my camera!", self.current_user)
-                success = self.object_identifier.show_camera_preview(duration=5)
+                success = self.object_identifier.show_camera_preview(duration=5, headless=is_headless)
                 
                 if success:
                     return "Did you see the camera window? That's what I can see! Now you know where to hold your objects!"
