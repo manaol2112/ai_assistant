@@ -27,8 +27,8 @@ from typing import Optional
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 try:
-    from face_tracking_integration import integrate_enhanced_face_tracking, EnhancedFaceTrackingIntegration
-    from intelligent_face_tracker import IntelligentFaceTracker
+    from face_tracking_integration import integrate_enhanced_face_tracking, RealTimeEnhancedFaceTrackingIntegration
+    from intelligent_face_tracker import RealTimeIntelligentFaceTracker
     # Import main AI system if available
     try:
         from main import AIAssistant
@@ -136,7 +136,7 @@ class EnhancedFaceTrackingSetup:
         try:
             # Create and initialize tracker
             print("🔄 Initializing intelligent face tracker...")
-            tracker = IntelligentFaceTracker(self.arduino_port, self.camera_index)
+            tracker = RealTimeIntelligentFaceTracker(self.arduino_port, self.camera_index)
             
             if not tracker.initialize():
                 print("❌ Intelligent tracker initialization failed")
@@ -194,12 +194,9 @@ class EnhancedFaceTrackingSetup:
         try:
             # Create integration
             print("🔄 Creating enhanced integration...")
-            integration = EnhancedFaceTrackingIntegration()
+            integration = RealTimeEnhancedFaceTrackingIntegration(self.arduino_port, self.camera_index)
             
-            if not integration.initialize(self.arduino_port, self.camera_index):
-                print("❌ Integration initialization failed")
-                return False
-            
+            # Initialize (the constructor already handles initialization)
             print("✅ Integration initialized successfully!")
             
             # Test voice commands

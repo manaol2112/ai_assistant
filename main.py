@@ -59,7 +59,7 @@ try:
     from face_tracking_servo_controller import PremiumFaceTracker
     from smart_camera_detector import SmartCameraDetector
     # Enhanced face tracking integration
-    from face_tracking_integration import EnhancedFaceTrackingIntegration
+    from face_tracking_integration import RealTimeEnhancedFaceTrackingIntegration
 except ImportError as e:
     print(f"❌ Import error: {e}")
     print("Please install required packages: pip install -r requirements.txt")
@@ -470,19 +470,27 @@ class AIAssistant:
         self.gesture_control_thread = None
         self.gesture_stop_event = threading.Event()
         
-        # Initialize Enhanced Face Tracking System
-        logger.info("🎯 Setting up Enhanced Face Tracking System...")
+        # Initialize Enhanced Face Tracking with Real-Time Performance
         try:
-            self.enhanced_face_tracking = EnhancedFaceTrackingIntegration(main_ai_assistant=self)
+            self.enhanced_face_tracking = RealTimeEnhancedFaceTrackingIntegration('/dev/ttyUSB0', 0)
             if self.enhanced_face_tracking.initialize():
-                logger.info("✅ Enhanced Face Tracking System initialized successfully!")
-                logger.info("🎯 Priority tracking enabled for Sophia and Eladriel")
-                logger.info("🔍 Intelligent search behavior activated")
+                self.logger.info("✅ REAL-TIME Enhanced Face Tracking initialized successfully")
+                self.logger.info("🎯 Priority tracking enabled for Sophia and Eladriel")
+                self.logger.info("⚡ Real-time tracking (60+ FPS) with sub-second response")
+                self.logger.info("💬 Continuous conversation mode tracking enabled")
+                self.logger.info("🔍 Intelligent search behavior activated")
+                
+                # Start initial tracking if hardware is available
+                try:
+                    self.enhanced_face_tracking.start_tracking(conversation_mode=False)
+                    self.logger.info("🚀 REAL-TIME face tracking started")
+                except Exception as tracking_start_error:
+                    self.logger.warning(f"⚠️ Could not start initial tracking: {tracking_start_error}")
             else:
-                logger.warning("⚠️ Enhanced Face Tracking initialization failed - will run without tracking")
+                self.logger.warning("⚠️ REAL-TIME Enhanced Face Tracking initialization failed")
                 self.enhanced_face_tracking = None
-        except Exception as e:
-            logger.error(f"❌ Enhanced Face Tracking setup failed: {e}")
+        except Exception as face_tracking_error:
+            self.logger.error(f"❌ Enhanced Face Tracking setup failed: {face_tracking_error}")
             self.enhanced_face_tracking = None
 
     def setup_audio_feedback(self):
@@ -1157,11 +1165,13 @@ class AIAssistant:
         print(f"💬 Automatic conversation mode activated for {user.title()}!")
         print("🎤 I'm listening... (say 'goodbye' to end, or I'll timeout after 1 minute of silence)")
         
-        # Enable enhanced face tracking conversation mode
+        # Enable enhanced face tracking conversation mode with real-time stage management
         if self.enhanced_face_tracking:
             try:
                 self.enhanced_face_tracking.enable_conversation_mode(user)
-                logger.info(f"🎯 Enhanced face tracking conversation mode enabled for {user}")
+                self.enhanced_face_tracking.set_conversation_stage('listening')
+                logger.info(f"🎯 REAL-TIME enhanced face tracking conversation mode enabled for {user}")
+                logger.info("👂 Conversation stage: LISTENING - continuous tracking active")
             except Exception as e:
                 logger.error(f"❌ Failed to enable conversation mode tracking: {e}")
         
@@ -1173,11 +1183,19 @@ class AIAssistant:
         
         while conversation_active and self.running and self.current_user == user:
             try:
+                # Set conversation stage to LISTENING
+                if self.enhanced_face_tracking:
+                    self.enhanced_face_tracking.set_conversation_stage('listening')
+                
                 # Listen for their request with a 15-second timeout (longer for children)
                 user_input = self.listen_for_speech(timeout=15)
 
                 if user_input:
                     conversation_timeout_count = 0  # Reset timeout counter
+                    
+                    # Set conversation stage to PROCESSING
+                    if self.enhanced_face_tracking:
+                        self.enhanced_face_tracking.set_conversation_stage('processing')
                     
                     # Check if user wants to end conversation
                     if self.is_conversation_ending(user_input):
@@ -1190,6 +1208,11 @@ class AIAssistant:
                         
                         # Add farewell to history and then clear it
                         self.add_to_conversation_history(user, user_input, farewell_response)
+                        
+                        # Set conversation stage to RESPONDING
+                        if self.enhanced_face_tracking:
+                            self.enhanced_face_tracking.set_conversation_stage('responding')
+                        
                         self.speak(farewell_response, user)
                         
                         # Clear conversation history for fresh start next time
@@ -1205,6 +1228,10 @@ class AIAssistant:
                         # Add special command to conversation history too
                         self.add_to_conversation_history(user, user_input, special_response)
                         
+                        # Set conversation stage to RESPONDING
+                        if self.enhanced_face_tracking:
+                            self.enhanced_face_tracking.set_conversation_stage('responding')
+                        
                         # Use no-interrupt speak for Filipino game responses to prevent recording during explanations
                         if self.filipino_translator.is_filipino_game_command(user_input) or self.filipino_translator.game_active:
                             self.speak_no_interrupt(special_response, user)
@@ -1216,6 +1243,10 @@ class AIAssistant:
                         try:
                             response = asyncio.run(self.process_with_openai(user_input, user))
                             
+                            # Set conversation stage to RESPONDING
+                            if self.enhanced_face_tracking:
+                                self.enhanced_face_tracking.set_conversation_stage('responding')
+                            
                             # Use no-interrupt speak if Filipino game is active to prevent recording during explanations
                             if self.filipino_translator.game_active:
                                 self.speak_no_interrupt(response, user)
@@ -1223,6 +1254,11 @@ class AIAssistant:
                                 self.speak(response, user)
                         except Exception as e:
                             logger.error(f"Error processing request: {e}")
+                            
+                            # Set conversation stage to RESPONDING even for errors
+                            if self.enhanced_face_tracking:
+                                self.enhanced_face_tracking.set_conversation_stage('responding')
+                                
                             self.speak("I'm sorry, something went wrong. Let me try again.", user)
                     
                     # After responding, give a subtle cue that we're still listening
@@ -1250,6 +1286,11 @@ class AIAssistant:
                                 'eladriel': "Still here for more dinosaur fun, Eladriel! What's next?",
                                 'parent': "I'm still here and ready to assist. Any additional requests?"
                             }
+                        
+                        # Set conversation stage to RESPONDING for timeout prompts
+                        if self.enhanced_face_tracking:
+                            self.enhanced_face_tracking.set_conversation_stage('responding')
+                            
                         self.speak(prompts.get(user, "I'm still listening if you have more to say!"), user)
                         print(f"⏰ Waiting for {user.title()} to continue...")
                         
@@ -1269,6 +1310,11 @@ class AIAssistant:
                                 'eladriel': "I'll be waiting for more dinosaur adventures, Eladriel! Just say 'Dino' when you're ready!",
                                 'parent': "Returning to standby mode. Say 'Assistant' anytime for immediate assistance."
                             }
+                        
+                        # Set conversation stage to RESPONDING for timeout messages
+                        if self.enhanced_face_tracking:
+                            self.enhanced_face_tracking.set_conversation_stage('responding')
+                            
                         self.speak(timeout_messages.get(user, "I'll be here when you need me. Just call my name!"), user)
                         conversation_active = False
                         
@@ -1280,6 +1326,10 @@ class AIAssistant:
                 
                 # Try to inform user of error and end conversation gracefully
                 try:
+                    # Set conversation stage to RESPONDING for error messages
+                    if self.enhanced_face_tracking:
+                        self.enhanced_face_tracking.set_conversation_stage('responding')
+                        
                     error_message = f"I'm sorry {user.title()}, I'm having some technical difficulties. Let me restart our conversation."
                     self.speak(error_message, user)
                 except:
@@ -1293,11 +1343,13 @@ class AIAssistant:
         if self.visual:
             self.visual.show_standby("👋 Goodbye! Say wake word to chat again")
         
-        # Disable enhanced face tracking conversation mode
+        # Disable enhanced face tracking conversation mode and set to IDLE
         if self.enhanced_face_tracking:
             try:
+                self.enhanced_face_tracking.set_conversation_stage('idle')
                 self.enhanced_face_tracking.disable_conversation_mode()
-                logger.info("🎯 Enhanced face tracking conversation mode disabled")
+                logger.info("🎯 REAL-TIME enhanced face tracking conversation mode disabled")
+                logger.info("😴 Conversation stage: IDLE - returning to general tracking")
             except Exception as e:
                 logger.error(f"❌ Failed to disable conversation mode tracking: {e}")
         
@@ -2026,9 +2078,16 @@ class AIAssistant:
         
         # Enhanced Face Tracking Commands (for all users) - ADD BEFORE OTHER COMMANDS
         if self.enhanced_face_tracking:
-            face_tracking_result = self.enhanced_face_tracking.process_voice_command(user_input)
-            if face_tracking_result:
-                return face_tracking_result.get('response', 'Face tracking command processed.')
+            try:
+                face_tracking_result = self.enhanced_face_tracking.process_voice_command(user_input)
+                if face_tracking_result and face_tracking_result.strip():
+                    # Log command processing for performance monitoring
+                    logger.info(f"Enhanced face tracking command processed: {user_input}")
+                    return face_tracking_result
+            except Exception as e:
+                logger.error(f"Error processing face tracking command: {e}")
+                # Continue to other commands if face tracking fails
+                pass
         
         return None
     
