@@ -163,7 +163,7 @@ class CameraManager:
     def read_frame(self):
         """Read frame from camera"""
         if not self.is_camera_available():
-            return None, None
+            return False, None
         
         try:
             if self.using_aitrios:
