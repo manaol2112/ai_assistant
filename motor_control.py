@@ -40,21 +40,26 @@ class MotorController:
     ENB = 24
     
     def __init__(self, in1=None, in2=None, in3=None, in4=None, ena=None, enb=None, 
-                 use_arduino=True, arduino_port='/dev/ttyUSB0', arduino_baud=9600):
+                 use_arduino=True, arduino_port=None, arduino_baud=9600):
         """
         Initialize enhanced motor controller with speed calibration
         
         Args:
             use_arduino: Try Arduino serial communication first
-            arduino_port: Serial port for Arduino (usually /dev/ttyUSB0)
+            arduino_port: Serial port for Arduino (auto-detect if None)
             arduino_baud: Baud rate for Arduino communication
             in1-in4, ena, enb: GPIO pins for direct control fallback
         """
         self.enabled = False
         self.arduino_serial = None
         self.use_arduino = use_arduino
-        self.arduino_port = arduino_port
+        self.arduino_baud = arduino_baud
         self.movement_duration = 1.0  # Default movement duration in seconds
+        
+        # Auto-detect Arduino port if not specified
+        if arduino_port is None:
+            arduino_port = self._detect_arduino_port()
+        self.arduino_port = arduino_port
         
         # Motor speed calibration (0-255) - adjust these to fix circular movement
         self.motor_speeds = {
@@ -85,19 +90,20 @@ class MotorController:
         }
         
         # Try Arduino serial communication first
-        if self.use_arduino:
+        if self.use_arduino and self.arduino_port:
             try:
-                print(f"[MotorController] Attempting Arduino serial connection on {arduino_port}...")
-                self.arduino_serial = serial.Serial(arduino_port, arduino_baud, timeout=1)
+                print(f"[MotorController] Attempting Arduino serial connection on {self.arduino_port}...")
+                self.arduino_serial = serial.Serial(self.arduino_port, self.arduino_baud, timeout=1)
                 time.sleep(2)  # Wait for Arduino to initialize
                 
-                # Test connection with a safe stop command
-                self.arduino_serial.write(b"MOTOR_A_STOP\n")
+                # Test connection with a safe command
+                self.arduino_serial.write(b"SAFETY_ON\n")
                 self.arduino_serial.flush()
                 time.sleep(0.1)
                 
                 self.enabled = True
-                print(f"[MotorController] ✅ Arduino connected successfully on {arduino_port}")
+                print(f"[MotorController] ✅ Arduino connected successfully on {self.arduino_port}")
+                print("[MotorController] 🛡️ Collision avoidance ENABLED")
                 return
                 
             except Exception as e:
@@ -137,6 +143,38 @@ class MotorController:
             print("[MotorController] ⚠️ No motor control available (GPIO library not found)")
             self.enabled = False
 
+    def _detect_arduino_port(self):
+        """Auto-detect Arduino serial port"""
+        import glob
+        
+        # Common Arduino ports on different systems
+        possible_ports = []
+        
+        if platform.system() == "Darwin":  # macOS
+            possible_ports.extend(glob.glob("/dev/cu.usbmodem*"))
+            possible_ports.extend(glob.glob("/dev/cu.usbserial*"))
+        elif platform.system() == "Linux":  # Linux/Raspberry Pi
+            possible_ports.extend(glob.glob("/dev/ttyUSB*"))
+            possible_ports.extend(glob.glob("/dev/ttyACM*"))
+        elif platform.system() == "Windows":  # Windows
+            possible_ports = [f"COM{i}" for i in range(1, 20)]
+        
+        print(f"[MotorController] Detected possible Arduino ports: {possible_ports}")
+        
+        # Try each port
+        for port in possible_ports:
+            try:
+                if serial:
+                    test_serial = serial.Serial(port, 9600, timeout=1)
+                    test_serial.close()
+                    print(f"[MotorController] ✅ Found working port: {port}")
+                    return port
+            except:
+                continue
+        
+        print("[MotorController] ⚠️ No Arduino port detected")
+        return None
+
     def _send_arduino_command(self, command):
         """Send command to Arduino with error handling"""
         if not self.arduino_serial or not self.enabled:
@@ -166,6 +204,9 @@ class MotorController:
                 
                 print(f"[MotorController] 🚀 Starting {action} movement for {safe_duration}s")
                 
+                # FIXED: Immediate motor start without additional delays
+                movement_start_time = time.time()
+                
                 # Start the movement
                 if action == 'forward':
                     self._start_forward_movement()
@@ -176,11 +217,20 @@ class MotorController:
                 elif action == 'right':
                     self._start_right_movement()
                 
+                actual_start_delay = time.time() - movement_start_time
+                if actual_start_delay > 0.05:  # Log if start delay is too high
+                    print(f"[MotorController] ⚠️ Movement start delay: {actual_start_delay:.3f}s")
+                
                 # Wait for duration or stop signal
                 self.stop_movement_event.wait(timeout=safe_duration)
                 
-                # Stop the movement
+                # FIXED: Immediate stop without additional delays
+                stop_start_time = time.time()
                 self._stop_all_motors()
+                actual_stop_delay = time.time() - stop_start_time
+                
+                if actual_stop_delay > 0.05:  # Log if stop delay is too high
+                    print(f"[MotorController] ⚠️ Movement stop delay: {actual_stop_delay:.3f}s")
                 
                 with self.movement_lock:
                     self.current_movement = None
@@ -195,21 +245,41 @@ class MotorController:
                     self.current_movement = None
                     self.movement_start_time = None
         
-        # Stop any existing movement
-        self.stop()
+        # FIXED: Optimized stop sequence - reduce delay between stop and new movement
+        if self.movement_thread and self.movement_thread.is_alive():
+            self.stop_movement_event.set()
+            # Reduced timeout for faster transitions
+            self.movement_thread.join(timeout=0.1)
+            
+            # Force immediate stop if thread doesn't finish quickly
+            if self.movement_thread.is_alive():
+                self._stop_all_motors()
+                print("[MotorController] ⚡ Force stopped for faster transition")
+        
+        # Add small delay to prevent motor strain during direction changes
+        if hasattr(self, '_last_movement_time'):
+            time_since_last = time.time() - self._last_movement_time
+            if time_since_last < 0.1:  # 100ms minimum between movements
+                time.sleep(0.1 - time_since_last)
         
         # Start new movement thread
         self.movement_thread = threading.Thread(target=movement_worker, daemon=True)
         self.movement_thread.start()
+        
+        # Record movement time for smooth transitions
+        self._last_movement_time = time.time()
 
     def _start_forward_movement(self):
         """Start calibrated forward movement (internal method)"""
         if self.arduino_serial:
-            # Use original Arduino command format (without speed parameters for now)
-            self._send_arduino_command("MOTOR_A_FORWARD")
-            self._send_arduino_command("MOTOR_B_FORWARD")
-            self._send_arduino_command("MOTOR_C_FORWARD")
-            self._send_arduino_command("MOTOR_D_FORWARD")
+            # FIXED: Send simultaneous movement command to prevent jerky motion
+            self._send_arduino_command(f"MOVE_FORWARD:{self.motor_speeds['A']},{self.motor_speeds['B']},{self.motor_speeds['C']},{self.motor_speeds['D']}")
+            # Fallback to individual commands if combined command not supported
+            if not self._test_arduino_response():
+                self._send_arduino_command("MOTOR_A_FORWARD")
+                self._send_arduino_command("MOTOR_B_FORWARD")
+                self._send_arduino_command("MOTOR_C_FORWARD")
+                self._send_arduino_command("MOTOR_D_FORWARD")
         else:
             GPIO.output(self.IN1, GPIO.HIGH)
             GPIO.output(self.IN2, GPIO.LOW)
@@ -219,11 +289,14 @@ class MotorController:
     def _start_backward_movement(self):
         """Start calibrated backward movement (internal method)"""
         if self.arduino_serial:
-            # Use original Arduino command format (without speed parameters for now)
-            self._send_arduino_command("MOTOR_A_BACKWARD")
-            self._send_arduino_command("MOTOR_B_BACKWARD")
-            self._send_arduino_command("MOTOR_C_BACKWARD")
-            self._send_arduino_command("MOTOR_D_BACKWARD")
+            # FIXED: Send simultaneous movement command to prevent jerky motion
+            self._send_arduino_command(f"MOVE_BACKWARD:{self.motor_speeds['A']},{self.motor_speeds['B']},{self.motor_speeds['C']},{self.motor_speeds['D']}")
+            # Fallback to individual commands if combined command not supported
+            if not self._test_arduino_response():
+                self._send_arduino_command("MOTOR_A_BACKWARD")
+                self._send_arduino_command("MOTOR_B_BACKWARD")
+                self._send_arduino_command("MOTOR_C_BACKWARD")
+                self._send_arduino_command("MOTOR_D_BACKWARD")
         else:
             GPIO.output(self.IN1, GPIO.LOW)
             GPIO.output(self.IN2, GPIO.HIGH)
@@ -233,11 +306,15 @@ class MotorController:
     def _start_left_movement(self):
         """Start calibrated left turn movement (internal method)"""
         if self.arduino_serial:
-            # Left side motors backward, right side motors forward
-            self._send_arduino_command("MOTOR_A_BACKWARD")  # Front left
-            self._send_arduino_command("MOTOR_B_FORWARD")   # Front right
-            self._send_arduino_command("MOTOR_C_BACKWARD")  # Back left
-            self._send_arduino_command("MOTOR_D_FORWARD")   # Back right
+            # FIXED: Send simultaneous turn command with speed control
+            self._send_arduino_command(f"TURN_LEFT:{self.motor_speeds['A']},{self.motor_speeds['B']},{self.motor_speeds['C']},{self.motor_speeds['D']}")
+            # Fallback to individual commands if combined command not supported
+            if not self._test_arduino_response():
+                # Left side motors backward, right side motors forward
+                self._send_arduino_command("MOTOR_A_BACKWARD")  # Front left
+                self._send_arduino_command("MOTOR_B_FORWARD")   # Front right
+                self._send_arduino_command("MOTOR_C_BACKWARD")  # Back left
+                self._send_arduino_command("MOTOR_D_FORWARD")   # Back right
         else:
             GPIO.output(self.IN1, GPIO.LOW)
             GPIO.output(self.IN2, GPIO.HIGH)
@@ -247,11 +324,15 @@ class MotorController:
     def _start_right_movement(self):
         """Start calibrated right turn movement (internal method)"""
         if self.arduino_serial:
-            # Left side motors forward, right side motors backward
-            self._send_arduino_command("MOTOR_A_FORWARD")   # Front left
-            self._send_arduino_command("MOTOR_B_BACKWARD")  # Front right
-            self._send_arduino_command("MOTOR_C_FORWARD")   # Back left
-            self._send_arduino_command("MOTOR_D_BACKWARD")  # Back right
+            # FIXED: Send simultaneous turn command with speed control
+            self._send_arduino_command(f"TURN_RIGHT:{self.motor_speeds['A']},{self.motor_speeds['B']},{self.motor_speeds['C']},{self.motor_speeds['D']}")
+            # Fallback to individual commands if combined command not supported
+            if not self._test_arduino_response():
+                # Left side motors forward, right side motors backward
+                self._send_arduino_command("MOTOR_A_FORWARD")   # Front left
+                self._send_arduino_command("MOTOR_B_BACKWARD")  # Front right
+                self._send_arduino_command("MOTOR_C_FORWARD")   # Back left
+                self._send_arduino_command("MOTOR_D_BACKWARD")  # Back right
         else:
             GPIO.output(self.IN1, GPIO.HIGH)
             GPIO.output(self.IN2, GPIO.LOW)
@@ -261,15 +342,29 @@ class MotorController:
     def _stop_all_motors(self):
         """Stop all motors immediately (internal method)"""
         if self.arduino_serial:
-            self._send_arduino_command("MOTOR_A_STOP")
-            self._send_arduino_command("MOTOR_B_STOP")
-            self._send_arduino_command("MOTOR_C_STOP")
-            self._send_arduino_command("MOTOR_D_STOP")
+            # FIXED: Send simultaneous stop command to prevent jerky stopping
+            self._send_arduino_command("STOP_ALL")
+            # Fallback to individual commands if combined command not supported
+            if not self._test_arduino_response():
+                self._send_arduino_command("MOTOR_A_STOP")
+                self._send_arduino_command("MOTOR_B_STOP")
+                self._send_arduino_command("MOTOR_C_STOP")
+                self._send_arduino_command("MOTOR_D_STOP")
         else:
             GPIO.output(self.IN1, GPIO.LOW)
             GPIO.output(self.IN2, GPIO.LOW)
             GPIO.output(self.IN3, GPIO.LOW)
             GPIO.output(self.IN4, GPIO.LOW)
+
+    def _test_arduino_response(self):
+        """Test if Arduino responds to check if combined commands are supported"""
+        try:
+            if self.arduino_serial and self.arduino_serial.in_waiting > 0:
+                response = self.arduino_serial.readline().decode().strip()
+                return "OK" in response or "Command executed" in response
+            return False
+        except:
+            return False
 
     # MOTOR CALIBRATION METHODS
     def calibrate_motor_speeds(self, front_left=None, front_right=None, back_left=None, back_right=None):

@@ -276,7 +276,7 @@ class RealTimeEnhancedFaceTrackingIntegration:
             'fast_responses': f"{fast} ({fast/total_responses*100:.1f}%)",
             'slow_responses': f"{slow} ({slow/total_responses*100:.1f}%)",
             'performance_rating': '⚡ EXCELLENT' if avg_time < 0.2 else '✅ GOOD' if avg_time < 0.5 else '⚠️ NEEDS OPTIMIZATION'
-        }
+            }
             
     def cleanup(self):
         """Clean up integration resources"""
@@ -433,5 +433,5 @@ if __name__ == "__main__":
         traceback.print_exc()
     finally:
         if 'integration' in locals():
-            integration.cleanup()
-        print("🧹 Test cleanup completed")
+            integration.cleanup() 
+            print("🧹 Test cleanup completed")
