@@ -205,11 +205,11 @@ class MotorController:
     def _start_forward_movement(self):
         """Start calibrated forward movement (internal method)"""
         if self.arduino_serial:
-            # Send individual motor commands with speed calibration
-            self._send_arduino_command(f"MOTOR_A_FORWARD_{self.motor_speeds['A']}")
-            self._send_arduino_command(f"MOTOR_B_FORWARD_{self.motor_speeds['B']}")
-            self._send_arduino_command(f"MOTOR_C_FORWARD_{self.motor_speeds['C']}")
-            self._send_arduino_command(f"MOTOR_D_FORWARD_{self.motor_speeds['D']}")
+            # Use original Arduino command format (without speed parameters for now)
+            self._send_arduino_command("MOTOR_A_FORWARD")
+            self._send_arduino_command("MOTOR_B_FORWARD")
+            self._send_arduino_command("MOTOR_C_FORWARD")
+            self._send_arduino_command("MOTOR_D_FORWARD")
         else:
             GPIO.output(self.IN1, GPIO.HIGH)
             GPIO.output(self.IN2, GPIO.LOW)
@@ -219,11 +219,11 @@ class MotorController:
     def _start_backward_movement(self):
         """Start calibrated backward movement (internal method)"""
         if self.arduino_serial:
-            # Send individual motor commands with speed calibration
-            self._send_arduino_command(f"MOTOR_A_BACKWARD_{self.motor_speeds['A']}")
-            self._send_arduino_command(f"MOTOR_B_BACKWARD_{self.motor_speeds['B']}")
-            self._send_arduino_command(f"MOTOR_C_BACKWARD_{self.motor_speeds['C']}")
-            self._send_arduino_command(f"MOTOR_D_BACKWARD_{self.motor_speeds['D']}")
+            # Use original Arduino command format (without speed parameters for now)
+            self._send_arduino_command("MOTOR_A_BACKWARD")
+            self._send_arduino_command("MOTOR_B_BACKWARD")
+            self._send_arduino_command("MOTOR_C_BACKWARD")
+            self._send_arduino_command("MOTOR_D_BACKWARD")
         else:
             GPIO.output(self.IN1, GPIO.LOW)
             GPIO.output(self.IN2, GPIO.HIGH)
@@ -234,10 +234,10 @@ class MotorController:
         """Start calibrated left turn movement (internal method)"""
         if self.arduino_serial:
             # Left side motors backward, right side motors forward
-            self._send_arduino_command(f"MOTOR_A_BACKWARD_{self.motor_speeds['A']}")  # Front left
-            self._send_arduino_command(f"MOTOR_B_FORWARD_{self.motor_speeds['B']}")   # Front right
-            self._send_arduino_command(f"MOTOR_C_BACKWARD_{self.motor_speeds['C']}")  # Back left
-            self._send_arduino_command(f"MOTOR_D_FORWARD_{self.motor_speeds['D']}")   # Back right
+            self._send_arduino_command("MOTOR_A_BACKWARD")  # Front left
+            self._send_arduino_command("MOTOR_B_FORWARD")   # Front right
+            self._send_arduino_command("MOTOR_C_BACKWARD")  # Back left
+            self._send_arduino_command("MOTOR_D_FORWARD")   # Back right
         else:
             GPIO.output(self.IN1, GPIO.LOW)
             GPIO.output(self.IN2, GPIO.HIGH)
@@ -248,10 +248,10 @@ class MotorController:
         """Start calibrated right turn movement (internal method)"""
         if self.arduino_serial:
             # Left side motors forward, right side motors backward
-            self._send_arduino_command(f"MOTOR_A_FORWARD_{self.motor_speeds['A']}")   # Front left
-            self._send_arduino_command(f"MOTOR_B_BACKWARD_{self.motor_speeds['B']}")  # Front right
-            self._send_arduino_command(f"MOTOR_C_FORWARD_{self.motor_speeds['C']}")   # Back left
-            self._send_arduino_command(f"MOTOR_D_BACKWARD_{self.motor_speeds['D']}")  # Back right
+            self._send_arduino_command("MOTOR_A_FORWARD")   # Front left
+            self._send_arduino_command("MOTOR_B_BACKWARD")  # Front right
+            self._send_arduino_command("MOTOR_C_FORWARD")   # Back left
+            self._send_arduino_command("MOTOR_D_BACKWARD")  # Back right
         else:
             GPIO.output(self.IN1, GPIO.HIGH)
             GPIO.output(self.IN2, GPIO.LOW)
