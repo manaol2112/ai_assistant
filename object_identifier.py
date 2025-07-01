@@ -260,8 +260,8 @@ Please be detailed and educational."""
                         "message": "I couldn't take a picture. The camera might be busy."
                     }
             else:
-                frame = self.camera_manager.capture_frame()
-                if frame is None:
+                ret, frame = self.camera_manager.read_frame()
+                if not ret or frame is None:
                     return {
                         "success": False,
                         "error": "Failed to capture frame",
@@ -306,8 +306,9 @@ Please be detailed and educational."""
                 with open(image_path, "rb") as image_file:
                     base64_image = base64.b64encode(image_file.read()).decode('utf-8')
             else:
-                # For standalone camera manager, use its method
-                base64_image = self.camera_manager.encode_image_to_base64(image_path)
+                # For standalone camera manager, encode the image file directly
+                with open(image_path, "rb") as image_file:
+                    base64_image = base64.b64encode(image_file.read()).decode('utf-8')
             
             if not base64_image:
                 return {
@@ -501,7 +502,7 @@ I love helping you learn about the world around you! Show me anything you're cur
             if self.using_shared_camera:
                 logger.info("ObjectIdentifier cleanup - shared camera remains active")
             else:
-                self.camera_manager.cleanup()
+                self.camera_manager.release()
                 logger.info("ObjectIdentifier cleaned up successfully")
         except Exception as e:
             logger.error(f"Error during cleanup: {e}")
@@ -573,14 +574,15 @@ I love helping you learn about the world around you! Show me anything you're cur
                     }
             else:
                 # Use standalone camera manager
-                image_path = self.camera_manager.capture_image()
-                if not image_path:
+                capture_result = self.camera_manager.capture_image()
+                if not capture_result or not capture_result.get('success', False):
                     return {
                         "success": False,
                         "message": "Failed to capture image. Please check the camera.",
                         "detected_text": "",
                         "image_path": None
                     }
+                image_path = capture_result.get('filepath')
             
             # Identify text with enhanced prompts for handwriting
             result = self._identify_text_with_vision(image_path, user, expected_word)
