@@ -285,28 +285,58 @@ void emergency_stop_all() {
   digitalWrite(END, LOW);
 }
 
-// SAFETY FUNCTIONS - Prevent collisions (NEW)
+// SAFETY FUNCTIONS - Prevent collisions (IMPROVED WITH SMART FILTERING)
 bool is_safe_to_move_forward() {
   if (!safety_enabled) return true;
   
-  int distance = read_ultrasonic_distance();
-  int irLeft = digitalRead(irLeftPin);
-  int irRight = digitalRead(irRightPin);
+  // SMART ULTRASONIC FILTERING - Take multiple readings
+  int distances[3];
+  int valid_readings = 0;
+  int total_distance = 0;
   
-  // Check ultrasonic sensor
-  if (distance > 0 && distance < SAFE_DISTANCE) {
-    Serial.print("SAFETY: Obstacle detected at ");
-    Serial.print(distance);
-    Serial.println("cm");
+  // Take 3 readings with small delays
+  for (int i = 0; i < 3; i++) {
+    distances[i] = read_ultrasonic_distance();
+    
+    // Only count valid readings (ignore false readings below 3cm)
+    if (distances[i] > 3 && distances[i] < 400) {  
+      valid_readings++;
+      total_distance += distances[i];
+    }
+    delay(10);  // Small delay between readings
+  }
+  
+  // Only block movement if we have consistent valid readings
+  if (valid_readings >= 2) {
+    int avg_distance = total_distance / valid_readings;
+    
+    // Block only if average distance shows real obstacle
+    if (avg_distance < SAFE_DISTANCE) {
+      Serial.print("SAFETY: Confirmed obstacle at ");
+      Serial.print(avg_distance);
+      Serial.println("cm (filtered average)");
+      return false;
+    }
+  }
+  
+  // SMART IR FILTERING - Require consistent detections
+  int ir_left_detections = 0;
+  int ir_right_detections = 0;
+  
+  // Take 3 quick IR readings
+  for (int i = 0; i < 3; i++) {
+    if (digitalRead(irLeftPin) == 0) ir_left_detections++;
+    if (digitalRead(irRightPin) == 0) ir_right_detections++;
+    delay(5);
+  }
+  
+  // Block only if IR sensors consistently detect obstacle (2 out of 3 readings)
+  if (ir_left_detections >= 2 || ir_right_detections >= 2) {
+    Serial.println("SAFETY: IR sensors consistently detected obstacle");
     return false;
   }
   
-  // Check IR sensors (assuming 0 = obstacle detected)
-  if (irLeft == 0 || irRight == 0) {
-    Serial.println("SAFETY: IR sensor detected obstacle");
-    return false;
-  }
-  
+  // If we get here, it's safe to move forward
   return true;
 }
 

@@ -268,7 +268,6 @@ class RealTimeEnhancedFaceTrackingIntegration:
         ultra_fast = len([t for t in self.command_response_times if t < 0.2])
         fast = len([t for t in self.command_response_times if 0.2 <= t < 0.5])
         slow = len([t for t in self.command_response_times if t >= 0.5])
-        
         return {
             'total_commands': total_responses,
             'average_response_time': f"{avg_time:.3f}s",
